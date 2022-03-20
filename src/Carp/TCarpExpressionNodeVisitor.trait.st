@@ -36,6 +36,12 @@ TCarpExpressionNodeVisitor >> visitList: aList [
 ]
 
 { #category : #generated }
+TCarpExpressionNodeVisitor >> visitMap: aMap [
+
+	^ self visitExpression: aMap
+]
+
+{ #category : #generated }
 TCarpExpressionNodeVisitor >> visitModuleOrType: aModuleOrType [
 
 	^ self visitExpression: aModuleOrType
@@ -48,6 +54,18 @@ TCarpExpressionNodeVisitor >> visitNumber: aNumber [
 ]
 
 { #category : #generated }
+TCarpExpressionNodeVisitor >> visitPair: aPair [
+
+	^ self visitExpression: aPair
+]
+
+{ #category : #generated }
+TCarpExpressionNodeVisitor >> visitPattern: aPattern [
+
+	^ self visitExpression: aPattern
+]
+
+{ #category : #generated }
 TCarpExpressionNodeVisitor >> visitQuote: aQuote [
 
 	^ self visitExpression: aQuote
@@ -57,6 +75,12 @@ TCarpExpressionNodeVisitor >> visitQuote: aQuote [
 TCarpExpressionNodeVisitor >> visitRef: aRef [
 
 	^ self visitExpression: aRef
+]
+
+{ #category : #generated }
+TCarpExpressionNodeVisitor >> visitRefCall: aRefCall [
+
+	^ self visitExpression: aRefCall
 ]
 
 { #category : #generated }
