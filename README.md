@@ -1,6 +1,6 @@
-# Carp Parser
+# Carp
 
-A Carp parser for the Glamorous Toolkit, using SmaCC.
+contains Carp language support for the Glamorous Toolkit.
 
 <hr/>
 
