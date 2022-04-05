@@ -1,7 +1,7 @@
 Class {
 	#name : #CarpExpressionNode,
 	#superclass : #SmaCCParseNode,
-	#category : #'Carp-Carp'
+	#category : #'Carp-AST'
 }
 
 { #category : #generated }

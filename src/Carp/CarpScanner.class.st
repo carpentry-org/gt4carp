@@ -1,7 +1,7 @@
 Class {
 	#name : #CarpScanner,
 	#superclass : #SmaCCScanner,
-	#category : #Carp
+	#category : #'Carp-Parser'
 }
 
 { #category : #generated }

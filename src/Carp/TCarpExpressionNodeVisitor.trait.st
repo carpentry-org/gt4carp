@@ -2,7 +2,7 @@ Trait {
 	#name : #TCarpExpressionNodeVisitor,
 	#traits : 'TSmaCCParseNodeVisitor',
 	#classTraits : 'TSmaCCParseNodeVisitor classTrait',
-	#category : #Carp
+	#category : #'Carp-Parser'
 }
 
 { #category : #generated }

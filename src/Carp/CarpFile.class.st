@@ -5,7 +5,7 @@ Class {
 		'fileName',
 		'contents'
 	],
-	#category : #Carp
+	#category : #'Carp-Parser'
 }
 
 { #category : #'instance creation' }

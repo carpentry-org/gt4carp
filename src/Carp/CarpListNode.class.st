@@ -4,7 +4,7 @@ Class {
 	#instVars : [
 		'expressions'
 	],
-	#category : #Carp
+	#category : #'Carp-AST'
 }
 
 { #category : #generated }

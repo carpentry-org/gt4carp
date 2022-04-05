@@ -3,5 +3,5 @@ Class {
 	#superclass : #Object,
 	#traits : 'TCarpExpressionNodeVisitor',
 	#classTraits : 'TCarpExpressionNodeVisitor classTrait',
-	#category : #Carp
+	#category : #'Carp-Parser'
 }

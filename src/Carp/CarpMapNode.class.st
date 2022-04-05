@@ -4,7 +4,7 @@ Class {
 	#instVars : [
 		'pairs'
 	],
-	#category : #Carp
+	#category : #'Carp-AST'
 }
 
 { #category : #generated }

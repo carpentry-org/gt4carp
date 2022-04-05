@@ -5,7 +5,7 @@ Class {
 		'key',
 		'value'
 	],
-	#category : #Carp
+	#category : #'Carp-AST'
 }
 
 { #category : #generated }

@@ -1,7 +1,7 @@
 Class {
 	#name : #CarpParser,
 	#superclass : #SmaCCGLRParser,
-	#category : #Carp
+	#category : #'Carp-Parser'
 }
 
 { #category : #'generated-accessing' }
