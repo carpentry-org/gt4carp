@@ -13,6 +13,16 @@ CarpQuoteNode >> acceptVisitor: anExpressionVisitor [
 	^ anExpressionVisitor visitQuote: self
 ]
 
+{ #category : #accessing }
+CarpQuoteNode >> isQuoted [
+	^ true
+]
+
+{ #category : #accessing }
+CarpQuoteNode >> newMethod [
+	"This is a new method"
+]
+
 { #category : #generated }
 CarpQuoteNode >> nodeVariables [
 

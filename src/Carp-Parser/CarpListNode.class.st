@@ -2,9 +2,11 @@ Class {
 	#name : #CarpListNode,
 	#superclass : #CarpExpressionNode,
 	#instVars : [
-		'expressions'
+		'leftParen',
+		'expressions',
+		'rightParen'
 	],
-	#category : #'Carp-AST'
+	#category : #'Carp-Parser'
 }
 
 { #category : #generated }
@@ -37,4 +39,34 @@ CarpListNode >> expressions: anOrderedCollection [
 CarpListNode >> initialize [
 	super initialize.
 	expressions := OrderedCollection new: 2.
+]
+
+{ #category : #generated }
+CarpListNode >> leftParen [
+
+	^ leftParen
+]
+
+{ #category : #generated }
+CarpListNode >> leftParen: aSmaCCToken [
+
+	leftParen := aSmaCCToken
+]
+
+{ #category : #generated }
+CarpListNode >> rightParen [
+
+	^ rightParen
+]
+
+{ #category : #generated }
+CarpListNode >> rightParen: aSmaCCToken [
+
+	rightParen := aSmaCCToken
+]
+
+{ #category : #generated }
+CarpListNode >> tokenVariables [
+
+	^ #( #leftParen #rightParen )
 ]

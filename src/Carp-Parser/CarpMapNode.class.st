@@ -2,9 +2,11 @@ Class {
 	#name : #CarpMapNode,
 	#superclass : #CarpExpressionNode,
 	#instVars : [
-		'pairs'
+		'leftBrace',
+		'pairs',
+		'rightBrace'
 	],
-	#category : #'Carp-AST'
+	#category : #'Carp-Parser'
 }
 
 { #category : #generated }
@@ -26,6 +28,18 @@ CarpMapNode >> initialize [
 ]
 
 { #category : #generated }
+CarpMapNode >> leftBrace [
+
+	^ leftBrace
+]
+
+{ #category : #generated }
+CarpMapNode >> leftBrace: aSmaCCToken [
+
+	leftBrace := aSmaCCToken
+]
+
+{ #category : #generated }
 CarpMapNode >> pairs [
 
 	^ pairs
@@ -37,4 +51,22 @@ CarpMapNode >> pairs: anOrderedCollection [
 	self setParents: self pairs to: nil.
 	pairs := anOrderedCollection.
 	self setParents: self pairs to: self
+]
+
+{ #category : #generated }
+CarpMapNode >> rightBrace [
+
+	^ rightBrace
+]
+
+{ #category : #generated }
+CarpMapNode >> rightBrace: aSmaCCToken [
+
+	rightBrace := aSmaCCToken
+]
+
+{ #category : #generated }
+CarpMapNode >> tokenVariables [
+
+	^ #( #leftBrace #rightBrace )
 ]

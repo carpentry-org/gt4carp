@@ -6,7 +6,7 @@ Class {
 
 { #category : #'generated-accessing' }
 CarpParser class >> cacheId [
-	^'2022-03-20T20:34:27.408287+01:00'
+	^'2022-04-16T18:21:43.028213+02:00'
 ]
 
 { #category : #generated }
@@ -95,22 +95,22 @@ Expression
 	| Unquote
 	;
 RefCall
-	: ""~"" Expression 'value' {{}}
+	: ""~"" 'refGlyph' Expression 'value' {{}}
 	;
 Unquote
-	: (""%"" | ""%@"") Expression 'value' {{}}
+	: (""%"" 'unquoteGlyph' | ""%@""'unquoteGlyph') Expression 'value' {{}}
 	;
 Ref
-	: ""&"" Expression 'value' {{}}
+	: ""&"" 'refGlyph' Expression 'value' {{}}
 	;
 Deref
-	: ""@"" Expression 'value' {{}}
+	: ""@"" 'derefGlyph' Expression 'value' {{}}
 	;
 Literal
 	: String | List | Array | Symbol | Quote | Number | Character | Pattern | Map
 	;
 Map
-	: ""{"" MapPairs ""}"" {{}}
+	: ""{"" 'leftBrace' MapPairs ""}"" 'rightBrace' {{}}
 	;
 MapPairs
 	:
@@ -120,7 +120,7 @@ MapPair
 	: Expression 'key' Expression 'value' {{Pair}}
 	;
 Pattern
-	: ""#"" <string_literal> 'value' {{}}
+	: ""#"" 'patternGlyph' <string_literal> 'value' {{}}
 	;
 Character
 	: <character> 'value' {{}}
@@ -129,7 +129,7 @@ Number
 	: <numeric_literal> 'value' {{}} 
 	;
 Array
-	: <open_bracket> Expressions <close_bracket> {{}}
+	: <open_bracket> 'leftBracket' Expressions <close_bracket> 'rightBracket' {{}}
 	;
 Quote
 	: <quote> Expression 'value' {{}}
@@ -145,7 +145,7 @@ ModuleOrType
 	| <module> 'value' {{}}
 	;
 List
-	: <open_paren> Expressions <close_paren> {{}}
+	: <open_paren> 'leftParen' Expressions <close_paren> 'rightParen' {{}}
 	;
 String
 	: <string_literal> 'value' {{}}
@@ -157,42 +157,42 @@ CarpParser class >> reduceTable [
 ^#(
 	#(24 0 #reduceActionForExpressions1: 1289217 false) 
 	#(23 1 #reduceActionForStart1: 1258497 false) 
-	#(32 0 #reduceActionForExpressions1: 1712129 false) 
-	#(43 1 #reduceActionForString1: 2274305 false) 
-	#(40 1 #reduceActionForVariable1: 2097153 false) 
-	#(41 1 #reduceActionForModuleOrType2: 2137090 false) 
-	#(36 1 #reduceActionForNumber1: 1906689 false) 
-	#(35 1 #reduceActionForCharacter1: 1864705 false) 
+	#(32 0 #reduceActionForExpressions1: 1803265 false) 
+	#(43 1 #reduceActionForString1: 2436097 false) 
+	#(40 1 #reduceActionForVariable1: 2233345 false) 
+	#(41 1 #reduceActionForModuleOrType2: 2273282 false) 
+	#(36 1 #reduceActionForNumber1: 2013185 false) 
+	#(35 1 #reduceActionForCharacter1: 1971201 false) 
 	#(24 2 #reduceActionForExpressions2: 1289218 false) 
 	#(25 1 #liftFirstValue: 1347588 false) 
 	#(25 1 #liftFirstValue: 1347589 false) 
 	#(25 1 #liftFirstValue: 1347587 false) 
 	#(25 1 #liftFirstValue: 1347586 false) 
 	#(25 1 #liftFirstValue: 1347585 false) 
-	#(30 1 #liftFirstValue: 1587209 false) 
-	#(30 1 #liftFirstValue: 1587208 false) 
-	#(30 1 #liftFirstValue: 1587207 false) 
-	#(30 1 #liftFirstValue: 1587206 false) 
-	#(30 1 #liftFirstValue: 1587203 false) 
-	#(30 1 #liftFirstValue: 1587205 false) 
-	#(30 1 #liftFirstValue: 1587204 false) 
-	#(39 1 #liftFirstValue: 2059266 false) 
-	#(39 1 #liftFirstValue: 2059265 false) 
-	#(30 1 #liftFirstValue: 1587202 false) 
-	#(30 1 #liftFirstValue: 1587201 false) 
-	#(34 2 #reduceActionForPattern1: 1815553 false) 
-	#(27 2 #reduceActionForUnquote1: 1455105 false) 
-	#(27 2 #reduceActionForUnquote1: 1455106 false) 
-	#(28 2 #reduceActionForRef1: 1507329 false) 
-	#(29 2 #reduceActionForDeref1: 1546241 false) 
+	#(30 1 #liftFirstValue: 1652745 false) 
+	#(30 1 #liftFirstValue: 1652744 false) 
+	#(30 1 #liftFirstValue: 1652743 false) 
+	#(30 1 #liftFirstValue: 1652742 false) 
+	#(30 1 #liftFirstValue: 1652739 false) 
+	#(30 1 #liftFirstValue: 1652741 false) 
+	#(30 1 #liftFirstValue: 1652740 false) 
+	#(39 1 #liftFirstValue: 2195458 false) 
+	#(39 1 #liftFirstValue: 2195457 false) 
+	#(30 1 #liftFirstValue: 1652738 false) 
+	#(30 1 #liftFirstValue: 1652737 false) 
+	#(34 2 #reduceActionForPattern1: 1906689 false) 
+	#(27 2 #reduceActionForUnquote1: 1466369 false) 
+	#(27 2 #reduceActionForUnquote1: 1466370 false) 
+	#(28 2 #reduceActionForRef1: 1548289 false) 
+	#(29 2 #reduceActionForDeref1: 1598465 false) 
 	#(26 2 #reduceActionForRefCall1: 1412097 false) 
-	#(38 2 #reduceActionForQuote1: 2014209 false) 
-	#(31 3 #reduceActionForMap1: 1679361 false) 
-	#(32 2 #reduceActionForExpressions2: 1712130 false) 
-	#(42 3 #reduceActionForList1: 2217985 false) 
-	#(41 3 #reduceActionForModuleOrType1: 2137089 false) 
-	#(37 3 #reduceActionForArray1: 1952769 false) 
-	#(33 2 #reduceActionForMapPair1: 1755137 false)
+	#(38 2 #reduceActionForQuote1: 2150401 false) 
+	#(31 3 #reduceActionForMap1: 1744897 false) 
+	#(32 2 #reduceActionForExpressions2: 1803266 false) 
+	#(42 3 #reduceActionForList1: 2354177 false) 
+	#(41 3 #reduceActionForModuleOrType1: 2273281 false) 
+	#(37 3 #reduceActionForArray1: 2059265 false) 
+	#(33 2 #reduceActionForMapPair1: 1846273 false)
 	).
 ]
 
@@ -300,7 +300,9 @@ CarpParser >> reduceActionForArray1: nodes [
 
 	| result |
 	result := CarpArrayNode new.
+	result leftBracket: (nodes at: 1).
 	result addNodes: (nodes at: 2) to: result expressions.
+	result rightBracket: (nodes at: 3).
 	^ result
 ]
 
@@ -318,6 +320,7 @@ CarpParser >> reduceActionForDeref1: nodes [
 
 	| result |
 	result := CarpDerefNode new.
+	result derefGlyph: (nodes at: 1).
 	result value: (nodes at: 2).
 	^ result
 ]
@@ -344,7 +347,9 @@ CarpParser >> reduceActionForList1: nodes [
 
 	| result |
 	result := CarpListNode new.
+	result leftParen: (nodes at: 1).
 	result addNodes: (nodes at: 2) to: result expressions.
+	result rightParen: (nodes at: 3).
 	^ result
 ]
 
@@ -353,7 +358,9 @@ CarpParser >> reduceActionForMap1: nodes [
 
 	| result |
 	result := CarpMapNode new.
+	result leftBrace: (nodes at: 1).
 	result addNodes: (nodes at: 2) to: result pairs.
+	result rightBrace: (nodes at: 3).
 	^ result
 ]
 
@@ -399,6 +406,7 @@ CarpParser >> reduceActionForPattern1: nodes [
 
 	| result |
 	result := CarpPatternNode new.
+	result patternGlyph: (nodes at: 1).
 	result value: (nodes at: 2).
 	^ result
 ]
@@ -417,6 +425,7 @@ CarpParser >> reduceActionForRef1: nodes [
 
 	| result |
 	result := CarpRefNode new.
+	result refGlyph: (nodes at: 1).
 	result value: (nodes at: 2).
 	^ result
 ]
@@ -426,6 +435,7 @@ CarpParser >> reduceActionForRefCall1: nodes [
 
 	| result |
 	result := CarpRefCallNode new.
+	result refGlyph: (nodes at: 1).
 	result value: (nodes at: 2).
 	^ result
 ]
@@ -453,6 +463,7 @@ CarpParser >> reduceActionForUnquote1: nodes [
 
 	| result |
 	result := CarpUnquoteNode new.
+	result unquoteGlyph: (nodes at: 1).
 	result value: (nodes at: 2).
 	^ result
 ]

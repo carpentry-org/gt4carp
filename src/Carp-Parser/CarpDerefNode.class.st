@@ -2,9 +2,10 @@ Class {
 	#name : #CarpDerefNode,
 	#superclass : #CarpExpressionNode,
 	#instVars : [
+		'derefGlyph',
 		'value'
 	],
-	#category : #'Carp-AST'
+	#category : #'Carp-Parser'
 }
 
 { #category : #generated }
@@ -14,9 +15,27 @@ CarpDerefNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #generated }
+CarpDerefNode >> derefGlyph [
+
+	^ derefGlyph
+]
+
+{ #category : #generated }
+CarpDerefNode >> derefGlyph: aSmaCCToken [
+
+	derefGlyph := aSmaCCToken
+]
+
+{ #category : #generated }
 CarpDerefNode >> nodeVariables [
 
 	^ #( #value )
+]
+
+{ #category : #generated }
+CarpDerefNode >> tokenVariables [
+
+	^ #( #derefGlyph )
 ]
 
 { #category : #generated }

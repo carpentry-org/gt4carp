@@ -2,9 +2,10 @@ Class {
 	#name : #CarpRefNode,
 	#superclass : #CarpExpressionNode,
 	#instVars : [
+		'refGlyph',
 		'value'
 	],
-	#category : #'Carp-AST'
+	#category : #'Carp-Parser'
 }
 
 { #category : #generated }
@@ -17,6 +18,24 @@ CarpRefNode >> acceptVisitor: anExpressionVisitor [
 CarpRefNode >> nodeVariables [
 
 	^ #( #value )
+]
+
+{ #category : #generated }
+CarpRefNode >> refGlyph [
+
+	^ refGlyph
+]
+
+{ #category : #generated }
+CarpRefNode >> refGlyph: aSmaCCToken [
+
+	refGlyph := aSmaCCToken
+]
+
+{ #category : #generated }
+CarpRefNode >> tokenVariables [
+
+	^ #( #refGlyph )
 ]
 
 { #category : #generated }

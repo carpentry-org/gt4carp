@@ -2,9 +2,10 @@ Class {
 	#name : #CarpUnquoteNode,
 	#superclass : #CarpExpressionNode,
 	#instVars : [
+		'unquoteGlyph',
 		'value'
 	],
-	#category : #'Carp-AST'
+	#category : #'Carp-Parser'
 }
 
 { #category : #generated }
@@ -13,10 +14,33 @@ CarpUnquoteNode >> acceptVisitor: anExpressionVisitor [
 	^ anExpressionVisitor visitUnquote: self
 ]
 
+{ #category : #accessing }
+CarpUnquoteNode >> isQuoted [
+	^ false
+]
+
 { #category : #generated }
 CarpUnquoteNode >> nodeVariables [
 
 	^ #( #value )
+]
+
+{ #category : #generated }
+CarpUnquoteNode >> tokenVariables [
+
+	^ #( #unquoteGlyph )
+]
+
+{ #category : #generated }
+CarpUnquoteNode >> unquoteGlyph [
+
+	^ unquoteGlyph
+]
+
+{ #category : #generated }
+CarpUnquoteNode >> unquoteGlyph: aSmaCCToken [
+
+	unquoteGlyph := aSmaCCToken
 ]
 
 { #category : #generated }
