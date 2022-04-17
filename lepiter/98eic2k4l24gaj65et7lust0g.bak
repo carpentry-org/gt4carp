@@ -29,7 +29,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:18:43.697823+02:00"
+						"dateAndTimeString" : "2022-04-17T18:18:44.200231+02:00"
 					}
 				},
 				"uid" : {
@@ -39,7 +39,226 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "In this bonus chapter, we are going to learn how to visualize code using just the AST. While you cannot expect the highest level of semantic insight from analyses that purely focus on the AST, it can be a fun and interesting challenge, and give you some ideas on  how to work with ASTs."
+				"string" : "In this bonus chapter, we are going to learn how to visualize code using just the AST. While you cannot expect the highest level of semantic insight from analyses that purely focus on the AST, it can be a fun and interesting challenge, and give you some ideas on how to work with ASTs."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T21:59:36.075691+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:00:54.834762+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "yZ0R0UCZDQCJmVqTBAU6hQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "When I first got the Carp parser working, for instance, I asked myself the question “How are the files in the standard library interconnected?” Using the parser and a simple wrapper class named {{gtClass:CarpFile}} I was able to answer that question within minutes."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:12:07.557482+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:13:44.45603+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "32aj/kCZDQCJp1bbBAU6hQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "First, I parsed all the files from the standard library and got all the `load` statements. From that, I built a mapping from files to the files they include."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:09:14.547385+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:12:30.516602+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "Fbbt1kCZDQCJm4QRBAU6hQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "{{gtExample:CarpFile class >> #coreLoadStatements |codeExpanded=false| previewExpanded=true|previewShow=#gtItemsFor:}}"
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:13:49.336046+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:14:51.084501+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "lh+yBEGZDQCJqXdGBAU6hQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "From there, it is just a matter of visualizing the data. {{gtClass:GtMondrian}} is a powerful visualization tool for such questions, and fairly quick to use."
+			},
+			{
+				"__type" : "pharoSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:14:58.363273+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:15:49.272055+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "t5/kCEGZDQCJsYevBAU6hQ=="
+				},
+				"code" : "\"the mapping from above\"\raDict := CarpFile coreLoadStatements.\r\r\"the actual view\"\rview := GtMondrian new. \rview nodes\r\tstencil: [:each |\r\t\tBlElement new\r\t\t\tsize: 5@5;\r\t\t\tgeometry: BlCircleGeometry new;\r\t\t\tbackground: Color gray ];\r\twith: aDict keys.\rview edges connectToAll: [:each | aDict at: each ]. \rview layout force. \rview"
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:16:02.024437+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:16:30.971495+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "6gxuDEGZDQCJuCEYBAU6hQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "This was the first such question I asked, and realizing how quickly I got an answer and how easy it was, I felt emboldened"
 			}
 		]
 	},

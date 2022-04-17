@@ -18,7 +18,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:15:34.71835+02:00"
+						"dateAndTimeString" : "2022-04-17T22:22:53.22701+02:00"
 					}
 				},
 				"editEmail" : {
@@ -29,17 +29,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:18:44.200231+02:00"
+						"dateAndTimeString" : "2022-04-17T22:24:36.631484+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "ZjeOsD2ZDQCcs7yADqn2mw=="
+					"uidString" : "Dm0UJUGZDQCKn/UjBAU6hQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "In this bonus chapter, we are going to learn how to visualize code using just the AST. While you cannot expect the highest level of semantic insight from analyses that purely focus on the AST, it can be a fun and interesting challenge, and give you some ideas on how to work with ASTs."
+				"string" : "Before we build an IDE for Carp together, it might make sense to introduce you to Carp. I’ve written about the language extensively on [my blog](https://veitheller.de), but I’d like to take a stab at quickly introducing it here, for the purposes of this tutorial."
 			},
 			{
 				"__type" : "textSnippet",
@@ -55,7 +55,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T21:59:36.075691+02:00"
+						"dateAndTimeString" : "2022-04-17T22:24:37.857895+02:00"
 					}
 				},
 				"editEmail" : {
@@ -66,17 +66,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:00:54.834762+02:00"
+						"dateAndTimeString" : "2022-04-17T22:25:41.467247+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "yZ0R0UCZDQCJmVqTBAU6hQ=="
+					"uidString" : "x5dhK0GZDQCKodavBAU6hQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "When I first got the Carp parser working, for instance, I asked myself the question “How are the files in the standard library interconnected?” Using the parser and a simple wrapper class named {{gtClass:CarpFile}} I was able to answer that question within minutes."
+				"string" : "If the description whets your appetite, be sure to check it out [on Github](https://github.com) and join our community [on Gitter](https://gitter.im/carp-lang/carp)."
 			},
 			{
 				"__type" : "textSnippet",
@@ -92,7 +92,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:12:07.557482+02:00"
+						"dateAndTimeString" : "2022-04-17T22:27:45.487766+02:00"
 					}
 				},
 				"editEmail" : {
@@ -103,17 +103,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:13:44.45603+02:00"
+						"dateAndTimeString" : "2022-04-17T22:39:56.823586+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "32aj/kCZDQCJp1bbBAU6hQ=="
+					"uidString" : "i/93NkGZDQCKoyIwBAU6hQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "First, I parsed all the files from the standard library and got all the `load` statements. From that, I built a mapping from files to the files they include."
+				"string" : "##A short introduction"
 			},
 			{
 				"__type" : "textSnippet",
@@ -129,7 +129,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:09:14.547385+02:00"
+						"dateAndTimeString" : "2022-04-17T22:28:00.226582+02:00"
 					}
 				},
 				"editEmail" : {
@@ -140,17 +140,51 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:12:30.516602+02:00"
+						"dateAndTimeString" : "2022-04-17T22:32:49.704279+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "Fbbt1kCZDQCJm4QRBAU6hQ=="
+					"uidString" : "nlrWNkGZDQCKpcSZBAU6hQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "{{gtExample:CarpFile class >> #coreLoadStatements |codeExpanded=false| previewExpanded=true|previewShow=#gtItemsFor:}}"
+				"string" : "As mentioned in the [[Introduction]], Carp is a **borrow-checked** language with **type inference** and **syntactic macros**. Outwardly, it takes the form of a Lisp akin to Clojure. The writing experience, however, is more like that of Rust or OCaml."
+			},
+			{
+				"__type" : "carpSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:32:53.393834+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:41:44.082741+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "0En4SEGZDQCMIJywBAU6hQ=="
+				},
+				"code" : "; while global statements exist, Carp does most of its work inside modules\r(defmodule MyMod\r\r\t; we have\r\t; - macros,\r\t(defmacro mymacro [x] (eval 'x)) ; 'x is short for (quote x)\r\t\r\t; - dynamic functions and values (available at compile time), and\r\t(defdynamic dval 1)\r\t(defndynamic dfun [x] (fn [] (+ dval 1)))\r\t\r\t; - static functions and values\r\t(def val \"hi\")\r\t(defn fun [] @val) ; @val is a shorthand for (copy val)\r\t; NB: strings are references by default, they need to be copied\r\t\r\t; other syntactic features include\r\t(def array [1 2 3])\r\t(def map {1 2, 3 4}) ; commas are optional and treated like whitespace\r\t(def ref-1 &1) ; &1 is short for (ref 1), the inverse to copy\r\t\r\t(defdynamic quasiquoted `(1 2 dval %dval)) ; expands to '(1 2 dval 1)\r\t; quasiquoting is a bit of a complicated beast, and I won’t delve too much\r\t; on it.\r\t\r\t; different number types have different suffixes\r\t(def an-int 1)\r\t(def a-long 1l)\r\t(def a-byte 1b)\r\t(def a-float 1.0f)\r\t(def a-double 1.0)\r)"
 			},
 			{
 				"__type" : "textSnippet",
@@ -166,7 +200,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:13:49.336046+02:00"
+						"dateAndTimeString" : "2022-04-17T22:41:52.766276+02:00"
 					}
 				},
 				"editEmail" : {
@@ -177,88 +211,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:14:51.084501+02:00"
+						"dateAndTimeString" : "2022-04-17T22:42:24.609911+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "lh+yBEGZDQCJqXdGBAU6hQ=="
+					"uidString" : "CkwFaUGZDQCMI8MVBAU6hQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "From there, it is just a matter of visualizing the data. {{gtClass:GtMondrian}} is a powerful visualization tool for such questions, and fairly quick to use."
-			},
-			{
-				"__type" : "pharoSnippet",
-				"children" : {
-					"__type" : "snippets",
-					"items" : [ ]
-				},
-				"createEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"createTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:14:58.363273+02:00"
-					}
-				},
-				"editEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"editTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:15:49.272055+02:00"
-					}
-				},
-				"uid" : {
-					"__type" : "uid",
-					"uidString" : "t5/kCEGZDQCJsYevBAU6hQ=="
-				},
-				"code" : "\"the mapping from above\"\raDict := CarpFile coreLoadStatements.\r\r\"the actual view\"\rview := GtMondrian new. \rview nodes\r\tstencil: [:each |\r\t\tBlElement new\r\t\t\tsize: 5@5;\r\t\t\tgeometry: BlCircleGeometry new;\r\t\t\tbackground: Color gray ];\r\twith: aDict keys.\rview edges connectToAll: [:each | aDict at: each ]. \rview layout force. \rview"
-			},
-			{
-				"__type" : "textSnippet",
-				"children" : {
-					"__type" : "snippets",
-					"items" : [ ]
-				},
-				"createEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"createTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:16:02.024437+02:00"
-					}
-				},
-				"editEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"editTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:16:43.097036+02:00"
-					}
-				},
-				"uid" : {
-					"__type" : "uid",
-					"uidString" : "6gxuDEGZDQCJuCEYBAU6hQ=="
-				},
-				"paragraphStyle" : {
-					"__type" : "textStyle"
-				},
-				"string" : "This was the first such question I asked, and realizing how quickly I got an answer and how easy it was, I felt emboldened to ask more such questions. Maybe you will, too!"
+				"string" : "While Carp naturally has many more features, this little snippet should be enough to help you get through this booklet!"
 			}
 		]
 	},
@@ -270,7 +233,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T18:15:31.357765+02:00"
+			"dateAndTimeString" : "2022-04-17T22:22:51.219115+02:00"
 		}
 	},
 	"editEmail" : {
@@ -281,15 +244,15 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T18:15:31.357765+02:00"
+			"dateAndTimeString" : "2022-04-17T22:22:51.219115+02:00"
 		}
 	},
 	"pageType" : {
 		"__type" : "namedPage",
-		"title" : "Visualizing code using our AST"
+		"title" : "Interlude: An Introduction to Carp"
 	},
 	"uid" : {
 		"__type" : "uuid",
-		"uuid" : "e0838db0-3d99-0d00-9cb2-a5f20ea9f69b"
+		"uuid" : "6ed41325-4199-0d00-8a9e-533904053a85"
 	}
 }
