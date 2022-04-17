@@ -4,28 +4,42 @@ Class {
 	#traits : 'TBrLayoutResizable + TGtWithStreamingCodersViewModel',
 	#classTraits : 'TBrLayoutResizable classTrait + TGtWithStreamingCodersViewModel classTrait',
 	#instVars : [
-		'listItemsProvider',
-		'list'
+		'list',
+		'module'
 	],
 	#category : #'Carp-Coder'
 }
 
 { #category : #accessing }
+CarpStreamingMethodsCoderElement class >> forModule: aModule [
+	^ self new module: aModule
+]
+
+{ #category : #accessing }
 CarpStreamingMethodsCoderElement >> initialize [
+
 	super initialize.
-	
+
 	self matchParent.
-	
-	listItemsProvider := BrListStreamItemsProvider new stream: AsyncEmptyStream new.
 
 	list := BrSimpleList new
-		itemType: [ :anItemTypeFactory :anItemObject | anItemObject elementClass ];
-		itemStencil: [ :anElementClass | anElementClass new id: GtSourceCoderId ];
-		itemDataBinder: [ :aCoderElement :aCoderViewModel |
-			BlFrameTelemetry
-				time: [ 'Set {1} as a view model of {2}' format: { aCoderViewModel class name . aCoderElement class name } ]
-				during: [ aCoderElement textualCoderViewModel: aCoderViewModel ] ];
-		itemsProvider: listItemsProvider.
-	
+		        itemType: [ :anItemTypeFactory :anItemObject | 
+			        anItemObject ];
+		        itemStencil: [ :anItem | 
+			        anItem asElement id: GtSourceCoderId ];
+		        itemsProvider:
+			        (BrListStreamItemsProvider new stream: AsyncEmptyStream new).
+
 	self addChild: list
+]
+
+{ #category : #accessing }
+CarpStreamingMethodsCoderElement >> initializeForModule [
+	list itemsProvider: module expressions asBrItemsProvider
+]
+
+{ #category : #accessing }
+CarpStreamingMethodsCoderElement >> module: aModule [ 
+	module := aModule.
+	self initializeForModule
 ]

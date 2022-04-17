@@ -52,16 +52,16 @@ CarpModule >> carpCoderCommentsFor: aView [
 		  action: [ :aToggle :aTab | 
 			  self documentation:
 				  aTab viewContentElement children first text asString ];
-		  actionUpdateButtonTooltip: 'Update documentation'
+		  actionButtonIcon: BrGlamorousVectorIcons cancel
+		  tooltip: 'Discard documentation'
+		  action: [ :aToggle :aTab | 
+			  aTab viewContentElement children first text: self documentation ]
 ]
 
 { #category : #accessing }
 CarpModule >> carpCoderStreamingMethodsFor: aView context: aPhlowContext [
 	<gtModuleView>
 	| aMethodsCoder aMethodsCoderViewModel aNewMethodCoderHolder |
-	
-	aMethodsCoder := GtStreamingCodersModel new.
-	aMethodsCoderViewModel := GtStreamingCodersViewModel new streamingCodersModel: aMethodsCoder.
 		
 	aNewMethodCoderHolder := ValueHolder new.
 
@@ -109,7 +109,12 @@ CarpModule >> carpCoderStreamingMethodsFor: aView context: aPhlowContext [
 							padding: (BlInsets all: 5);
 							addAptitude: BrGlamorousFocusableShadowAptitude new ];
 				name: #'button--add-new-expression'];
-		stencil: [ CarpStreamingMethodsCoderElement new streamingCodersViewModel: aMethodsCoderViewModel ]
+		stencil: [ CarpStreamingMethodsCoderElement forModule: self ]
+]
+
+{ #category : #accessing }
+CarpModule >> expressions [
+	^ expressions
 ]
 
 { #category : #initialization }

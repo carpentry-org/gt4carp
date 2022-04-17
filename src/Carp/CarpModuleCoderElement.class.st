@@ -46,48 +46,46 @@ CarpModuleCoderElement >> buildDefinitionElement [
 
 { #category : #accessing }
 CarpModuleCoderElement >> buildModuleLabel [
+
 	| classCoder aModuleNameEditor aContainer aPreviewButton removeClassButton |
-
 	aContainer := BrHorizontalPane new
-		hMatchParent;
-		alignCenterLeft;
-		vFitContent.
-	
+		              hMatchParent;
+		              alignCenterLeft;
+		              vFitContent.
+
 	aModuleNameEditor := BrEditableLabel new
-		aptitude: (BrGlamorousEditableLabelAptitude new
-			defaultBackground: Color transparent;
-			glamorousCodeFont;
-			bold;
-			fontSize: 18);
-		inputFilter: BrTextEditorClassNameInputFilter new;
-		text: self module name;
-		margin: (BlInsets all: 0);
-		id: GtBehaviorCoderBehaviorNameId;
-		whenKey: BlKeyCombination primaryG
-			labelDo: [ :aShortcutEvent | self phlow spawnObject: self module ];
-		whenKey: BlKeyCombination primaryR
-			labelDo: [ :aShortcutEvent | aShortcutEvent currentTarget switchToEditor ];
-		whenKey: BlKeyCombination primaryC
-			labelDo: [ :aShortcutEvent | Clipboard clipboardText: self module name asString ].
-
-	aPreviewButton := BrButton new
-		id: CarpCoderBehaviorNameApplyPreviewId;
-		margin: (BlInsets left: 5);
-		addAptitude: BrGlamorousButtonWithIconAptitude;
-		icon: BrGlamorousVectorIcons accept;
-		action: [self module name: aModuleNameEditor text].
-
-	aModuleNameEditor editor
-		when: BrTextEditorModifiedEvent 
-		do: [ :anEvent |
-			anEvent text asString trimBoth asSymbol = self module name
-				ifTrue: [ aContainer removeChild: aPreviewButton ]
-				ifFalse: [
-					"show preview button when name is modified"
-					(aContainer hasChild: aPreviewButton)
-						ifFalse: [ aContainer addChild: aPreviewButton after: aModuleNameEditor ] ] ].
+		                     aptitude:
+			                     (BrGlamorousEditableLabelAptitude new
+				                      defaultBackground: Color transparent;
+				                      glamorousCodeFont;
+				                      bold;
+				                      fontSize: 18);
+		                     text: self module name;
+		                     margin: (BlInsets all: 0);
+		                     id: GtBehaviorCoderBehaviorNameId;
+		                     whenKey: BlKeyCombination primaryG
+		                     labelDo: [ :aShortcutEvent | 
+		                     self phlow spawnObject: self module ];
+		                     whenKey: BlKeyCombination primaryR
+		                     labelDo: [ :aShortcutEvent | 
+		                     aShortcutEvent currentTarget switchToEditor ];
+		                     whenKey: BlKeyCombination primaryC
+		                     labelDo: [ :aShortcutEvent | 
+			                     Clipboard clipboardText:
+				                     self module name asString ];
+		                     when: BrEditorAcceptWish
+		                     do: [ :aWish | 
+		                     self module name: aWish text asString ].
 
 	aContainer addChild: aModuleNameEditor.
+
+	aContainer addChild: (BrButton new
+			 aptitude: BrGlamorousButtonWithIconAptitude;
+			 icon: BrGlamorousVectorIcons play;
+			 beSmallSize;
+			 label: 'Generate source';
+			 action: [ :aButton | 
+				 aButton phlow spawnObject: self module toCarp ]).
 
 	^ aContainer
 ]

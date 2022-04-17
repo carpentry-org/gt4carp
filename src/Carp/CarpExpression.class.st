@@ -8,6 +8,11 @@ Class {
 }
 
 { #category : #accessing }
+CarpExpression >> asElement [
+	^ (GtCarpCoderModel new sourceCode: (GtCoderExplicitStringSource new source: self toCarp)) asElement
+]
+
+{ #category : #accessing }
 CarpExpression >> documentation [
 	^ documentation ifNil: ['']
 ]
