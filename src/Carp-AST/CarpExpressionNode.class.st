@@ -4,6 +4,12 @@ Class {
 	#category : #'Carp-AST'
 }
 
+{ #category : #accessing }
+CarpExpressionNode class >> itself [
+	<gtExample>
+	^ self
+]
+
 { #category : #generated }
 CarpExpressionNode >> acceptVisitor: anExpressionVisitor [
 

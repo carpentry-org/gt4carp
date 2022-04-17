@@ -6,7 +6,7 @@ Class {
 
 { #category : #'generated-accessing' }
 CarpParser class >> cacheId [
-	^'2022-04-16T18:21:43.028213+02:00'
+	^'2022-04-17T17:01:25.369965+02:00'
 ]
 
 { #category : #generated }
@@ -141,8 +141,8 @@ Variable
 	: <variable> 'value' {{}}
 	;
 ModuleOrType
-	: <module> <dot> Symbol 'value' {{}}
-	| <module> 'value' {{}}
+	: <module> 'module' <dot> Symbol 'value' {{}}
+	| <module> 'module' {{}}
 	;
 List
 	: <open_paren> 'leftParen' Expressions <close_paren> 'rightParen' {{}}
@@ -158,7 +158,7 @@ CarpParser class >> reduceTable [
 	#(24 0 #reduceActionForExpressions1: 1289217 false) 
 	#(23 1 #reduceActionForStart1: 1258497 false) 
 	#(32 0 #reduceActionForExpressions1: 1803265 false) 
-	#(43 1 #reduceActionForString1: 2436097 false) 
+	#(43 1 #reduceActionForString1: 2446337 false) 
 	#(40 1 #reduceActionForVariable1: 2233345 false) 
 	#(41 1 #reduceActionForModuleOrType2: 2273282 false) 
 	#(36 1 #reduceActionForNumber1: 2013185 false) 
@@ -189,7 +189,7 @@ CarpParser class >> reduceTable [
 	#(38 2 #reduceActionForQuote1: 2150401 false) 
 	#(31 3 #reduceActionForMap1: 1744897 false) 
 	#(32 2 #reduceActionForExpressions2: 1803266 false) 
-	#(42 3 #reduceActionForList1: 2354177 false) 
+	#(42 3 #reduceActionForList1: 2364417 false) 
 	#(41 3 #reduceActionForModuleOrType1: 2273281 false) 
 	#(37 3 #reduceActionForArray1: 2059265 false) 
 	#(33 2 #reduceActionForMapPair1: 1846273 false)
@@ -379,6 +379,7 @@ CarpParser >> reduceActionForModuleOrType1: nodes [
 
 	| result |
 	result := CarpModuleOrTypeNode new.
+	result module: (nodes at: 1).
 	result value: (nodes at: 3).
 	^ result
 ]
@@ -388,7 +389,7 @@ CarpParser >> reduceActionForModuleOrType2: nodes [
 
 	| result |
 	result := CarpModuleOrTypeNode new.
-	result value: (nodes at: 1).
+	result module: (nodes at: 1).
 	^ result
 ]
 
