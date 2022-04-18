@@ -214,7 +214,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:11:32.016153+02:00"
+						"dateAndTimeString" : "2022-04-18T21:12:52.520639+02:00"
 					}
 				},
 				"uid" : {
@@ -224,7 +224,44 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "If you want to have a non-Carp-centric explanation of how to work with parsers in SmaCC, the Glamorous Toolkit book has a section on that as well, {{gtPage:Playing with Parsers in SmaCC - Show|db=2j9m7db2i4oz116bexd7wbdxo}}. It doesn’t cover all of the ground we will, but it should give you enough of an introduction to feel less lost."
+				"string" : "If you want to have a non-Carp-centric explanation of how to work with parsers in SmaCC, the Glamorous Toolkit book has a section on that as well, {{gtPage:Playing with Parsers in SmaCC - Show|db=2j9m7db2i4oz116bexd7wbdxo}}. It doesn’t cover all of the ground you will need to cover to write your own parser, but it should give you enough of an introduction to feel less lost."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:12:54.409049+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:15:52.095384+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "YkG3SFSZDQCfaPv6D3Spxw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "This section is not a guide for writing a SmaCC parser. Neither am I an expert in that, nor is this within the scope of this booklet. [There are entire books on parsing using SmaCC](https://books.pharo.org/booklet-Smacc/), and perusing that should get you pretty far. I will only provide a few pointers and maybe a thing or two to look at inside GT."
 			},
 			{
 				"__type" : "textSnippet",
@@ -277,7 +314,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:11:48.803566+02:00"
+						"dateAndTimeString" : "2022-04-18T21:00:15.390675+02:00"
 					}
 				},
 				"editEmail" : {
@@ -288,7 +325,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:11:49.328916+02:00"
+						"dateAndTimeString" : "2022-04-18T21:12:18.932746+02:00"
 					}
 				},
 				"uid" : {
@@ -298,7 +335,44 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "TODO"
+				"string" : "As a first step, we need to generate a parse tree. To do that, we can write our parser wtihout specifying anything but the rules themselves, without putting the resulting expressions into any classes. I like to start out doing that, to figure out whether I understand the grammar and see whether I can parse expressions."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:07:07.653141+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:12:06.500325+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "C4EONFSZDQCfKITPD3Spxw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "The downside of this is that we end up with an {{gtClass:OrderedCollection}} of parse nodes, without much to help us understand the actual structure of the input program. To have an actual AST that matches our language’s semantics, we will have to do a little more leg work."
 			},
 			{
 				"__type" : "textSnippet",
@@ -351,7 +425,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:12:10.773142+02:00"
+						"dateAndTimeString" : "2022-04-18T21:12:09.876864+02:00"
 					}
 				},
 				"editEmail" : {
@@ -362,7 +436,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:12:47.439878+02:00"
+						"dateAndTimeString" : "2022-04-18T21:17:07.009579+02:00"
 					}
 				},
 				"uid" : {
@@ -372,7 +446,155 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "TODO"
+				"string" : "This is the step you will need to do yourself even if you generated a parser from a grammar as described in [[Building a parser from an ANTLR grammar]]."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:17:18.203944+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:19:57.342894+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "8uDhV1SZDQCfoU+xD3Spxw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "At this point we will need to provide names for the tokens and productions. Thisis best done from either the `Grammar` or `Annotations` tabs of the parser. In the video I linked to in [[Building a parser from an ANTLR grammar]] John Brant demonstrates what to do [in this section](https://youtu.be/ClxwPg_L54g?t=981)."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:22:29.113113+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:22:40.888776+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "fTH4alSZDQCf63p0D3Spxw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "If you need another, simple example for a complete parser generating an"
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:19:59.508189+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:21:17.790476+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "SaIMYlSZDQCf59wBD3Spxw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "As a tip: while not strictly necessary, it will be important later on whether you name tokens inside your rules or not. Unnamed tokens will not picked up by the styler and remain woefully unstyled, making you scratch your head why your highlighter doesn’t do what it should—I speak from experience!"
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:21:24.403357+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-18T21:22:10.192457+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "M+UMZ1SZDQCf6SdSD3Spxw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "Once you click on `Accept` for your grammar, the appropriate clases, including all the members and their accessors, will be created for you. Congratulations, you have an AST!"
 			},
 			{
 				"__type" : "textSnippet",
@@ -473,7 +695,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:21:44.411232+02:00"
+						"dateAndTimeString" : "2022-04-17T18:21:45.318245+02:00"
 					}
 				},
 				"uid" : {
@@ -483,7 +705,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Over in the bonus section, there is a chapter on [[Visualizing code using our AST]]. It’s just a suggestion, but maybe there are some questions you’ve been asking yourself about your code bases lately that you can now finally answer using the AST? If you do, be sure to tell me about "
+				"string" : "Over in the bonus section, there is a chapter on [[Visualizing code using our AST]]. It’s just a suggestion, but maybe there are some questions you’ve been asking yourself about your code bases lately that you can now finally answer using the AST? If you do, be sure to tell me about it!"
 			}
 		]
 	},

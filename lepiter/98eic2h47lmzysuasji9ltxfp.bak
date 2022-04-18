@@ -103,7 +103,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T18:04:42.132554+02:00"
+						"dateAndTimeString" : "2022-04-17T18:04:44.753707+02:00"
 					}
 				},
 				"uid" : {
@@ -113,7 +113,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Apart from that, I fear, I cannot help you much if things don’t go as planned. But maybe some of the things we will discuss in the next section, [[Building a parser from scratch]], will help you get from something that generates a raw parse tree to something that generates a real usable AST for your language. Take a "
+				"string" : "Apart from that, I fear, I cannot help you much if things don’t go as planned. But maybe some of the things we will discuss in the next section, [[Building a parser from scratch]], will help you get from something that generates a raw parse tree to something that generates a real usable AST for your language. Take a peek!"
 			}
 		]
 	},
