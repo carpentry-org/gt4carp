@@ -41,7 +41,7 @@ CarpModuleCoderElement >> buildContentTabs [
 
 { #category : #accessing }
 CarpModuleCoderElement >> buildDefinitionElement [
-	^ BrExpander new
+	^ CarpDefinitionsElement new module: self module
 ]
 
 { #category : #accessing }

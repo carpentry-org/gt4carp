@@ -4,7 +4,8 @@ Class {
 	#instVars : [
 		'uses',
 		'expressions',
-		'name'
+		'name',
+		'tests'
 	],
 	#category : #'Carp-IDE'
 }
@@ -17,6 +18,11 @@ CarpModule class >> named: aString [
 { #category : #accessing }
 CarpModule >> addExpression: anExpression [
 	expressions add: anExpression
+]
+
+{ #category : #accessing }
+CarpModule >> addTest: aTest [
+	tests add: aTest
 ]
 
 { #category : #accessing }
@@ -121,6 +127,7 @@ CarpModule >> expressions [
 CarpModule >> initialize [
 	uses := Set new.
 	expressions := OrderedCollection new.
+	tests := OrderedCollection new.
 ]
 
 { #category : #converting }
@@ -133,6 +140,16 @@ CarpModule >> name: aString [
 	name := aString
 ]
 
+{ #category : #accessing }
+CarpModule >> removeUse: aString [
+	uses remove: aString
+]
+
+{ #category : #accessing }
+CarpModule >> setUses: aCollectionOfStrings [
+	uses := aCollectionOfStrings asSet
+]
+
 { #category : #converting }
 CarpModule >> toCarp [
 
@@ -142,9 +159,86 @@ CarpModule >> toCarp [
 		  aStream << '(defmodule ' << self name << ' ' << (uses
 			   ifEmpty: [ '' ]
 			   ifNotEmpty: [ 
-			   Character lf , Character tab , '(use-all ' , (' ' join: uses)
+			   Character lf  asString , Character tab  asString, '(use-all ' , (' ' join: uses)
 			   , ')' ]).
 		  expressions do: [ :expression | 
 			  aStream << Character lf << Character tab << expression toCarp ].
 		  aStream << ')' ]
+]
+
+{ #category : #accessing }
+CarpModule >> uses [
+	^ uses
+]
+
+{ #category : #accessing }
+CarpModule >> usesDescription [
+
+	<magritteDescription>
+	^ MAToManyRelationDescription new
+		  label: 'Uses';
+		  priority: 6;
+		  accessor: (MASelectorAccessor read: #uses write: #setUses:);
+		  classes: { String };
+		  blocListStencil: [ :aMemento :aDescription :aForm | 
+			  | aTagger |
+			  aTagger := BrTagger new.
+			  aTagger
+				  margin: ((BlInsets left: 7) withBottom: 4);
+				  hMatchParent;
+				  vFitContent.
+			  aForm hMatchParent.
+			  aDescription isReadOnly
+				  ifTrue: [ 
+					  aTagger aptitude: (BrGlamorousTaggerAptitude new
+							   margin: (BlInsets right: 5);
+							   tagLabel: [ :aTag | 
+								   | aLabel |
+								   aLabel := BrLabel new
+									             text: aTag name;
+									             padding: (BlInsets all: 4);
+									             geometry: (BlRoundedRectangleGeometry cornerRadius: 4);
+									             background:
+										             BrGlamorousColors neutralBackgroundColor;
+									             aptitude: (BrGlamorousLabelAptitude new
+											              glamorousCodeFont;
+											              fontSize: 10).
+
+								   aLabel ]) ]
+				  ifFalse: [ 
+					  aTagger aptitude: (BrGlamorousTaggerEditableAptitude new
+							   margin: (BlInsets right: 5);
+							   tagLabel: [ :aTag | 
+								   | aLabel |
+								   aLabel := BrEditableLabel new
+									             text: aTag name;
+									             aptitude: (BrGlamorousEditableLabelAptitude new
+											              glamorousCodeFont;
+											              defaultForeground: Color black;
+											              fontSize: 10).
+
+								   aLabel ]).
+					  aTagger when: BrTaggerAddTagRequest do: [ :aRequest | 
+						  aMemento
+							  write: ((aTagger tags collect: #name)
+									   add: aRequest tag name;
+									   yourself)
+							  using: aDescription ].
+					  aTagger when: BrTaggerRemoveTagRequest do: [ :aRequest | 
+						  aMemento
+							  write: ((aTagger tags collect: #name)
+									   remove: aRequest tag name;
+									   yourself)
+							  using: aDescription ] ].
+			  aTagger withAsyncSinkDo: [ :anElementSink | 
+				  anElementSink
+					  sink: AsyncPeakSink new;
+					  whenUpdate: [ :theTagger :aSink | 
+						  | theValues theTexts |
+						  theValues := aSink value currentValue.
+						  theTexts := theValues collect: [ :each | 
+								              aDescription displayStringFor: each ].
+						  theTagger namedTags: theTexts ].
+				  (aMemento readObservableValueUsing: aDescription) observe:
+					  anElementSink ] ]
 ]
