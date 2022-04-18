@@ -43,3 +43,8 @@ CarpStreamingMethodsCoderElement >> module: aModule [
 	module := aModule.
 	self initializeForModule
 ]
+
+{ #category : #accessing }
+CarpStreamingMethodsCoderElement >> onTests [
+	list itemsProvider: module tests asBrItemsProvider
+]

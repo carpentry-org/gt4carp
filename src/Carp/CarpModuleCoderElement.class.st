@@ -79,6 +79,10 @@ CarpModuleCoderElement >> buildModuleLabel [
 
 	aContainer addChild: aModuleNameEditor.
 
+	aContainer addChild: (BrFrame new
+			 vFitContent;
+			 hMatchParent).
+
 	aContainer addChild: (BrButton new
 			 aptitude: BrGlamorousButtonWithIconAptitude;
 			 icon: BrGlamorousVectorIcons play;

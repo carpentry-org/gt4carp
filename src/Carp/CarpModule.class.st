@@ -37,7 +37,7 @@ CarpModule >> carpCoderCommentsFor: aView [
 	^ aView explicit
 		  title: 'Documentation';
 		  tooltip: 'Module Documentation';
-		  priority: 30;
+		  priority: 1;
 		  disableAsync;
 		  stencil: [ 
 			  | snippet snippetViewModel |
@@ -118,6 +118,60 @@ CarpModule >> carpCoderStreamingMethodsFor: aView context: aPhlowContext [
 		stencil: [ CarpStreamingMethodsCoderElement forModule: self ]
 ]
 
+{ #category : #coders }
+CarpModule >> carpCoderStreamingTestsFor: aView context: aPhlowContext [
+	<gtModuleView>
+	| aMethodsCoder aMethodsCoderViewModel aNewMethodCoderHolder |
+		
+	aNewMethodCoderHolder := ValueHolder new.
+
+	^ aView explicit
+		priority: 10;
+		title: 'Tests';
+		disableAsync;
+		actionDropdownButtonDo: [ :aDrodownAction | 
+			aDrodownAction dropdown 
+				icon: BrGlamorousVectorIcons add;
+				tooltip: 'Add new test suite';
+				content: [ :aButton |
+					| aNewMethodCoder aNewMethodCoderViewModel aHandler |
+
+					aNewMethodCoderHolder contents
+						ifNotNil: [ :aContents |
+							aNewMethodCoderViewModel := aContents ]
+						ifNil: [
+					
+						aNewMethodCoder := GtCarpCoderModel new.
+
+						aNewMethodCoderViewModel := aNewMethodCoder asCoderViewModel.
+						aNewMethodCoderViewModel
+							withoutHeader;
+							expanded: true;
+							focused: true;
+							moveCursorAtEnd.
+						
+						aNewMethodCoderHolder contents: aNewMethodCoderViewModel.
+
+						aHandler := GtPharoNewMethodCodeSavedHandler new
+							methodsCoderViewModel: aMethodsCoderViewModel;
+							element: aButton;
+							methodCoderHolder: aNewMethodCoderHolder.
+						
+						aNewMethodCoderViewModel weak
+							when: GtMethodCoderSaved
+							send: #onAnnouncement:
+							to: aHandler ].
+
+						(GtExpandedOnlyCoderElement new coderViewModel: aNewMethodCoderViewModel)
+							hExact: 300;
+							vFitContent;
+							background: Color white;
+							padding: (BlInsets all: 5);
+							addAptitude: BrGlamorousFocusableShadowAptitude new ];
+				name: #'button--add-new-test-suite'];
+		stencil: [ (CarpStreamingMethodsCoderElement forModule: self) onTests ]
+]
+
 { #category : #accessing }
 CarpModule >> expressions [
 	^ expressions
@@ -148,6 +202,11 @@ CarpModule >> removeUse: aString [
 { #category : #accessing }
 CarpModule >> setUses: aCollectionOfStrings [
 	uses := aCollectionOfStrings asSet
+]
+
+{ #category : #accessing }
+CarpModule >> tests [
+	^ tests
 ]
 
 { #category : #converting }
