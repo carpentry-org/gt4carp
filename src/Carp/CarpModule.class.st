@@ -30,7 +30,7 @@ CarpModule >> addUse: aString [
 	uses add: aString
 ]
 
-{ #category : #accessing }
+{ #category : #coders }
 CarpModule >> carpCoderCommentsFor: aView [
 
 	<gtModuleView>
@@ -64,7 +64,7 @@ CarpModule >> carpCoderCommentsFor: aView [
 			  aTab viewContentElement children first text: self documentation ]
 ]
 
-{ #category : #accessing }
+{ #category : #coders }
 CarpModule >> carpCoderStreamingMethodsFor: aView context: aPhlowContext [
 	<gtModuleView>
 	| aMethodsCoder aMethodsCoderViewModel aNewMethodCoderHolder |
@@ -171,7 +171,7 @@ CarpModule >> uses [
 	^ uses
 ]
 
-{ #category : #accessing }
+{ #category : #magritte }
 CarpModule >> usesDescription [
 
 	<magritteDescription>

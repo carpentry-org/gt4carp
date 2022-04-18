@@ -7,7 +7,7 @@ Class {
 	#category : #'Carp-Coder'
 }
 
-{ #category : #accessing }
+{ #category : #'ui building' }
 CarpDefinitionsElement >> addDefinitionEditorShortcutsTo: aPropertiesElement [
 
 	aPropertiesElement addShortcut: (BlShortcutWithAction new
@@ -35,7 +35,7 @@ CarpDefinitionsElement >> addDefinitionEditorShortcutsTo: aPropertiesElement [
 								 aNextFocusElement requestFocus ] ] ])
 ]
 
-{ #category : #accessing }
+{ #category : #'ui building' }
 CarpDefinitionsElement >> buildDefinitionEditor [
 
 	| theProperties |
@@ -51,7 +51,7 @@ CarpDefinitionsElement >> buildDefinitionEditor [
 	^ theProperties
 ]
 
-{ #category : #accessing }
+{ #category : #'ui building' }
 CarpDefinitionsElement >> buildDefinitionReader [
 
 	| theProperties theReaders |
@@ -66,7 +66,7 @@ CarpDefinitionsElement >> buildDefinitionReader [
 	^ theProperties
 ]
 
-{ #category : #accessing }
+{ #category : #initialization }
 CarpDefinitionsElement >> initialize [
 	super initialize.	
 
@@ -87,7 +87,7 @@ CarpDefinitionsElement >> module: aCarpModule [
 	self updateElements
 ]
 
-{ #category : #accessing }
+{ #category : #'ui building' }
 CarpDefinitionsElement >> updateElements [
 
 	self header: [ 
