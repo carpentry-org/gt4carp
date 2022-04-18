@@ -9,7 +9,7 @@ Class {
 
 { #category : #accessing }
 CarpExpression >> asElement [
-	^ (GtCarpCoderModel new sourceCode: (GtCoderExplicitStringSource new source: self toCarp)) asElement
+	^ (GtCarpCoderModel code: self toCarp) asElement
 ]
 
 { #category : #accessing }
