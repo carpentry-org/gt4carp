@@ -1,6 +1,9 @@
 Class {
 	#name : #LeCarpSnippetElement,
 	#superclass : #LeExternalEvaluatedSnippetElement,
+	#instVars : [
+		'serverStrategy'
+	],
 	#category : #'Carp-Lepiter'
 }
 
@@ -18,7 +21,7 @@ LeCarpSnippetElement >> onSnippetViewModelChanged [
 LeCarpSnippetElement >> serverStrategy [
 
 	^ serverStrategy ifNil: 
-		[ serverStrategy := LeCarpApplicationStrategy new content: self ].
+		[ serverStrategy := LeCarpApplicationStrategy new content: self snippet ].
 ]
 
 { #category : #accessing }
