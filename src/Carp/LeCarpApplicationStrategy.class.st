@@ -14,9 +14,9 @@ LeCarpApplicationStrategy class >> strategyName [
 LeCarpApplicationStrategy >> applicationServer [
 
 	content database isDatabase ifFalse: [ ^ nil ].
-	JSLinkApplication uniqueInstance ifNil:
-		[ JSLinkApplication uniqueInstance: (self newJavaScriptApplicationFor: content database) ].
-	^ JSLinkApplication uniqueInstance
+	CarpApplication uniqueInstance ifNil:
+		[ CarpApplication uniqueInstance: (self newCarpApplicationFor: content database) ].
+	^ CarpApplication uniqueInstance
 ]
 
 { #category : #accessing }
@@ -24,16 +24,16 @@ LeCarpApplicationStrategy >> applicationSettings [
 	"Answer the settings that will be used by the server.
 	This musn't actually start the server as that should be deferred until a snippet is evaluated for the first time."
 
-	^ JSLinkApplication isRunning ifTrue:
-		[ JSLinkApplication uniqueInstance settings ]
+	^ CarpApplication isRunning ifTrue:
+		[ CarpApplication uniqueInstance settings ]
 	ifFalse:
-		[ self updatedSettings: JSLinkApplication defaultSettings ]
+		[ self updatedSettings: CarpApplication defaultSettings ]
 ]
 
 { #category : #accessing }
-LeCarpApplicationStrategy >> newJavaScriptApplicationFor: aLeDatabase [
+LeCarpApplicationStrategy >> newCarpApplicationFor: aLeDatabase [
 
-	^ JSLinkApplication new initializeWith: 
+	^ CarpApplication new initializeWith: 
 		(self updatedSettings: LanguageLinkSettings carpDefaultSettings).
 
 ]

@@ -28,12 +28,12 @@ GtCarpCoderModel >> bindAndExecute: sourceString [
 	| carpSource trimmedSource ast varNames lastStatement application commandFactory |
 
 	trimmedSource := SmaCCString on: sourceString trimRight.
-	ast := JSParser parse: trimmedSource.
+	ast := CarpParser parse: trimmedSource.
 	"The variables to be returned are names that are in pharoBindings"
 	varNames := pharoBindings bindingNames asSet.
 
 	"Assign the final statement to snippetResult"
-	lastStatement := ast items last.
+	lastStatement := ast expressions last.
 	trimmedSource 
 		insert: '(defdynamic snippetResult ' 
 		at: lastStatement startPosition.
@@ -106,6 +106,19 @@ GtCarpCoderModel >> newCompletionStrategy [
 { #category : #accessing }
 GtCarpCoderModel >> pharoBindings: anObject [
 	pharoBindings := anObject
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> primitiveEvaluate: aSourceString inContext: aGtSourceCoderEvaluationContext onFailDo: anEvaluationFailBlock [
+	| result |
+
+	result := self bindAndExecute: aSourceString.
+	result associationsDo: [ :binding |
+		(pharoBindings bindingOf: binding key asSymbol) value: binding value ].
+
+	^ result
+		at: 'snippetResult'
+		ifAbsent: anEvaluationFailBlock
 ]
 
 { #category : #accessing }

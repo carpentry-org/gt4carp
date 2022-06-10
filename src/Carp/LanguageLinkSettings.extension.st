@@ -9,12 +9,12 @@ LanguageLinkSettings class >> carpDefaultSettings [
 		serverSocketAddress: (LanguageLinkSocketAddress 
 				ipOrName: 'localhost' port: (9900 + 99 atRandom));
 		messageBrokerStrategy: LanguageLinkHttpMessageBroker;
-		serverProcessClass: JSLinkPharoNodejsProcess;
-		platform: JSLinkPharoPlatform new;
-		commandFactoryClass: JSLinkCommandFactory;
+		serverProcessClass: CarpProcess;
+		platform: CarpPlatform new;
+		commandFactoryClass: CarpCommandFactory;
 		commandClass: LanguageLinkCommand;
 		serializerClass: LanguageLinkSerializer;
-		deserializerClass: JSLinkDeserializer;
+		deserializerClass: CarpDeserializer;
 		parserClass: CarpParser;
 		yourself
 ]

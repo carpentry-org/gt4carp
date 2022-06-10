@@ -10,7 +10,7 @@ Class {
 { #category : #'start-stop' }
 CarpApplication class >> start [
 
-	^ self startWith: LanguageLinkSettings jsDefaultSettings.
+	^ self startWith: LanguageLinkSettings carpDefaultSettings.
 ]
 
 { #category : #accessing }
@@ -19,9 +19,16 @@ CarpApplication >> baseApplication [
 ]
 
 { #category : #accessing }
+CarpApplication >> debuggerClientFor: anException [
+	"Answer the debugger client to be used by the Gt Post Mortem debugger"
+
+	^ CarpPostMortemDebugger new exception: anException
+]
+
+{ #category : #accessing }
 CarpApplication >> initializeHandlers [
 	loggingHandler := LanguageLinkLoggingHandler application: self.
 	communicationHandler := LanguageLinkCommunicationHandler application: self.
 	processHandler := LanguageLinkServerHandler application: self.
-	"executionHandler := CarpExecutionHandler application: self"
+	executionHandler := CarpExecutionHandler application: self
 ]
