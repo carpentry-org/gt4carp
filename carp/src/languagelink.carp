@@ -1,0 +1,17 @@
+(load "/Users/veitheller/Documents/Code/Github/carp/archive/socket/sockets.carp")
+
+(use Socket)
+
+(defn main []
+  (let-do [port (Maybe.from (from-string &(Maybe.from (nth &System.args 1) @"")) 0)]
+    (IO.println &(fmt "Starting server on localhost, port %d" port))
+    (Socket.with-server sock "127.0.0.1" port
+      (if (Socket.valid? &sock)
+        (Socket.while-connection &sock client
+          (IO.println &(read &client))
+          (send &client "hi")
+          (IO.println "yay"))
+        (IO.errorln "Server couldn’t be started.")))))
+
+(build)
+(run)

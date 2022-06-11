@@ -325,14 +325,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T17:07:38.104346+02:00"
+						"dateAndTimeString" : "2022-06-11T16:35:43.289314+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
 					"uidString" : "Ddc1ljyZDQCZq2mSDqn2mw=="
 				},
-				"code" : "; this is what we will be able to do\r(IO.defn hello-world []\r  (IO.println \"Hello world!\"))"
+				"code" : "; this is what we will be able to do\r(defn hello-world []\r  (IO.println \"Hello world!\"))"
 			},
 			{
 				"__type" : "textSnippet",

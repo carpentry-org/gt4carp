@@ -9,7 +9,7 @@ LanguageLinkSettings class >> carpDefaultSettings [
 		serverSocketAddress: (LanguageLinkSocketAddress 
 				ipOrName: 'localhost' port: (9900 + 99 atRandom));
 		messageBrokerStrategy: LanguageLinkHttpMessageBroker;
-		serverProcessClass: CarpProcess;
+		serverProcessClass: CarpPythonProcess;
 		platform: CarpPlatform new;
 		commandFactoryClass: CarpCommandFactory;
 		commandClass: LanguageLinkCommand;

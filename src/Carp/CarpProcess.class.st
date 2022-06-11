@@ -12,23 +12,24 @@ Class {
 }
 
 { #category : #accessing }
+CarpProcess class >> program [
+	^ 'carp'
+]
+
+{ #category : #accessing }
 CarpProcess class >> resolveCarpPath [
 	| proc |
 	
 	proc := GtSubprocessWithInMemoryOutput new
 				command: 'which';
-				arguments: { 'carp' }.
+				arguments: { self program}.
 	CarpPlatform subProcessEnvironmentDictionary keysAndValuesDo: [ :key :value |
 		proc environmentAt: key put: value ].
 	proc runAndWait.
 	(#(0 1) includes: proc exitCode) ifFalse:
-		[ self error: 'Unable to request carp location' ].
+		[ self error: 'Unable to request', self program, ' location' ].
 	^ proc stdout trim asFileReference
 
-]
-
-{ #category : #accessing }
-CarpProcess class >> resolveNodejsPath [
 ]
 
 { #category : #accessing }
@@ -89,10 +90,15 @@ CarpProcess >> processArguments [
 	self settings serverDebugMode ifTrue: 
 		[ args add: '--inspect' ].
 	args 
-		add: (self workingDirectory / 'src/languagelink.carp') resolve fullName;
+		add: (self workingDirectory / self programFile) resolve fullName;
 		add: self settings serverSocketAddress port asString;
 		add: self settings clientSocketAddress port asString.
 	^ args
+]
+
+{ #category : #accessing }
+CarpProcess >> programFile [
+	^ 'src/languagelink.carp'
 ]
 
 { #category : #accessing }
