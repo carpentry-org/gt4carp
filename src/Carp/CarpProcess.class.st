@@ -67,16 +67,17 @@ CarpProcess >> isRunning [
 		ifNotNil: [ process isRunning ]
 ]
 
-{ #category : #accessing }
-CarpProcess >> newProcess| newProcess [ |
+{ #category : #'start-stop' }
+CarpProcess >> newProcess [
+	| newProcess |
 	newProcess := GtSubprocessWithInMemoryOutput new
-				command: self serverPath fullName;
-				arguments: self processArguments;
-				workingDirectory: self workingDirectory resolve fullName;
-				terminateOnShutdown;
-				yourself.
-	environmentVariables associationsDo: [ :assoc |
-		newProcess environmentAt: assoc key put: assoc value ].
+			command: self serverPath fullName;
+			arguments: self processArguments;
+			workingDirectory: self workingDirectory resolve fullName;
+			terminateOnShutdown;
+			yourself.
+	environmentVariables
+		associationsDo: [ :assoc | newProcess environmentAt: assoc key put: assoc value ].
 	^ newProcess
 ]
 
