@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:25:16.445558+02:00"
+						"dateAndTimeString" : "2022-06-11T20:46:02.5892+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Creating a snippet type is actually quite simple. Almost all of the code for Carp is in the Carp package, under the tag Lepiter (TODO: gtPackage annotation would be great). The most important class is likely {{gtClass:LeCarpSnippet}}, because like {{gtClass:CarpApplication}} for LanguageLink, this class is the central player around which the rest of the team organizes."
+				"string" : "Creating a snippet type is actually quite simple. Almost all of the code for Carp is in {{gtPackage:Carp|tag=Lepiter}}. The most important class is likely {{gtClass:LeCarpSnippet}}, because like {{gtClass:CarpApplication}} for LanguageLink, this class is the central player around which the rest of the team organizes."
 			},
 			{
 				"__type" : "textSnippet",

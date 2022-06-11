@@ -140,7 +140,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-10T16:44:28.640047+02:00"
+						"dateAndTimeString" : "2022-06-11T20:50:28.716326+02:00"
 					}
 				},
 				"uid" : {
@@ -177,7 +177,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-10T16:47:01.610149+02:00"
+						"dateAndTimeString" : "2022-06-10T16:47:24.613405+02:00"
 					}
 				},
 				"uid" : {
@@ -187,7 +187,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "In Carp, I also went down the extra mile of coloring parentheses according to their nesting level. The code for this is inside the rule for lists, maps and arrays, and it uses {{gtClass:CarpStylerUtilities}} to color the parentheses and register an event for when the cursor enters or leaves the region to highlight it. Should you want more complex highlighting and change it based on cursor position"
+				"string" : "In Carp, I also went down the extra mile of coloring parentheses according to their nesting level. The code for this is inside the rule for lists, maps and arrays, and it uses {{gtClass:CarpStylerUtilities}} to color the parentheses and register an event for when the cursor enters or leaves the region to highlight it. Should you want more complex highlighting and change it based on cursor position and interactions, this might give you a taste of how to do it."
 			}
 		]
 	},

@@ -29,7 +29,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T17:48:16.142343+02:00"
+						"dateAndTimeString" : "2022-06-11T20:46:56.443327+02:00"
 					}
 				},
 				"uid" : {
@@ -39,7 +39,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Getting code to execute is most likely the most tricky part of adding a language to GT. Most of the code in the Carp IDE deals with handling that part of the IDE experience. Additionally, LanguageLink requires a custom server setup, which needed to be written outside of GT."
+				"string" : "Getting code to execute is most likely the most tricky part of adding a language to GT. Most of the code in the Carp IDE deals with handling that part of the IDE experience. Additionally, {{gtPackage:LanguageLink requires a custom server setup, which needed to be written outside of GT."
 			},
 			{
 				"__type" : "textSnippet",
@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T17:48:46.359725+02:00"
+						"dateAndTimeString" : "2022-06-11T17:49:02.268331+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Because both parts of this process make a cohesive whole, I split this chapter into two sub-chapters, [[B"
+				"string" : "Because both parts of this process make a cohesive whole, I split this chapter into two sub-chapters, [[Building a LanguageLink client]] and [[Building a LanguageLink server]]."
 			}
 		]
 	},

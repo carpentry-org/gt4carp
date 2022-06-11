@@ -140,7 +140,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T17:57:41.124314+02:00"
+						"dateAndTimeString" : "2022-04-17T17:58:06.623815+02:00"
 					}
 				},
 				"uid" : {
@@ -150,7 +150,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "You might also want to take a look at the esecti{{gtPage:How to parse sources in different languages|db=2j9m7db2i4oz116bexd7wbdxo}}"
+				"string" : "You might also want to take a look at the section {{gtPage:How to parse sources in different languages|db=2j9m7db2i4oz116bexd7wbdxo}} in the Glamorous Toolkit book to get an overview. Maybe the language you want to add is already there!"
 			}
 		]
 	},

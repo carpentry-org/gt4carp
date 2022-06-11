@@ -510,7 +510,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-18T21:22:40.888776+02:00"
+						"dateAndTimeString" : "2022-04-18T21:22:56.54305+02:00"
 					}
 				},
 				"uid" : {
@@ -520,7 +520,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "If you need another, simple example for a complete parser generating an"
+				"string" : "If you need another, simple example for a complete parser generating an AST, you might want to check out the {{gtClass:JSONParser}}."
 			},
 			{
 				"__type" : "textSnippet",

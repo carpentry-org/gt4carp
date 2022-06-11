@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:25:16.445558+02:00"
+						"dateAndTimeString" : "2022-06-11T20:45:57.641893+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Creating a snippet type is actually quite simple. Almost all of the code for Carp is in the Carp package, under the tag Lepiter (TODO: gtPackage annotation would be great). The most important class is likely {{gtClass:LeCarpSnippet}}, because like {{gtClass:CarpApplication}} for LanguageLink, this class is the central player around which the rest of the team organizes."
+				"string" : "Creating a snippet type is actually quite simple. Almost all of the code for Carp is in {{gtPackage:Carp}}. The most important class is likely {{gtClass:LeCarpSnippet}}, because like {{gtClass:CarpApplication}} for LanguageLink, this class is the central player around which the rest of the team organizes."
 			},
 			{
 				"__type" : "textSnippet",
@@ -103,7 +103,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:29:22.376041+02:00"
+						"dateAndTimeString" : "2022-06-11T18:29:42.230718+02:00"
 					}
 				},
 				"uid" : {
@@ -113,7 +113,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Most of the code you will write will just be specialization over readily-available Lepiter classes. The only things that will be truly custom will most likely be your version of {{gtClass:LeExternalServerStrategy}} (in the case of Carp that is {{gtClass:LeCarpApplicationStrategy}}), which will bridge the gap between your LanguageLink application and the snippet itself, and your {{gtClass:GtSourceCoder}}, which"
+				"string" : "Most of the code you will write will just be specialization over readily-available Lepiter classes. The only things that will be truly custom will most likely be your version of {{gtClass:LeExternalServerStrategy}} (in the case of Carp that is {{gtClass:LeCarpApplicationStrategy}}), which will bridge the gap between your LanguageLink application and the snippet itself, and your {{gtClass:GtSourceCoder}} ({{gtClass:GtCarpCoderModel}})."
 			},
 			{
 				"__type" : "textSnippet",
