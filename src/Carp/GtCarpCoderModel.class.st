@@ -37,6 +37,9 @@ GtCarpCoderModel >> bindAndExecute: sourceString [
 	trimmedSource 
 		insert: '(defdynamic snippetResult ' 
 		at: lastStatement startPosition.
+	trimmedSource 
+		insert: ')' 
+		at: lastStatement stopPosition.
 	varNames add: 'snippetResult'.
 
 	"Get the final source to execute"
