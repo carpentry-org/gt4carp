@@ -26,6 +26,11 @@ CarpDerefNode >> derefGlyph: aSmaCCToken [
 	derefGlyph := aSmaCCToken
 ]
 
+{ #category : #accessing }
+CarpDerefNode >> intoModel [
+	^ CarpCall function: 'deref' arguments: {value intoModel}
+]
+
 { #category : #generated }
 CarpDerefNode >> nodeVariables [
 

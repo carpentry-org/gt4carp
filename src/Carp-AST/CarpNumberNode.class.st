@@ -14,6 +14,11 @@ CarpNumberNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #accessing }
+CarpNumberNode >> intoModel [
+	^ CarpDouble number: self value source asNumber
+]
+
+{ #category : #accessing }
 CarpNumberNode >> toPharo [
 	^ value source asInteger
 ]

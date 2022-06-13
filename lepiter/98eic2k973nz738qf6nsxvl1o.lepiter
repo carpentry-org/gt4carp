@@ -103,14 +103,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:36:14.725535+02:00"
+						"dateAndTimeString" : "2022-06-13T22:57:42.883096+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
 					"uidString" : "yC3J0D6ZDQCd0ZgmDqn2mw=="
 				},
-				"code" : "'Example' asCarpModule\r\taddExpression: (CarpStaticFunction\r\t\t\t named: 'example' asCarpSymbol\r\t\t\t withArguments: { \r\t\t\t\t\t 'x' asCarpSymbol.\r\t\t\t\t\t 'y' asCarpSymbol }\r\t\t\t andBody: (CarpCall function: '+' asCarpSymbol arguments: { \r\t\t\t\t\t\t\t  'x' asCarpSymbol.\r\t\t\t\t\t\t\t  'y' asCarpSymbol }));\r\taddExpression: (CarpDynamicVariable\r\t\t\t named: 'dyn-example' asCarpSymbol\r\t\t\t binding: 1 asCarpInteger);\r\ttoCarp"
+				"code" : "'Example' asCarpModule\r\taddExpression: (CarpStaticFunction\r\t\t\t named: 'example' asCarpSymbol\r\t\t\t withArguments: { \r\t\t\t\t\t 'x' asCarpSymbol.\r\t\t\t\t\t 'y' asCarpSymbol }\r\t\t\t andBody: {'+' asCarpSymbol .\r\t\t\t\t\t\t\t  'x' asCarpSymbol.\r\t\t\t\t\t\t\t  'y' asCarpSymbol } asCarpCall);\r\taddExpression: (CarpDynamicVariable\r\t\t\t named: 'dyn-example' asCarpSymbol\r\t\t\t binding: 1 asCarpInteger);\r\ttoCarp"
 			},
 			{
 				"__type" : "textSnippet",

@@ -33,7 +33,9 @@ GtCarpCoderModel >> bindAndExecute: sourceString [
 	| res trimmedSource ast varNames lastStatement carpSource |
 	trimmedSource := SmaCCString on: sourceString trimRight.
 	ast := CarpParser parse: trimmedSource.	"The variables to be returned are names that are in pharoBindings"
-	varNames := pharoBindings bindingNames asSet.	"Assign the final statement to snippetResult"
+	varNames := pharoBindings
+			ifNil: [ Set new ]
+			ifNotNil: [ pharoBindings bindingNames asSet ].	"Assign the final statement to snippetResult"
 	lastStatement := ast expressions last.
 	trimmedSource
 		insert: '(defdynamic snippetResult '
@@ -46,10 +48,10 @@ GtCarpCoderModel >> bindAndExecute: sourceString [
 	res := self bindAndExecuteRaw: sourceString.
 
 	(res at: #result) = 'success' ifTrue: [ ^ CarpExecutionResult from: res ].
-	exception := (PharoLinkRemoteError new
-		application: application;
-		command: commandFactory command;
-		trace: (res at: #value)).
+	exception := PharoLinkRemoteError new
+			application: application;
+			command: commandFactory command;
+			trace: (res at: #value).
 	exception signal
 ]
 
@@ -87,56 +89,58 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 	addOns
 		addStyler: (GtCoderAstSmaCCParserStyler new smaccStyler: CarpParser gtStyler).
 
-	addOns
-		addMainAction: 'Evaluate' translated
-		icon: BrGlamorousVectorIcons play
-		action: [ :aCoderUIModel :anElement | 
-			GtCoderCodeExecutor doIt
-				coderViewModel: aCoderUIModel;
-				element: anElement;
-				execute ]
-		id: GtSourceCoderDoItActionId.
-	addOns
-		addMainAction: 'Inspect' translated
-		icon: BrGlamorousVectorIcons playinspect
-		action: [ :aCoderUIModel :anElement | 
-			GtCoderCodeExecutor doItAndGo
-				coderViewModel: aCoderUIModel;
-				element: anElement;
-				execute ]
-		id: GtSourceCoderDoItAndGoActionId.
-	addOns
-		addMainAction: 'Expand Macros' translated
-		icon: BrGlamorousVectorIcons repair
-		action: [ :aCoderUIModel :anElement | 
-			| source |
-			source := '(expand ''' , sourceCode currentSourceText value text , ')'.
-			anElement phlow
-				spawnObject: ((self bindAndExecute: source) parse view: #gtSourceFor:) ]
-		id: #'source-coder--macro-expand-action'.
-	addOns
-		addMainAction: 'Build and Run' translated
-		icon: BrGlamorousVectorIcons refresh
-		action: [ :aCoderUIModel :anElement | 
-			| source |
-			source := '' , sourceCode currentSourceText value text , '(build) (run)'.
-			anElement phlow
-				spawnObject: (CarpCliOutput text: ((self bindAndExecuteRaw: source) at: 'value')) ]
-		id: #'source-coder--build-and-run-action'.
-	addOns
-		addMainAction: 'Infer Type' translated
-		icon: BrGlamorousVectorIcons inspect
-		action: [ :aCoderUIModel :anElement | self inspectTypeSpawningOn: anElement phlow]
-		id: #'source-coder--type-infer-action'
+	application
+		ifNotNil: [ addOns
+				addMainAction: 'Evaluate' translated
+				icon: BrGlamorousVectorIcons play
+				action: [ :aCoderUIModel :anElement | 
+					GtCoderCodeExecutor doIt
+						coderViewModel: aCoderUIModel;
+						element: anElement;
+						execute ]
+				id: GtSourceCoderDoItActionId.
+			addOns
+				addMainAction: 'Inspect' translated
+				icon: BrGlamorousVectorIcons playinspect
+				action: [ :aCoderUIModel :anElement | 
+					GtCoderCodeExecutor doItAndGo
+						coderViewModel: aCoderUIModel;
+						element: anElement;
+						execute ]
+				id: GtSourceCoderDoItAndGoActionId.
+			addOns
+				addMainAction: 'Expand Macros' translated
+				icon: BrGlamorousVectorIcons repair
+				action: [ :aCoderUIModel :anElement | 
+					| source |
+					source := '(expand ''' , sourceCode currentSourceText value text , ')'.
+					anElement phlow
+						spawnObject: ((self bindAndExecute: source) parse view: #gtSourceFor:) ]
+				id: #'source-coder--macro-expand-action'.
+			addOns
+				addMainAction: 'Build and Run' translated
+				icon: BrGlamorousVectorIcons refresh
+				action: [ :aCoderUIModel :anElement | 
+					| source |
+					source := '' , sourceCode currentSourceText value text , '(build) (run)'.
+					anElement phlow
+						spawnObject: (CarpCliOutput text: ((self bindAndExecuteRaw: source) at: 'value')) ]
+				id: #'source-coder--build-and-run-action'.
+			addOns
+				addMainAction: 'Infer Type' translated
+				icon: BrGlamorousVectorIcons inspect
+				action: [ :aCoderUIModel :anElement | self inspectTypeSpawningOn: anElement phlow ]
+				id: #'source-coder--type-infer-action' ]
 ]
 
 { #category : #accessing }
 GtCarpCoderModel >> initializeShortcuts: addOns [
 	super initializeShortcuts: addOns.
 
-	addOns
-		addShortcut: GtSourceCoderDoItShortcut new;
-		addShortcut: GtSourceCoderDoItAndInspectShortcut new
+	application
+		ifNotNil: [ addOns
+				addShortcut: GtSourceCoderDoItShortcut new;
+				addShortcut: GtSourceCoderDoItAndInspectShortcut new ]
 ]
 
 { #category : #accessing }

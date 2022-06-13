@@ -1,11 +1,11 @@
-Extension { #name : #ByteString }
+Extension { #name : #String }
 
 { #category : #'*Carp' }
-ByteString >> asCarpModule [
+String >> asCarpModule [
 	^ CarpModule named: self
 ]
 
 { #category : #'*Carp' }
-ByteString >> asCarpSymbol [
+String >> asCarpSymbol [
 	^ CarpSymbol named: self
 ]

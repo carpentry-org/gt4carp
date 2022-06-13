@@ -41,6 +41,11 @@ CarpArrayNode >> initialize [
 	expressions := OrderedCollection new: 2.
 ]
 
+{ #category : #accessing }
+CarpArrayNode >> intoModel [
+	^ CarpArray contents: (expressions collect: #intoModel)
+]
+
 { #category : #generated }
 CarpArrayNode >> leftBracket [
 

@@ -49,5 +49,5 @@ CarpNamedFunction >> toCarp [
 		  aStream << '(' << self bindingName << ' ' << self name toCarp
 		  << ' ['.
 		  arguments do: [ :anArgument | aStream << anArgument toCarp << ' ' ].
-		  aStream << '] ' << self body toCarp << ')' ]
+		  aStream ensureNoSpace << '] ' << self body toCarp << ')' ]
 ]

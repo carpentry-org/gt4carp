@@ -14,6 +14,14 @@ CarpModuleOrTypeNode >> acceptVisitor: anExpressionVisitor [
 	^ anExpressionVisitor visitModuleOrType: self
 ]
 
+{ #category : #accessing }
+CarpModuleOrTypeNode >> intoModel [
+	^ CarpSymbol
+		named: ('.'
+				join: {module source.
+						value source})
+]
+
 { #category : #generated }
 CarpModuleOrTypeNode >> module [
 

@@ -13,6 +13,13 @@ CarpExpression >> asElement [
 ]
 
 { #category : #accessing }
+CarpExpression >> asElementWithModule: aModule [
+	^ ((GtCarpIDECoderModel code: self toCarp)
+		module: aModule;
+		expression: self) asElement
+]
+
+{ #category : #accessing }
 CarpExpression >> documentation [
 	^ documentation ifNil: ['']
 ]
@@ -20,6 +27,24 @@ CarpExpression >> documentation [
 { #category : #accessing }
 CarpExpression >> documentation: aString [
 	documentation := aString
+]
+
+{ #category : #accessing }
+CarpExpression >> gtCoderFor: aView [
+	<gtView>
+	^ aView explicit
+		title: 'Code';
+		priority: 1;
+		stencil: [ self asElement ]
+]
+
+{ #category : #accessing }
+CarpExpression >> gtTextFor: aView [
+	<gtView>
+	^ aView textEditor
+		title: 'String';
+		priority: 2;
+		text: [ self toCarp ]
 ]
 
 { #category : #converting }

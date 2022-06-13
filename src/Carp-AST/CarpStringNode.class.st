@@ -14,6 +14,11 @@ CarpStringNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #accessing }
+CarpStringNode >> intoModel [
+	^ CarpStringExpression contents: self value source
+]
+
+{ #category : #accessing }
 CarpStringNode >> toPharo [
 	^ value source
 ]

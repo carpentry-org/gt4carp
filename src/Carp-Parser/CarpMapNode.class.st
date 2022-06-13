@@ -27,6 +27,15 @@ CarpMapNode >> initialize [
 	pairs := OrderedCollection new: 2.
 ]
 
+{ #category : #accessing }
+CarpMapNode >> intoModel [
+	^ CarpMap
+		contents: (pairs
+				flatCollect: [ :p | 
+					{p key intoModel.
+						p value intoModel} ])
+]
+
 { #category : #generated }
 CarpMapNode >> leftBrace [
 

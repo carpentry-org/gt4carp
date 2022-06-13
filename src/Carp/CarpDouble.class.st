@@ -3,3 +3,8 @@ Class {
 	#superclass : #CarpNumber,
 	#category : #'Carp-IDE'
 }
+
+{ #category : #accessing }
+CarpDouble >> suffix [
+	^ ''
+]

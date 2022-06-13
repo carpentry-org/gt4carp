@@ -26,7 +26,7 @@ CarpStreamingMethodsCoderElement >> initialize [
 		        itemType: [ :anItemTypeFactory :anItemObject | 
 			        anItemObject ];
 		        itemStencil: [ :anItem | 
-			        anItem asElement id: GtSourceCoderId ];
+			        (anItem asElementWithModule: module) id: GtSourceCoderId ];
 		        itemsProvider:
 			        (BrListStreamItemsProvider new stream: AsyncEmptyStream new).
 

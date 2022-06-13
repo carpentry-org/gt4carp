@@ -15,6 +15,11 @@ CarpUnquoteNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #accessing }
+CarpUnquoteNode >> intoModel [
+	^ CarpCall function: 'unquote' arguments: {value intoModel}
+]
+
+{ #category : #accessing }
 CarpUnquoteNode >> isQuoted [
 	^ false
 ]

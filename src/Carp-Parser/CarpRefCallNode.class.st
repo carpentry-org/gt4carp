@@ -14,6 +14,11 @@ CarpRefCallNode >> acceptVisitor: anExpressionVisitor [
 	^ anExpressionVisitor visitRefCall: self
 ]
 
+{ #category : #accessing }
+CarpRefCallNode >> intoModel [
+	^ CarpCall function: '~' arguments: {value intoModel}
+]
+
 { #category : #generated }
 CarpRefCallNode >> nodeVariables [
 

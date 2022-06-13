@@ -14,6 +14,11 @@ CarpVariableNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #accessing }
+CarpVariableNode >> intoModel [
+	^ CarpSymbol named: self value source
+]
+
+{ #category : #accessing }
 CarpVariableNode >> isDefinitionPredicate [
 	^ {'defdynamic'.
 		'defndynamic'.

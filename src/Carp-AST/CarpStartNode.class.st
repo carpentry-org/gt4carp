@@ -40,6 +40,12 @@ CarpStartNode >> initialize [
 ]
 
 { #category : #accessing }
+CarpStartNode >> intoModel [
+	self assert: self expressions  size = 1.
+	^ self expressions first intoModel
+]
+
+{ #category : #accessing }
 CarpStartNode >> toPharo [
 	^ expressions collect: #toPharo
 ]

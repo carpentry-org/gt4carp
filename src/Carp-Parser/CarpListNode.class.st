@@ -50,6 +50,12 @@ CarpListNode >> initialize [
 ]
 
 { #category : #accessing }
+CarpListNode >> intoModel [
+	^ CarpList
+		contents: (expressions collect: #intoModel)
+]
+
+{ #category : #accessing }
 CarpListNode >> isDefinition [
 	^ self definitionVariable isNotNil
 ]

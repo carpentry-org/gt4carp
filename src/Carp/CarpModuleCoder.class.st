@@ -19,6 +19,15 @@ CarpModuleCoder >> asCoderViewModel [
 	^ CarpModuleCoderViewModel new coder: self
 ]
 
+{ #category : #accessing }
+CarpModuleCoder >> coderName [
+	"Return a short textual name of the coder.
+	For example, class coder would return a class name, package coder returns a package name."
+	<return: #String>
+
+	^ self module name
+]
+
 { #category : #'instance creation' }
 CarpModuleCoder >> module [
 	^ module
