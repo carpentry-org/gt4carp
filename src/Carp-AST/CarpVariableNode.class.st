@@ -14,6 +14,15 @@ CarpVariableNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #accessing }
+CarpVariableNode >> isDefinitionPredicate [
+	^ {'defdynamic'.
+		'defndynamic'.
+		'defmacro'.
+		'defn'.
+		'def'} includes: self value source
+]
+
+{ #category : #accessing }
 CarpVariableNode >> toPharo [
 	^ value source asSymbol
 ]

@@ -45,7 +45,7 @@ GtCarpCoderModel >> bindAndExecute: sourceString [
 			returnedVarNames: varNames.
 	res := self bindAndExecuteRaw: sourceString.
 
-	(res at: #result) = 'success' ifTrue: [ ^ res at: #value ].
+	(res at: #result) = 'success' ifTrue: [ ^ CarpExecutionResult from: res ].
 	exception := (PharoLinkRemoteError new
 		application: application;
 		command: commandFactory command;
@@ -112,7 +112,8 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 			| source |
 			source := '(expand ''' , sourceCode currentSourceText value text , ')'.
 			anElement phlow
-				spawnObject: (CarpParser parse: (aCoderUIModel coder bindAndExecute: source)) ].
+				spawnObject: ((self bindAndExecute: source) parse view: #gtSourceFor:) ]
+		id: #'source-coder--macro-expand-action'.
 	addOns
 		addMainAction: 'Build and Run' translated
 		icon: BrGlamorousVectorIcons refresh
@@ -120,8 +121,13 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 			| source |
 			source := '' , sourceCode currentSourceText value text , '(build) (run)'.
 			anElement phlow
-				spawnObject: (CarpCliOutput text: ((aCoderUIModel coder bindAndExecuteRaw: source) at: 'value')) ]
-		id: #'source-coder--macro-expand-action'
+				spawnObject: (CarpCliOutput text: ((self bindAndExecuteRaw: source) at: 'value')) ]
+		id: #'source-coder--build-and-run-action'.
+	addOns
+		addMainAction: 'Infer Type' translated
+		icon: BrGlamorousVectorIcons inspect
+		action: [ :aCoderUIModel :anElement | self inspectTypeSpawningOn: anElement phlow]
+		id: #'source-coder--type-infer-action'
 ]
 
 { #category : #accessing }
@@ -131,6 +137,21 @@ GtCarpCoderModel >> initializeShortcuts: addOns [
 	addOns
 		addShortcut: GtSourceCoderDoItShortcut new;
 		addShortcut: GtSourceCoderDoItAndInspectShortcut new
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> inspectTypeSpawningOn: aPhlow [
+	| source ast |
+	source := sourceCode currentSourceText value text.
+	ast := CarpParser parse: source.
+	
+	(ast expressions size = 1 and: [ ast expressions first isDefinition ])
+		ifTrue: [ self bindAndExecute: source asString.
+			source := ast expressions first definitionVariable value source ].
+			
+	source := '(def *type-infer-this* ' , source
+			, ') (defdynamic *type-infer-result* (type *type-infer-this*)) (def *type-infer-this* 0) *type-infer-result*'.
+	aPhlow spawnObject: ((self bindAndExecute: source) parse transformValue: [:aValue | CarpTypeSignature on: aValue expressions first using: self])
 ]
 
 { #category : #accessing }
@@ -145,7 +166,8 @@ GtCarpCoderModel >> pharoBindings: anObject [
 
 { #category : #accessing }
 GtCarpCoderModel >> primitiveEvaluate: aSourceString inContext: aGtSourceCoderEvaluationContext onFailDo: anEvaluationFailBlock [
-	^ (CarpParser parse: (self bindAndExecute: aSourceString)) expressions first toPharo
+	^ (self bindAndExecute: aSourceString) parse
+		transformValue: [ :aValue | aValue expressions first toPharo ]
 ]
 
 { #category : #accessing }

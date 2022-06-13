@@ -17,6 +17,11 @@ CarpExpressionNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #accessing }
+CarpExpressionNode >> isDefinition [
+	^ false
+]
+
+{ #category : #accessing }
 CarpExpressionNode >> isQuoted [
 	^ parent ifNil: [ false ] ifNotNil: [ parent isQuoted ]
 ]

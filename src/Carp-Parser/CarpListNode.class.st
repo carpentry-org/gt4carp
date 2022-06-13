@@ -21,6 +21,14 @@ CarpListNode >> compositeNodeVariables [
 	^ #( #expressions )
 ]
 
+{ #category : #accessing }
+CarpListNode >> definitionVariable [
+	^ (self expressions size > 1
+		and: [ self expressions first isDefinitionPredicate ])
+		ifTrue: [ self expressions second ]
+		ifFalse: [ nil ]
+]
+
 { #category : #generated }
 CarpListNode >> expressions [
 
@@ -39,6 +47,11 @@ CarpListNode >> expressions: anOrderedCollection [
 CarpListNode >> initialize [
 	super initialize.
 	expressions := OrderedCollection new: 2.
+]
+
+{ #category : #accessing }
+CarpListNode >> isDefinition [
+	^ self definitionVariable isNotNil
 ]
 
 { #category : #generated }
