@@ -70,6 +70,25 @@ CarpTypeSignature >> elementsList [
 						text: '<StaticLifetime>';
 						padding: (BlInsets all: 5)) ].
 
+	(tokens includes: 'Fn')
+		ifTrue: [ verticalContainer
+				addChild: (BrLabel new
+						aptitude: BrGlamorousLabelAptitude new
+								+ (GtExplainerExplanationAptitude new explanationModel: 'Fn')
+								+ (BrStyleCommonAptitude new
+										hovered: [ :aStyle | 
+											aStyle background: BrGlamorousColors textHighlightColor.
+											aStyle
+												do: [ tooltipsContainer
+														text: 'is the function type and is read: ' asRopedText, '(Fn [<arguments>] <return type> <lifetime>).' asRopedText glamorousCodeFont;
+														visibility: BlVisibility visible ]
+												after: [ tooltipsContainer
+														text: '' asRopedText;
+														visibility: BlVisibility gone ] ]);
+						geometry: (BlRoundedRectangleGeometry cornerRadius: 4);
+						text: 'Fn';
+						padding: (BlInsets all: 5)) ].
+
 	^ verticalContainer asScrollableElement
 		constraintsDo: [ :c | 
 			c horizontal fitContent.
