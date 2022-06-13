@@ -1,7 +1,7 @@
 import argparse
 import threading
 import sys
-import hooks
+from bridge import carp
 from bridge.hooks import *
 from bridge.object_registry import registry
 
@@ -23,7 +23,7 @@ class EvalCommand:
 
     def execute_using_env(self, env):
         try:
-              self.execute()
+              return self.execute()
         except Exception as err:
               self.perform_proceed_action(notify_error(err,self))
 
@@ -44,7 +44,7 @@ class EvalCommand:
             return self.commandId
 
     def execute(self):
-        bridge.globals.proc.evaluate(self.statements)
+        return bridge.globals.proc.evaluate(self.statements)
 
 class Logger():
       def log(self, msg):
@@ -140,6 +140,7 @@ def run_bridge():
         help="enable logging")
     args = vars(ap.parse_args())
 
+    bridge.globals.proc = carp.start_carp_proc()
     bridge.globals.pharoPort = args["pharo"]
     if args["log"]:
           bridge.globals.logger = Logger()
@@ -148,7 +149,6 @@ def run_bridge():
     bridge.globals.pyPort = args["port"]
     bridge.globals.globalCommandList = CommandList()
     globalCommandList = bridge.globals.globalCommandList
-    bridge.globals.proc = carp.start_carp_proc()
     env = clean_locals_env()
     msg_service = None 
     if args["port"] == None:
@@ -165,14 +165,15 @@ def run_bridge():
           raise Exception("Invalid communication strategy.")
     bridge.globals.msg_service = msg_service
     msg_service.start()
-    bridge.globals.logger.log("PYTHON: Start consuming commands")
+    bridge.globals.logger.log("CARP: Carp version " + bridge.globals.proc.version_info())
+    bridge.globals.logger.log("CARP: Start consuming commands")
     while True:
           command = globalCommandList.consume_command()
-          bridge.globals.logger.log("PYTHON: Executing command " + command.command_id())
-          bridge.globals.logger.log("PYTHON: bindings: " + str(command.bindings))
-          bridge.globals.logger.log("PYTHON: " + command.statements)
-          command.execute_using_env(env)
-          bridge.globals.logger.log("PYTHON: Finished command execution")
+          bridge.globals.logger.log("CARP: Executing command " + command.command_id())
+          bridge.globals.logger.log("CARP: bindings: " + str(command.bindings))
+          bridge.globals.logger.log("CARP: " + command.statements)
+          notify(command.execute_using_env(env), command.command_id())
+          bridge.globals.logger.log("CARP: Finished command execution")
 
 if __name__ == "__main__":
     run_bridge()

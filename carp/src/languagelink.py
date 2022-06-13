@@ -1,4 +1,4 @@
-from bridge import bridge
-from bridge.bridge_hooks import *
+from bridge import bridge as b
+from bridge.hooks import *
 
-bridge.run_bridge()
+b.run_bridge()
