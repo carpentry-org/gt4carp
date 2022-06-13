@@ -22,7 +22,7 @@ CarpApplication >> baseApplication [
 CarpApplication >> debuggerClientFor: anException [
 	"Answer the debugger client to be used by the Gt Post Mortem debugger"
 
-	^ CarpPostMortemDebugger new exception: anException
+	^ GtPythonPostMortemDebugger new exception: anException
 ]
 
 { #category : #accessing }

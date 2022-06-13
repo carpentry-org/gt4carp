@@ -7,6 +7,11 @@ Class {
 	#category : #'Carp-Processes'
 }
 
+{ #category : #accessing }
+CarpPlatform class >> uiManagerClass [
+	^ LanguageLinkPharoUiManager
+]
+
 { #category : #hooks }
 CarpPlatform class >> weakRegistryClass [
 	^ LanguageLinkPharoWeakRegistry
