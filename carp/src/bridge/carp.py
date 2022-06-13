@@ -8,6 +8,7 @@ class CarpProc:
         self.proc = diplomat.Diplomat('carp')
         self._version_info = None
         self.adornment_re = re.compile(".\[33m.*?\[0m")
+        self.warning_re = re.compile("\[WARNING\] (.*)\n?")
 
     def wait_for_boot(self):
         while not self.proc.output():
@@ -23,11 +24,13 @@ class CarpProc:
         while self.proc.output() == old_output:
             time.sleep(0.5)
         res = self.adornment_re.sub("", self.proc.output()[len(old_output):]).strip()
+        warnings = self.warning_re.findall(res)
+        res = self.warning_re.sub("", res)
         if res.startswith("=> "):
-            return {'result': 'success', 'value': res[3:]}
+            return {'result': 'success', 'value': res[3:], 'warnings': warnings}
         if not res:
-            return {'result': 'success', 'value': '()'}
-        return {'result': 'error', 'value': res}
+            return {'result': 'success', 'value': '()', 'warnings': warnings}
+        return {'result': 'error', 'value': res, 'warnings': warnings}
 
     def evaluate(self, statements):
         assert self.proc.is_running(), "carp process has died"
