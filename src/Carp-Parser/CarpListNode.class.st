@@ -65,6 +65,11 @@ CarpListNode >> rightParen: aSmaCCToken [
 	rightParen := aSmaCCToken
 ]
 
+{ #category : #accessing }
+CarpListNode >> toPharo [
+	^ expressions collect: #toPharo
+]
+
 { #category : #generated }
 CarpListNode >> tokenVariables [
 

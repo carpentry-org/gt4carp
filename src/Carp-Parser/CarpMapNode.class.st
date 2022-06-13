@@ -65,6 +65,11 @@ CarpMapNode >> rightBrace: aSmaCCToken [
 	rightBrace := aSmaCCToken
 ]
 
+{ #category : #accessing }
+CarpMapNode >> toPharo [
+	^ (pairs collect: #toPharo) asDictionary
+]
+
 { #category : #generated }
 CarpMapNode >> tokenVariables [
 

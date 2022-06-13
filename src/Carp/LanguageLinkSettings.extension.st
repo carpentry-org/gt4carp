@@ -12,7 +12,7 @@ LanguageLinkSettings class >> carpDefaultSettings [
 		serverProcessClass: CarpPythonProcess;
 		platform: CarpPlatform new;
 		commandFactoryClass: CarpCommandFactory;
-		commandClass: LanguageLinkCommand;
+		commandClass: CarpCommand;
 		serializerClass: LanguageLinkSerializer;
 		deserializerClass: CarpDeserializer;
 		parserClass: CarpParser;

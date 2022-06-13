@@ -6,7 +6,7 @@ Class {
 
 { #category : #'generated-accessing' }
 CarpParser class >> cacheId [
-	^'2022-04-17T17:01:25.369965+02:00'
+	^'2022-06-13T14:48:36.40126+02:00'
 ]
 
 { #category : #generated }
@@ -16,6 +16,26 @@ CarpParser class >> definitionComment [
 %root Expression;
 %prefix Carp;
 %suffix Node;
+
+%hierarchy Expression (
+	Array
+	Deref
+	List
+	Map
+	ModuleOrType
+	Pattern
+	RefCall
+	Ref
+	Unquote
+	Character
+	Number
+	Pair
+	Quote
+	Start
+	String
+	Variable
+);
+
 <escape>
 	: \\ (. | u[0-9A-F]{4,4} | o[0-7]{3,3} | newline | return | space | tab | space | backspace | formfeed)	# other character types
 	;
@@ -155,44 +175,44 @@ String
 { #category : #generated }
 CarpParser class >> reduceTable [
 ^#(
-	#(24 0 #reduceActionForExpressions1: 1289217 false) 
-	#(23 1 #reduceActionForStart1: 1258497 false) 
-	#(32 0 #reduceActionForExpressions1: 1803265 false) 
-	#(43 1 #reduceActionForString1: 2446337 false) 
-	#(40 1 #reduceActionForVariable1: 2233345 false) 
-	#(41 1 #reduceActionForModuleOrType2: 2273282 false) 
-	#(36 1 #reduceActionForNumber1: 2013185 false) 
-	#(35 1 #reduceActionForCharacter1: 1971201 false) 
-	#(24 2 #reduceActionForExpressions2: 1289218 false) 
-	#(25 1 #liftFirstValue: 1347588 false) 
-	#(25 1 #liftFirstValue: 1347589 false) 
-	#(25 1 #liftFirstValue: 1347587 false) 
-	#(25 1 #liftFirstValue: 1347586 false) 
-	#(25 1 #liftFirstValue: 1347585 false) 
-	#(30 1 #liftFirstValue: 1652745 false) 
-	#(30 1 #liftFirstValue: 1652744 false) 
-	#(30 1 #liftFirstValue: 1652743 false) 
-	#(30 1 #liftFirstValue: 1652742 false) 
-	#(30 1 #liftFirstValue: 1652739 false) 
-	#(30 1 #liftFirstValue: 1652741 false) 
-	#(30 1 #liftFirstValue: 1652740 false) 
-	#(39 1 #liftFirstValue: 2195458 false) 
-	#(39 1 #liftFirstValue: 2195457 false) 
-	#(30 1 #liftFirstValue: 1652738 false) 
-	#(30 1 #liftFirstValue: 1652737 false) 
-	#(34 2 #reduceActionForPattern1: 1906689 false) 
-	#(27 2 #reduceActionForUnquote1: 1466369 false) 
-	#(27 2 #reduceActionForUnquote1: 1466370 false) 
-	#(28 2 #reduceActionForRef1: 1548289 false) 
-	#(29 2 #reduceActionForDeref1: 1598465 false) 
-	#(26 2 #reduceActionForRefCall1: 1412097 false) 
-	#(38 2 #reduceActionForQuote1: 2150401 false) 
-	#(31 3 #reduceActionForMap1: 1744897 false) 
-	#(32 2 #reduceActionForExpressions2: 1803266 false) 
-	#(42 3 #reduceActionForList1: 2364417 false) 
-	#(41 3 #reduceActionForModuleOrType1: 2273281 false) 
-	#(37 3 #reduceActionForArray1: 2059265 false) 
-	#(33 2 #reduceActionForMapPair1: 1846273 false)
+	#(24 0 #reduceActionForExpressions1: 1449985 false) 
+	#(23 1 #reduceActionForStart1: 1419265 false) 
+	#(32 0 #reduceActionForExpressions1: 1964033 false) 
+	#(43 1 #reduceActionForString1: 2607105 false) 
+	#(40 1 #reduceActionForVariable1: 2394113 false) 
+	#(41 1 #reduceActionForModuleOrType2: 2434050 false) 
+	#(36 1 #reduceActionForNumber1: 2173953 false) 
+	#(35 1 #reduceActionForCharacter1: 2131969 false) 
+	#(24 2 #reduceActionForExpressions2: 1449986 false) 
+	#(25 1 #liftFirstValue: 1508356 false) 
+	#(25 1 #liftFirstValue: 1508357 false) 
+	#(25 1 #liftFirstValue: 1508355 false) 
+	#(25 1 #liftFirstValue: 1508354 false) 
+	#(25 1 #liftFirstValue: 1508353 false) 
+	#(30 1 #liftFirstValue: 1813513 false) 
+	#(30 1 #liftFirstValue: 1813512 false) 
+	#(30 1 #liftFirstValue: 1813511 false) 
+	#(30 1 #liftFirstValue: 1813510 false) 
+	#(30 1 #liftFirstValue: 1813507 false) 
+	#(30 1 #liftFirstValue: 1813509 false) 
+	#(30 1 #liftFirstValue: 1813508 false) 
+	#(39 1 #liftFirstValue: 2356226 false) 
+	#(39 1 #liftFirstValue: 2356225 false) 
+	#(30 1 #liftFirstValue: 1813506 false) 
+	#(30 1 #liftFirstValue: 1813505 false) 
+	#(34 2 #reduceActionForPattern1: 2067457 false) 
+	#(27 2 #reduceActionForUnquote1: 1627137 false) 
+	#(27 2 #reduceActionForUnquote1: 1627138 false) 
+	#(28 2 #reduceActionForRef1: 1709057 false) 
+	#(29 2 #reduceActionForDeref1: 1759233 false) 
+	#(26 2 #reduceActionForRefCall1: 1572865 false) 
+	#(38 2 #reduceActionForQuote1: 2311169 false) 
+	#(31 3 #reduceActionForMap1: 1905665 false) 
+	#(32 2 #reduceActionForExpressions2: 1964034 false) 
+	#(42 3 #reduceActionForList1: 2525185 false) 
+	#(41 3 #reduceActionForModuleOrType1: 2434049 false) 
+	#(37 3 #reduceActionForArray1: 2220033 false) 
+	#(33 2 #reduceActionForMapPair1: 2007041 false)
 	).
 ]
 

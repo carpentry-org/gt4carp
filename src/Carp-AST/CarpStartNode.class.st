@@ -38,3 +38,8 @@ CarpStartNode >> initialize [
 	super initialize.
 	expressions := OrderedCollection new: 2.
 ]
+
+{ #category : #accessing }
+CarpStartNode >> toPharo [
+	^ expressions collect: #toPharo
+]

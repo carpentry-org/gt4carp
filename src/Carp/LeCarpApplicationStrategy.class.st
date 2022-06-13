@@ -41,15 +41,16 @@ LeCarpApplicationStrategy >> newCarpApplicationFor: aLeDatabase [
 { #category : #accessing }
 LeCarpApplicationStrategy >> updatedSettings: applicationCarpSettings [
 	"Update the supplied settings with the lepiter configuration"
-	| lepiterCarpSettings lepiterDatabase carpDir |
 
+	| lepiterCarpSettings lepiterDatabase carpDir |
 	lepiterDatabase := content database.
+	(lepiterDatabase isKindOf: LeNullDatabase)
+		ifTrue: [ ^ applicationCarpSettings ].
 	lepiterCarpSettings := lepiterDatabase properties carpLinkSettings.
-	lepiterCarpSettings directory ifNotNil:
-		[ :relativeDir | 
+	lepiterCarpSettings directory
+		ifNotNil: [ :relativeDir | 
 			carpDir := lepiterDatabase localStoreRootDirectory resolve: relativeDir.
-			applicationCarpSettings workingDirectory: carpDir ].
-	"lepiterCarpSettings carpPath ifNotNil:
+			applicationCarpSettings workingDirectory: carpDir ].	"lepiterCarpSettings carpPath ifNotNil:
 		[ :carpPath | applicationCarpSettings serverExecutable: carpPath ]."
 	applicationCarpSettings serverDebugMode: lepiterCarpSettings serverDebugMode.
 

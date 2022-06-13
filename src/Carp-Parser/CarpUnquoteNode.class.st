@@ -25,6 +25,11 @@ CarpUnquoteNode >> nodeVariables [
 	^ #( #value )
 ]
 
+{ #category : #accessing }
+CarpUnquoteNode >> toPharo [
+	^ {#unquote . value toPharo}
+]
+
 { #category : #generated }
 CarpUnquoteNode >> tokenVariables [
 

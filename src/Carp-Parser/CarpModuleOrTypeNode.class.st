@@ -32,6 +32,11 @@ CarpModuleOrTypeNode >> nodeVariables [
 	^ #( #value )
 ]
 
+{ #category : #accessing }
+CarpModuleOrTypeNode >> toPharo [
+	^ value source asSymbol
+]
+
 { #category : #generated }
 CarpModuleOrTypeNode >> tokenVariables [
 

@@ -32,6 +32,11 @@ CarpRefNode >> refGlyph: aSmaCCToken [
 	refGlyph := aSmaCCToken
 ]
 
+{ #category : #accessing }
+CarpRefNode >> toPharo [
+	^ {#ref . value toPharo}
+]
+
 { #category : #generated }
 CarpRefNode >> tokenVariables [
 

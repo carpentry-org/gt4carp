@@ -65,6 +65,11 @@ CarpArrayNode >> rightBracket: aSmaCCToken [
 	rightBracket := aSmaCCToken
 ]
 
+{ #category : #accessing }
+CarpArrayNode >> toPharo [
+	^ expressions collect: #toPharo
+]
+
 { #category : #generated }
 CarpArrayNode >> tokenVariables [
 

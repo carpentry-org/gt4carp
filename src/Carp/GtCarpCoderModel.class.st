@@ -3,7 +3,8 @@ Class {
 	#superclass : #GtSourceCoder,
 	#instVars : [
 		'pharoBindings',
-		'carpLinkApplicationStrategy'
+		'carpLinkApplicationStrategy',
+		'exception'
 	],
 	#category : #'Carp-Coder'
 }
@@ -24,35 +25,37 @@ GtCarpCoderModel >> asCoderViewModel [
 { #category : #accessing }
 GtCarpCoderModel >> bindAndExecute: sourceString [
 	"Answer the source code with all declared variables returned in an immediate dictionary"
+
 	<gtIgnoreConstraint: #GtRBAcceptVisitorCalledFromNonVisitingMethods>
-	| carpSource trimmedSource ast varNames lastStatement application commandFactory |
-
+	<remoteDebuggerSignal>
+	| carpSource trimmedSource ast varNames lastStatement application commandFactory res |
 	trimmedSource := SmaCCString on: sourceString trimRight.
-	ast := CarpParser parse: trimmedSource.
-	"The variables to be returned are names that are in pharoBindings"
-	varNames := pharoBindings bindingNames asSet.
-
-	"Assign the final statement to snippetResult"
+	ast := CarpParser parse: trimmedSource.	"The variables to be returned are names that are in pharoBindings"
+	varNames := pharoBindings bindingNames asSet.	"Assign the final statement to snippetResult"
 	lastStatement := ast expressions last.
-	trimmedSource 
-		insert: '(defdynamic snippetResult ' 
+	trimmedSource
+		insert: '(defdynamic snippetResult '
 		at: lastStatement startPosition.
-	trimmedSource 
-		insert: ')' 
-		at: lastStatement stopPosition.
-	varNames add: 'snippetResult'.
-
-	"Get the final source to execute"
-	carpSource := self sourceFrom: trimmedSource asString returnedVarNames: varNames.
+	trimmedSource insert: ')' at: lastStatement stopPosition.
+	varNames add: 'snippetResult'.	"Get the final source to execute"
+	carpSource := self
+			sourceFrom: trimmedSource asString
+			returnedVarNames: varNames.
 
 	application := carpLinkApplicationStrategy applicationServer.
 	application isRunning ifFalse: [ application start ].
 	commandFactory := application newCommandFactory.
 
-	^ commandFactory
-		<< carpSource;
-		sendAndWait.
+	res := commandFactory
+			<< carpSource;
+			sendAndWait.
 
+	(res at: #result) = 'success' ifTrue: [ ^ res at: #value ].
+	exception := (PharoLinkRemoteError new
+		application: application;
+		command: commandFactory command;
+		trace: (res at: #value)).
+	exception signal
 ]
 
 { #category : #accessing }
@@ -64,6 +67,11 @@ GtCarpCoderModel >> carpLinkApplicationStrategy: anApplicationStrategy [
 GtCarpCoderModel >> computeAst: theSourceString [
 	^ CarpParser
 		parseWithErrors: theSourceString
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> exception [
+	^ exception
 ]
 
 { #category : #accessing }
@@ -113,36 +121,17 @@ GtCarpCoderModel >> pharoBindings: anObject [
 
 { #category : #accessing }
 GtCarpCoderModel >> primitiveEvaluate: aSourceString inContext: aGtSourceCoderEvaluationContext onFailDo: anEvaluationFailBlock [
-	| result |
-
-	result := self bindAndExecute: aSourceString.
-	result associationsDo: [ :binding |
-		(pharoBindings bindingOf: binding key asSymbol) value: binding value ].
-
-	^ result
-		at: 'snippetResult'
-		ifAbsent: anEvaluationFailBlock
+	^ (CarpParser parse: (self bindAndExecute: aSourceString)) expressions first toPharo
 ]
 
 { #category : #accessing }
 GtCarpCoderModel >> sourceFrom: trimmedSourceString returnedVarNames: varNames [
 	"Answer the modified source to return the declared variables"
 
-	^ String streamContents: [ :stream |
-		stream << trimmedSourceString.
-		stream 
-			cr
-			<< '{ '.
-		varNames do: [ :varName |
-			stream 
-				<< '(quote ';
-				<< varName;
-				<< ') ';
-				<< varName;
-				<< ' ' ].
-		"Answer the variable dictionary as an immediate object"
-		stream
-			<< '(quote carpLinkImmediate) true }' ]
+	^ String
+		streamContents: [ :stream | 
+			stream << trimmedSourceString.
+			stream lf << 'snippetResult' ]
 ]
 
 { #category : #accessing }

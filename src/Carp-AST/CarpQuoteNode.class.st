@@ -29,6 +29,11 @@ CarpQuoteNode >> nodeVariables [
 	^ #( #value )
 ]
 
+{ #category : #accessing }
+CarpQuoteNode >> toPharo [
+	^ {#quote . value toPharo }
+]
+
 { #category : #generated }
 CarpQuoteNode >> value [
 

@@ -23,7 +23,7 @@ CarpPostMortemDebugger >> exception: anException [
 CarpPostMortemDebugger >> initialize [
 
 	super initialize.
-	frameRegex := '\s+at.+\(([^:]+)\:(\d+)\:(\d+)\)' asRegexIgnoringCase.
+	frameRegex := '(.*)\s+at.+([^:]+)\:(\d+)\:(\d+)\.' asRegexIgnoringCase.
 ]
 
 { #category : #accessing }
@@ -37,16 +37,19 @@ CarpPostMortemDebugger >> sourceStyler [
 CarpPostMortemDebugger >> stackFrameFromLine: aString ordinal: ordinal [
 	"Answer a frame if the supplied string contains a valid file and line number, or nil"
 	<return: #GtPythonPostMortemStackFrame or: nil>
-	| file line column |
+	| file line column source |
 
 	^ (frameRegex search: aString) ifTrue:
 		[ file := frameRegex subexpression: 2.
-		line := frameRegex subexpression: 3.
-		column := frameRegex subexpression: 4.
+		file := frameRegex subexpression: 3.
+		line := frameRegex subexpression: 4.
+		column := frameRegex subexpression: 5.
+		self halt.
 		CarpPostMortemStackFrame new
 				ordinal: ordinal;
 				displayString: aString;
 				exception: exception;
+				source: source;
 				file: file asFileReference;
 				line: line asNumber;
 				column: column asNumber ]

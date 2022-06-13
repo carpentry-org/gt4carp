@@ -13,6 +13,11 @@ CarpVariableNode >> acceptVisitor: anExpressionVisitor [
 	^ anExpressionVisitor visitVariable: self
 ]
 
+{ #category : #accessing }
+CarpVariableNode >> toPharo [
+	^ value source asSymbol
+]
+
 { #category : #generated }
 CarpVariableNode >> tokenVariables [
 

@@ -26,6 +26,11 @@ CarpPatternNode >> patternGlyph: aSmaCCToken [
 	patternGlyph := aSmaCCToken
 ]
 
+{ #category : #accessing }
+CarpPatternNode >> toPharo [
+	^ value source
+]
+
 { #category : #generated }
 CarpPatternNode >> tokenVariables [
 

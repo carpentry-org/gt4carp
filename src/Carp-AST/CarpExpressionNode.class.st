@@ -25,3 +25,8 @@ CarpExpressionNode >> isQuoted [
 CarpExpressionNode >> listDepth [
 	^ parent ifNil: [ 0 ] ifNotNil: [ parent listDepth + 1 ]
 ]
+
+{ #category : #accessing }
+CarpExpressionNode >> toPharo [
+	^ self subclassResponsibility
+]

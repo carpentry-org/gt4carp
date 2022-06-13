@@ -30,80 +30,72 @@ CarpScanner >> scan1 [
 
 { #category : #generated }
 CarpScanner >> scan2 [
-
-	self recordMatch: #( 13 ).
+	self recordMatch: #(13).
 	self step.
 	currentCharacter isDigit ifTrue: [ ^ self scan3 ].
-	(currentCharacter isLowercase or: [ 
-		 currentCharacter isUppercase or: [ 
-			 ('!$' includes: currentCharacter) or: [ 
-				 (currentCharacter between: $* and: $+) or: [ 
-					 ('-/:' includes: currentCharacter) or: [ 
-						 (currentCharacter between: $< and: $?) or: [ 
-							 currentCharacter == $_ ] ] ] ] ] ]) ifTrue: [ 
-		[ 
-		self recordMatch: #( 13 ).
-		self step.
-		currentCharacter isLowercase or: [ 
-			currentCharacter isUppercase or: [ 
-				currentCharacter isDigit or: [ 
-					('!$' includes: currentCharacter) or: [ 
-						(currentCharacter between: $* and: $+) or: [ 
-							('-/:' includes: currentCharacter) or: [ 
-								(currentCharacter between: $< and: $?) or: [ 
-									currentCharacter == $_ ] ] ] ] ] ] ] ] whileTrue ].
+	(currentCharacter isLowercase
+		or: [ currentCharacter isUppercase
+				or: [ ('!$' includes: currentCharacter)
+						or: [ (currentCharacter between: $* and: $+)
+								or: [ currentCharacter == $-
+										or: [ (currentCharacter between: $/ and: $:)
+												or: [ (currentCharacter between: $< and: $?) or: [ currentCharacter == $_ ] ] ] ] ] ] ])
+		ifTrue: [ [ self recordMatch: #(13).
+			self step.
+			currentCharacter isLowercase
+				or: [ currentCharacter isUppercase
+						or: [ currentCharacter isDigit
+								or: [ ('!$' includes: currentCharacter)
+										or: [ (currentCharacter between: $* and: $+)
+												or: [ ('-/:' includes: currentCharacter)
+														or: [ (currentCharacter between: $< and: $?) or: [ currentCharacter == $_ ] ] ] ] ] ] ] ]
+				whileTrue ].
 	^ self reportLastMatch
 ]
 
 { #category : #generated }
 CarpScanner >> scan3 [
-
-	[ 
-	self recordMatch: #( 13 18 ).
+	[ self recordMatch: #(13 18).
 	self step.
 	currentCharacter == $. ifTrue: [ ^ self scan4 ].
 	currentCharacter isDigit ] whileTrue.
-	('bfl' includes: currentCharacter) ifTrue: [ 
-		self recordMatch: #( 13 18 ).
-		self step.
-		(currentCharacter isLowercase or: [ 
-			 currentCharacter isUppercase or: [ 
-				 currentCharacter isDigit or: [ 
-					 ('!$' includes: currentCharacter) or: [ 
-						 (currentCharacter between: $* and: $+) or: [ 
-							 ('-/:' includes: currentCharacter) or: [ 
-								 (currentCharacter between: $< and: $?) or: [ 
-									 currentCharacter == $_ ] ] ] ] ] ] ]) ifTrue: [ 
-			[ 
-			self recordMatch: #( 13 ).
+	('bfl' includes: currentCharacter)
+		ifTrue: [ self recordMatch: #(13 18).
 			self step.
-			currentCharacter isLowercase or: [ 
-				currentCharacter isUppercase or: [ 
-					currentCharacter isDigit or: [ 
-						('!$' includes: currentCharacter) or: [ 
-							(currentCharacter between: $* and: $+) or: [ 
-								('-/:' includes: currentCharacter) or: [ 
-									(currentCharacter between: $< and: $?) or: [ 
-										currentCharacter == $_ ] ] ] ] ] ] ] ] whileTrue ].
-		^ self reportLastMatch ].
-	(currentCharacter isUppercase or: [ 
-		 currentCharacter isLowercase or: [ 
-			 ('!$' includes: currentCharacter) or: [ 
-				 (currentCharacter between: $* and: $+) or: [ 
-					 ('-/:' includes: currentCharacter) or: [ 
-						 (currentCharacter between: $< and: $?) or: [ 
-							 currentCharacter == $_ ] ] ] ] ] ]) ifTrue: [ 
-		[ 
-		self recordMatch: #( 13 ).
-		self step.
-		currentCharacter isLowercase or: [ 
-			currentCharacter isUppercase or: [ 
-				currentCharacter isDigit or: [ 
-					('!$' includes: currentCharacter) or: [ 
-						(currentCharacter between: $* and: $+) or: [ 
-							('-/:' includes: currentCharacter) or: [ 
-								(currentCharacter between: $< and: $?) or: [ 
-									currentCharacter == $_ ] ] ] ] ] ] ] ] whileTrue ].
+			(currentCharacter isLowercase
+				or: [ currentCharacter isUppercase
+						or: [ currentCharacter isDigit
+								or: [ ('!$' includes: currentCharacter)
+										or: [ (currentCharacter between: $* and: $+)
+												or: [ ('-/:' includes: currentCharacter)
+														or: [ (currentCharacter between: $< and: $?) or: [ currentCharacter == $_ ] ] ] ] ] ] ])
+				ifTrue: [ [ self recordMatch: #(13).
+					self step.
+					currentCharacter isLowercase
+						or: [ currentCharacter isUppercase
+								or: [ currentCharacter isDigit
+										or: [ ('!$' includes: currentCharacter)
+												or: [ (currentCharacter between: $* and: $+)
+														or: [ ('-/:' includes: currentCharacter)
+																or: [ (currentCharacter between: $< and: $?) or: [ currentCharacter == $_ ] ] ] ] ] ] ] ]
+						whileTrue ].
+			^ self reportLastMatch ].
+	(currentCharacter isUppercase
+		or: [ currentCharacter isLowercase
+				or: [ ('!$' includes: currentCharacter)
+						or: [ (currentCharacter between: $* and: $+)
+								or: [ (currentCharacter between: $- and: $:)
+										or: [ (currentCharacter between: $< and: $?) or: [ currentCharacter == $_ ] ] ] ] ] ])
+		ifTrue: [ [ self recordMatch: #(13).
+			self step.
+			currentCharacter isLowercase
+				or: [ currentCharacter isUppercase
+						or: [ currentCharacter isDigit
+								or: [ ('!$' includes: currentCharacter)
+										or: [ (currentCharacter between: $* and: $+)
+												or: [ ('-/:' includes: currentCharacter)
+														or: [ (currentCharacter between: $< and: $?) or: [ currentCharacter == $_ ] ] ] ] ] ] ] ]
+				whileTrue ].
 	^ self reportLastMatch
 ]
 
@@ -152,12 +144,9 @@ CarpScanner >> scan7 [
 
 { #category : #generated }
 CarpScanner >> scanForToken [
-
 	self step.
 	currentCharacter == $" ifTrue: [ ^ self scan1 ].
-	currentCharacter == $# ifTrue: [ ^ self recordAndReportMatch: #( 1 ) ].
-	currentCharacter == $% ifTrue: [ ^ self scanForTokenX7 ].
-	currentCharacter == $& ifTrue: [ ^ self recordAndReportMatch: #( 4 ) ].
+	currentCharacter == $# ifTrue: [ ^ self recordAndReportMatch: #(1) ].
 	^ self scanForTokenX9
 ]
 
@@ -330,47 +319,36 @@ CarpScanner >> scanForTokenX7 [
 
 { #category : #generated }
 CarpScanner >> scanForTokenX8 [
-
-	currentCharacter == $} ifTrue: [ ^ self recordAndReportMatch: #( 7 ) ].
-	currentCharacter == $~ ifTrue: [ ^ self recordAndReportMatch: #( 8 ) ].
+	currentCharacter == $] ifTrue: [ ^ self recordAndReportMatch: #(17) ].
+	currentCharacter == ${ ifTrue: [ ^ self recordAndReportMatch: #(6) ].
+	currentCharacter == $} ifTrue: [ ^ self recordAndReportMatch: #(7) ].
+	currentCharacter == $~ ifTrue: [ ^ self recordAndReportMatch: #(8) ].
 	currentCharacter isDigit ifTrue: [ ^ self scan5 ].
-	('''`' includes: currentCharacter) ifTrue: [ 
-		^ self recordAndReportMatch: #( 12 ) ].
-	(currentCharacter isSeparator or: [ 
-		 currentCharacter == Character pageUp ]) ifTrue: [ 
-		^ self scanForTokenX6 ].
+	('''`' includes: currentCharacter)
+		ifTrue: [ ^ self recordAndReportMatch: #(12) ].
+	(currentCharacter isSeparator or: [ currentCharacter == Character pageUp ])
+		ifTrue: [ ^ self scanForTokenX6 ].
 	currentCharacter isUppercase ifTrue: [ ^ self scanForTokenX3 ].
-	(currentCharacter isLowercase or: [ 
-		 ('!$' includes: currentCharacter) or: [ 
-			 (currentCharacter between: $* and: $+) or: [ 
-				 ('/:' includes: currentCharacter) or: [ 
-					 (currentCharacter between: $< and: $?) or: [ 
-						 currentCharacter == $_ ] ] ] ] ]) ifTrue: [ 
-		self scanForTokenX4 ].
+	(currentCharacter isLowercase
+		or: [ (currentCharacter between: $! and: $?) or: [ currentCharacter == $_ ] ])
+		ifTrue: [ self scanForTokenX4 ].
 	^ self reportLastMatch
 ]
 
 { #category : #generated }
 CarpScanner >> scanForTokenX9 [
-
-	currentCharacter == $( ifTrue: [ 
-		^ self recordAndReportMatch: #( 10 ) ].
-	currentCharacter == $) ifTrue: [ 
-		^ self recordAndReportMatch: #( 11 ) ].
-	currentCharacter == $, ifTrue: [ 
-		^ self recordAndReportMatch: #( 19 ) ].
+	currentCharacter == $% ifTrue: [ ^ self scanForTokenX7 ].
+	currentCharacter == $& ifTrue: [ ^ self recordAndReportMatch: #(4) ].
+	currentCharacter == $( ifTrue: [ ^ self recordAndReportMatch: #(10) ].
+	currentCharacter == $) ifTrue: [ ^ self recordAndReportMatch: #(11) ].
+	currentCharacter == $, ifTrue: [ ^ self recordAndReportMatch: #(19) ].
 	currentCharacter == $- ifTrue: [ ^ self scan2 ].
-	currentCharacter == $. ifTrue: [ 
-		^ self recordAndReportMatch: #( 15 ) ].
+	currentCharacter == $. ifTrue: [ ^ self recordAndReportMatch: #(15) ].
 	currentCharacter == $0 ifTrue: [ ^ self scanForTokenX2 ].
 	currentCharacter == $; ifTrue: [ ^ self scanForTokenX5 ].
-	currentCharacter == $@ ifTrue: [ ^ self recordAndReportMatch: #( 5 ) ].
-	currentCharacter == $[ ifTrue: [ 
-		^ self recordAndReportMatch: #( 16 ) ].
+	currentCharacter == $@ ifTrue: [ ^ self recordAndReportMatch: #(5) ].
+	currentCharacter == $[ ifTrue: [ ^ self recordAndReportMatch: #(16) ].
 	currentCharacter == $\ ifTrue: [ ^ self scanForTokenX1 ].
-	currentCharacter == $] ifTrue: [ 
-		^ self recordAndReportMatch: #( 17 ) ].
-	currentCharacter == ${ ifTrue: [ ^ self recordAndReportMatch: #( 6 ) ].
 	^ self scanForTokenX8
 ]
 

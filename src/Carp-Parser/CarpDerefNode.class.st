@@ -32,6 +32,11 @@ CarpDerefNode >> nodeVariables [
 	^ #( #value )
 ]
 
+{ #category : #accessing }
+CarpDerefNode >> toPharo [
+	^ {#deref . value toPharo}
+]
+
 { #category : #generated }
 CarpDerefNode >> tokenVariables [
 

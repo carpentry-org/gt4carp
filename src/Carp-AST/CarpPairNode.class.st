@@ -34,6 +34,11 @@ CarpPairNode >> nodeVariables [
 	^ #( #key #value )
 ]
 
+{ #category : #accessing }
+CarpPairNode >> toPharo [
+	^ Association key: key toPharo value: value toPharo
+]
+
 { #category : #generated }
 CarpPairNode >> value [
 
