@@ -20,10 +20,19 @@ CarpPostMortemDebugger >> exception: anException [
 ]
 
 { #category : #accessing }
+CarpPostMortemDebugger >> findTrace: inputLines [
+	| lines |
+	lines := inputLines asOrderedCollection.
+	[ lines isNotEmpty and: [ (lines first = 'Traceback:') not ] ]
+		whileTrue: [ lines removeFirst ].
+	^ lines
+]
+
+{ #category : #accessing }
 CarpPostMortemDebugger >> initialize [
 
 	super initialize.
-	frameRegex := '(.*)\s+at.+([^:]+)\:(\d+)\:(\d+)\.' asRegexIgnoringCase.
+	frameRegex := '(.*)\s+at\s+([^:]+)\:(\d+)\:(\d+)\.' asRegexIgnoringCase.
 ]
 
 { #category : #accessing }
@@ -40,11 +49,10 @@ CarpPostMortemDebugger >> stackFrameFromLine: aString ordinal: ordinal [
 	| file line column source |
 
 	^ (frameRegex search: aString) ifTrue:
-		[ file := frameRegex subexpression: 2.
+		[ source := frameRegex subexpression: 2.
 		file := frameRegex subexpression: 3.
 		line := frameRegex subexpression: 4.
 		column := frameRegex subexpression: 5.
-		self halt.
 		CarpPostMortemStackFrame new
 				ordinal: ordinal;
 				displayString: aString;
@@ -62,17 +70,28 @@ CarpPostMortemDebugger >> stackFrameFromLine: aString ordinal: ordinal [
 CarpPostMortemDebugger >> stackFrames [
 	"Answer a ordered collection of stack frames.
 	This is called many times by the debugger, so cache"
+
 	| ordinal |
-
-	^ stackFrames ifNil:
-		[ ordinal := 1.
-		stackFrames := OrderedCollection new.
-		exception trace lines do: [ :line | 
-			(self stackFrameFromLine: line ordinal: ordinal) ifNotNil: [ :frame | 
-				stackFrames add: frame.
-				ordinal := ordinal + 1 ] ].
-		stackFrames ].
-
+	^ stackFrames
+		ifNil: [ ordinal := 1.
+			stackFrames := OrderedCollection new.
+			(self findTrace: exception trace lines)
+				do: [ :line | 
+					(self stackFrameFromLine: line ordinal: ordinal)
+						ifNotNil: [ :frame | 
+							stackFrames add: frame.
+							ordinal := ordinal + 1 ] ].
+			(exception trace lines last beginsWith: '[RUNTIME ERROR]')
+				ifTrue: [ stackFrames
+						add: (CarpPostMortemStackFrame new
+								ordinal: 1;
+								displayString: exception trace lines last;
+								exception: exception;
+								source: exception trace lines last;
+								file: 'REPL' asFileReference;
+								line: 0;
+								column: 0) ].
+			stackFrames ]
 ]
 
 { #category : #accessing }
