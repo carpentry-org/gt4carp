@@ -15,8 +15,7 @@ Class {
 { #category : #accessing }
 CarpModuleCoderElement >> build [
 	| application commandFactory |
-	application := CarpApplication uniqueInstance.
-	application isRunning ifFalse: [ application start ].
+	application := CarpApplication start.
 	commandFactory := application newCommandFactory.
 
 	^ commandFactory

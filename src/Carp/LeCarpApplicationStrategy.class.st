@@ -13,8 +13,6 @@ LeCarpApplicationStrategy class >> strategyName [
 { #category : #accessing }
 LeCarpApplicationStrategy >> applicationServer [
 
-	CarpApplication uniqueInstance ifNil:
-		[ CarpApplication uniqueInstance: self newCarpApplication ].
 	^ CarpApplication uniqueInstance
 ]
 
@@ -26,32 +24,5 @@ LeCarpApplicationStrategy >> applicationSettings [
 	^ CarpApplication isRunning ifTrue:
 		[ CarpApplication uniqueInstance settings ]
 	ifFalse:
-		[ self updatedSettings: CarpApplication defaultSettings ]
-]
-
-{ #category : #accessing }
-LeCarpApplicationStrategy >> newCarpApplication [
-
-	^ CarpApplication new initializeWith: 
-		(self updatedSettings: LanguageLinkSettings carpDefaultSettings)
-
-]
-
-{ #category : #accessing }
-LeCarpApplicationStrategy >> updatedSettings: applicationCarpSettings [
-	"Update the supplied settings with the lepiter configuration"
-
-	| lepiterCarpSettings lepiterDatabase carpDir |
-	lepiterDatabase := content database.
-	(lepiterDatabase isKindOf: LeNullDatabase)
-		ifTrue: [ ^ applicationCarpSettings ].
-	lepiterCarpSettings := lepiterDatabase properties carpLinkSettings.
-	lepiterCarpSettings directory
-		ifNotNil: [ :relativeDir | 
-			carpDir := lepiterDatabase localStoreRootDirectory resolve: relativeDir.
-			applicationCarpSettings workingDirectory: carpDir ].	"lepiterCarpSettings carpPath ifNotNil:
-		[ :carpPath | applicationCarpSettings serverExecutable: carpPath ]."
-	applicationCarpSettings serverDebugMode: lepiterCarpSettings serverDebugMode.
-
-	^ applicationCarpSettings
+		[ CarpApplication defaultSettings ]
 ]

@@ -11,6 +11,9 @@ Class {
 { #category : #accessing }
 GtCarpNewFunctionCoderModel >> initializeAddOns: addOns [
 	addOns
+		addStyler: (GtCoderAstSmaCCParserStyler new smaccStyler: CarpParser gtStyler).
+
+	addOns
 		addMainAction: 'Save' translated
 		icon: BrGlamorousVectorIcons accept
 		action: [ :aCoderUIModel :anElement | self save ]
