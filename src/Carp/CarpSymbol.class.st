@@ -13,6 +13,11 @@ CarpSymbol class >> named: aString [
 ]
 
 { #category : #accessing }
+CarpSymbol >> name [
+	^ name
+]
+
+{ #category : #accessing }
 CarpSymbol >> name: aString [
 	name := aString
 ]

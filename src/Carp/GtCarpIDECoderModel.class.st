@@ -8,6 +8,12 @@ Class {
 }
 
 { #category : #accessing }
+GtCarpIDECoderModel >> collapsedTextPromise [
+	^ self expression name name , ' : '
+		, (self bindAndExecute: '(type ' , module name, '.', self expression name name , ')') value
+]
+
+{ #category : #accessing }
 GtCarpIDECoderModel >> expression [
 	^ expression
 ]
@@ -30,7 +36,8 @@ GtCarpIDECoderModel >> initializeAddOns: addOns [
 
 { #category : #accessing }
 GtCarpIDECoderModel >> remove [
-	^ module removeExpression: self expression
+	module removeExpression: self expression.
+	self bindAndExecute: module toCarp
 ]
 
 { #category : #accessing }
@@ -38,5 +45,6 @@ GtCarpIDECoderModel >> save [
 	module removeExpression: expression.
 	module
 		addExpression: (CarpParser parse: sourceCode availableSource text) intoModel.
+	self bindAndExecute: module toCarp.
 	onSave ifNotNil: [ onSave value ]
 ]

@@ -51,8 +51,18 @@ CarpListNode >> initialize [
 
 { #category : #accessing }
 CarpListNode >> intoModel [
-	^ CarpList
-		contents: (expressions collect: #intoModel)
+	^ self isDefinition
+		ifTrue: [ | binding |
+			binding := (CarpBinding perform: self expressions first value source asSymbol)
+					name: self definitionVariable intoModel.
+			self expressions size = 3
+				ifTrue: [ binding binding: self expressions third intoModel ].
+			self expressions size = 4
+				ifTrue: [ binding
+						arguments: self expressions third intoModel;
+						body: self expressions fourth intoModel ].
+			binding ]
+		ifFalse: [ CarpList contents: (expressions collect: #intoModel) ]
 ]
 
 { #category : #accessing }

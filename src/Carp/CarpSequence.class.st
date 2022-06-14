@@ -24,6 +24,11 @@ CarpSequence >> contents: aCollection [
 ]
 
 { #category : #accessing }
+CarpSequence >> do: aBlock [
+	contents do: aBlock
+]
+
+{ #category : #accessing }
 CarpSequence >> open [
 	^ self subclassResponsibility
 ]

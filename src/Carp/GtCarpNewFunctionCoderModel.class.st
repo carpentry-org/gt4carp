@@ -10,14 +10,11 @@ Class {
 
 { #category : #accessing }
 GtCarpNewFunctionCoderModel >> initializeAddOns: addOns [
-	super initializeAddOns: addOns.
-
 	addOns
-				addMainAction: 'Save' translated
-				icon: BrGlamorousVectorIcons accept
-				action: [ :aCoderUIModel :anElement | 
-					self save ]
-				id: GtMethodCoderSaveActionId.
+		addMainAction: 'Save' translated
+		icon: BrGlamorousVectorIcons accept
+		action: [ :aCoderUIModel :anElement | self save ]
+		id: GtMethodCoderSaveActionId
 ]
 
 { #category : #coders }
@@ -32,6 +29,9 @@ GtCarpNewFunctionCoderModel >> onSave: aBlock [
 
 { #category : #accessing }
 GtCarpNewFunctionCoderModel >> save [
-	module addExpression: (CarpParser parse: sourceCode currentSourceText value text) intoModel.
+	| expression |
+	expression := (CarpParser parse: sourceCode currentSourceText value text) intoModel.
+	module addExpression: expression.
+	self bindAndExecute: module toCarp.
 	onSave ifNotNil: [ onSave value ]
 ]

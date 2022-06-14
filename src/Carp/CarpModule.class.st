@@ -84,6 +84,7 @@ CarpModule >> carpCoderStreamingMethodsFor: aView context: aPhlowContext [
 						ifNotNil: [ :aContents | aNewMethodCoderViewModel := aContents ]
 						ifNil: [ aNewMethodCoder := GtCarpNewFunctionCoderModel new
 									module: self;
+									carpLinkApplicationStrategy: LeCarpApplicationStrategy new;
 									onSave: [ aButton fireEvent: BrDropdownHideWish new.
 										coderElement initializeForModule ].
 

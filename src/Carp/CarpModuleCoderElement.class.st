@@ -13,6 +13,18 @@ Class {
 }
 
 { #category : #accessing }
+CarpModuleCoderElement >> build [
+	| application commandFactory |
+	application := CarpApplication uniqueInstance.
+	application isRunning ifFalse: [ application start ].
+	commandFactory := application newCommandFactory.
+
+	^ commandFactory
+		<< self module toCarp;
+		sendAndWait
+]
+
+{ #category : #accessing }
 CarpModuleCoderElement >> buildContentPane [
 
 	contentPane := BlElement new.
@@ -91,6 +103,13 @@ CarpModuleCoderElement >> buildModuleLabel [
 			 action: [ :aButton | 
 				 aButton phlow spawnObject: self module toCarp ]).
 
+	aContainer addChild: (BrButton new
+			 aptitude: BrGlamorousButtonWithIconAptitude;
+			 icon: BrGlamorousVectorIcons refresh;
+			 beSmallSize;
+			 label: 'Build';
+			 action: [ self build ]).
+
 	^ aContainer
 ]
 
@@ -133,7 +152,8 @@ CarpModuleCoderElement >> coderViewModel: aCarpCoderViewModel [
 
 	container ifNotNil: #removeFromParent.
 	container := self buildContentPane.
-	self addChildFirst: container
+	self addChildFirst: container.
+	self build
 ]
 
 { #category : #accessing }

@@ -22,6 +22,11 @@ CarpExpressionNode >> isDefinition [
 ]
 
 { #category : #accessing }
+CarpExpressionNode >> isDefinitionPredicate [
+	^ false
+]
+
+{ #category : #accessing }
 CarpExpressionNode >> isQuoted [
 	^ parent ifNil: [ false ] ifNotNil: [ parent isQuoted ]
 ]

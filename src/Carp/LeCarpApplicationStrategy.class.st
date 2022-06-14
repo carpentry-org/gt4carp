@@ -13,9 +13,8 @@ LeCarpApplicationStrategy class >> strategyName [
 { #category : #accessing }
 LeCarpApplicationStrategy >> applicationServer [
 
-	content database isDatabase ifFalse: [ ^ nil ].
 	CarpApplication uniqueInstance ifNil:
-		[ CarpApplication uniqueInstance: (self newCarpApplicationFor: content database) ].
+		[ CarpApplication uniqueInstance: self newCarpApplication ].
 	^ CarpApplication uniqueInstance
 ]
 
@@ -31,10 +30,10 @@ LeCarpApplicationStrategy >> applicationSettings [
 ]
 
 { #category : #accessing }
-LeCarpApplicationStrategy >> newCarpApplicationFor: aLeDatabase [
+LeCarpApplicationStrategy >> newCarpApplication [
 
 	^ CarpApplication new initializeWith: 
-		(self updatedSettings: LanguageLinkSettings carpDefaultSettings).
+		(self updatedSettings: LanguageLinkSettings carpDefaultSettings)
 
 ]
 

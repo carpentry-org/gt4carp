@@ -14,9 +14,13 @@ CarpExpression >> asElement [
 
 { #category : #accessing }
 CarpExpression >> asElementWithModule: aModule [
-	^ ((GtCarpIDECoderModel code: self toCarp)
-		module: aModule;
-		expression: self) asElement
+	| applicationStrategy |
+	applicationStrategy := LeCarpApplicationStrategy new.
+	^ (GtExpandableSourceCoderElement new
+		coderViewModel: ((GtCarpIDECoderModel code: self toCarp)
+				module: aModule;
+				carpLinkApplicationStrategy: applicationStrategy;
+				expression: self) asCoderViewModel) collapse
 ]
 
 { #category : #accessing }
