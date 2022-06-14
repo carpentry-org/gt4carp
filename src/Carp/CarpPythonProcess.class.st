@@ -12,7 +12,7 @@ CarpPythonProcess class >> program [
 { #category : #accessing }
 CarpPythonProcess class >> resolveCarpPath [
 	"TODO: make more robust"
-	^ '/usr/bin/python' asFileReference
+	^ '/usr/bin/python3' asFileReference
 ]
 
 { #category : #accessing }
