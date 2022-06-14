@@ -10,6 +10,12 @@ CarpPythonProcess class >> program [
 ]
 
 { #category : #accessing }
+CarpPythonProcess class >> resolveCarpPath [
+	"TODO: make more robust"
+	^ '/usr/bin/python' asFileReference
+]
+
+{ #category : #accessing }
 CarpPythonProcess >> processArguments [
 	| args |
 
