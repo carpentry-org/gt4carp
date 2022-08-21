@@ -140,14 +140,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:20:04.341282+02:00"
+						"dateAndTimeString" : "2022-08-21T11:47:48.008938+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
 					"uidString" : "5gg9GkGZDQCJ66tmBAU6hQ=="
 				},
-				"code" : "CarpModuleCoder forModule: ('Example' asCarpModule addExpression:\r\t\t (CarpDynamicVariable\r\t\t\t  named: 'x' asCarpSymbol\r\t\t\t  binding: 1 asCarpInteger))"
+				"code" : "CarpModuleCoder forModule: ('Example' asCarpModule\rdocumentation: 'Example Module documentation';\raddUse: 'Test.carp';\raddExpression:\r\t\t (CarpDynamicVariable\r\t\t\t  named: 'x' asCarpSymbol\r\t\t\t  binding: 1 asCarpInteger))"
 			},
 			{
 				"__type" : "textSnippet",

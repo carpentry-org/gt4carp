@@ -140,14 +140,48 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:20:04.341282+02:00"
+						"dateAndTimeString" : "2022-08-21T11:47:48.008938+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
 					"uidString" : "5gg9GkGZDQCJ66tmBAU6hQ=="
 				},
-				"code" : "CarpModuleCoder forModule: ('Example' asCarpModule addExpression:\r\t\t (CarpDynamicVariable\r\t\t\t  named: 'x' asCarpSymbol\r\t\t\t  binding: 1 asCarpInteger))"
+				"code" : "CarpModuleCoder forModule: ('Example' asCarpModule\rdocumentation: 'Example Module documentation';\raddUse: 'Test.carp';\raddExpression:\r\t\t (CarpDynamicVariable\r\t\t\t  named: 'x' asCarpSymbol\r\t\t\t  binding: 1 asCarpInteger))"
+			},
+			{
+				"__type" : "carpSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-08-21T11:47:54.331262+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-08-21T11:48:03.002445+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "urRU9h6jDQCLLrnDCiW6Tw=="
+				},
+				"code" : "(def x 1)"
 			},
 			{
 				"__type" : "textSnippet",
@@ -211,7 +245,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:22:01.589023+02:00"
+						"dateAndTimeString" : "2022-04-17T22:22:11.968841+02:00"
 					}
 				},
 				"uid" : {
@@ -221,7 +255,44 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "A quick disclaimer before we start: I’m using the intermediate representation introduced in [[Generating Code]]. You might need to get familiar with that chapter before movi"
+				"string" : "A quick disclaimer before we start: I’m using the intermediate representation introduced in [[Generating Code]]. You might need to get familiar with that chapter before making your way through this one."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:22:13.646691+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2022-04-17T22:22:14.249896+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "KCfLIkGZDQCKltcPBAU6hQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "TODO"
 			}
 		]
 	},

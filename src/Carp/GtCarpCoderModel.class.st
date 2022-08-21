@@ -57,8 +57,7 @@ GtCarpCoderModel >> bindAndExecute: sourceString [
 
 { #category : #accessing }
 GtCarpCoderModel >> bindAndExecuteRaw: sourceString [
-	application := carpLinkApplicationStrategy applicationServer.
-	application isRunning ifFalse: [ application start ].
+	self initializeApplication.
 	commandFactory := application newCommandFactory.
 
 	^ commandFactory
@@ -113,7 +112,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 				icon: BrGlamorousVectorIcons repair
 				action: [ :aCoderUIModel :anElement | 
 					| source |
-					source := '(expand ''' , sourceCode currentSourceText value text , ')'.
+					source := '(expand ''' , sourceCode currentSourceText wait value text , ')'.
 					anElement phlow
 						spawnObject: ((self bindAndExecute: source) parse view: #gtSourceFor:) ]
 				id: #'source-coder--macro-expand-action'.
@@ -121,16 +120,22 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 				addMainAction: 'Build and Run' translated
 				icon: BrGlamorousVectorIcons refresh
 				action: [ :aCoderUIModel :anElement | 
-					| source |
-					source := '' , sourceCode currentSourceText value text , '(build) (run)'.
+					self bindAndExecuteRaw: sourceCode currentSourceText wait value text.
+					self bindAndExecuteRaw: '(build)'.
 					anElement phlow
-						spawnObject: (CarpCliOutput text: ((self bindAndExecuteRaw: source) at: 'value')) ]
+						spawnObject: (CarpCliOutput text: ((self bindAndExecuteRaw: '(run)') at: 'value')) ]
 				id: #'source-coder--build-and-run-action'.
 			addOns
 				addMainAction: 'Infer Type' translated
 				icon: BrGlamorousVectorIcons inspect
 				action: [ :aCoderUIModel :anElement | self inspectTypeSpawningOn: anElement phlow ]
 				id: #'source-coder--type-infer-action' ]
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> initializeApplication [
+	application := carpLinkApplicationStrategy applicationServer.
+	application isRunning ifFalse: [ application start ].
 ]
 
 { #category : #accessing }
@@ -146,7 +151,7 @@ GtCarpCoderModel >> initializeShortcuts: addOns [
 { #category : #accessing }
 GtCarpCoderModel >> inspectTypeSpawningOn: aPhlow [
 	| source ast |
-	source := sourceCode currentSourceText value text.
+	source := sourceCode currentSourceText wait value text.
 	ast := CarpParser parse: source.
 	
 	(ast expressions size = 1 and: [ ast expressions first isDefinition ])

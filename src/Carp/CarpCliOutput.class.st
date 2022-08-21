@@ -28,7 +28,9 @@ CarpCliOutput >> gtOutputFor: aView [
 	^ aView textEditor
 		title: 'Output';
 		priority: 1;
-		text: [ Character lf join: (self text lines allButLast: 2) ]
+		text: [ self text lines size > 1
+				ifTrue: [ Character lf join: (self text lines allButLast: 1) ]
+				ifFalse: [ '' ] ]
 ]
 
 { #category : #accessing }
