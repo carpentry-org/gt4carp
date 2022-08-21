@@ -314,7 +314,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T16:56:34.436805+02:00"
+						"dateAndTimeString" : "2022-08-21T13:26:14.248045+02:00"
 					}
 				},
 				"editEmail" : {
@@ -325,14 +325,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T16:35:43.289314+02:00"
+						"dateAndTimeString" : "2022-08-21T13:26:21.600797+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "Ddc1ljyZDQCZq2mSDqn2mw=="
+					"uidString" : "sEr+VSCjDQCp+CTdALqe5Q=="
 				},
-				"code" : "; this is what we will be able to do\r(defn hello-world []\r  (IO.println \"Hello world!\"))"
+				"code" : "; this is what we will be able to do\r(defn hello-world []\r  (IO.println \\\"Hello world!\\\"))"
 			},
 			{
 				"__type" : "textSnippet",

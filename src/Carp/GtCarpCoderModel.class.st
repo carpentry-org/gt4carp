@@ -88,7 +88,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 	addOns
 		addStyler: (GtCoderAstSmaCCParserStyler new smaccStyler: CarpParser gtStyler).
 
-	application
+	carpLinkApplicationStrategy
 		ifNotNil: [ addOns
 				addMainAction: 'Evaluate' translated
 				icon: BrGlamorousVectorIcons play
@@ -142,7 +142,7 @@ GtCarpCoderModel >> initializeApplication [
 GtCarpCoderModel >> initializeShortcuts: addOns [
 	super initializeShortcuts: addOns.
 
-	application
+	carpLinkApplicationStrategy
 		ifNotNil: [ addOns
 				addShortcut: GtSourceCoderDoItShortcut new;
 				addShortcut: GtSourceCoderDoItAndInspectShortcut new ]
