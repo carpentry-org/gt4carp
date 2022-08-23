@@ -67,7 +67,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T17:08:58.770803+02:00"
+						"dateAndTimeString" : "2022-08-22T12:23:53.897678+02:00"
 					}
 				},
 				"uid" : {
@@ -77,7 +77,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "[[Introduction]]"
+				"string" : "\t[[Introduction]]"
 			},
 			{
 				"__type" : "textSnippet",
@@ -668,7 +668,7 @@
 								"__type" : "time",
 								"time" : {
 									"__type" : "dateAndTime",
-									"dateAndTimeString" : "2022-08-21T13:05:18.689986+02:00"
+									"dateAndTimeString" : "2022-08-21T13:05:22.120679+02:00"
 								}
 							},
 							"uid" : {
