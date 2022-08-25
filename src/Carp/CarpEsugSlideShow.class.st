@@ -14,32 +14,57 @@ CarpEsugSlideShow >> blastFor: aSlide [
 ]
 
 { #category : #accessing }
+CarpEsugSlideShow >> carpAppetizerExpandedFor: aSlide [
+	<gtSlide>
+	^ aSlide element
+		priority: (self priorityFor: #carpAppetizerExpandedFor:);
+		element: [ GtPager createWrappedOn: (CarpModuleCoder forModule: self exampleModule) ]
+]
+
+{ #category : #accessing }
 CarpEsugSlideShow >> carpAppetizerFor: aSlide [
 	<gtSlide>
-	^ aSlide textAndElement
+	^ aSlide element
 		priority: (self priorityFor: #carpAppetizerFor:);
-		newTextWithFormat: (self asHeader: 'Enter gt4carp') bold
-				, (self
-						asText: '
-representing an IDE for a static language');
-		element: [ GtPager createWrappedOn: (CarpModuleCoder forModule: self exampleModule) ]
+		element: [ BlElement new
+				layout: BlFrameLayout new;
+				constraintsDo: [ :c | 
+					c horizontal matchParent.
+					c vertical matchParent ];
+				addChild: (BlElement new
+						aptitude: BrShadowAptitude;
+						background: Color white;
+						layout: BlLinearLayout new;
+						constraintsDo: [ :c | 
+							c frame horizontal alignCenter.
+							c frame vertical alignCenter.
+							c horizontal fitContent.
+							c vertical matchParent ];
+						padding: (BlInsets all: 10);
+						margin: (BlInsets all: 10);
+						addChild: (CarpModuleCoder forModule: self exampleModule) asElement hFitContent
+								vMatchParent) ]
+]
+
+{ #category : #accessing }
+CarpEsugSlideShow >> carpAppetizerTwoExpandedFor: aSlide [
+	<gtSlide>
+	^ aSlide element
+		priority: (self priorityFor: #carpAppetizerTwoExpandedFor:);
+		element: [ GtPager
+				createWrappedOn: ((GtCarpCoderModel code: self exampleCode)
+						carpLinkApplicationStrategy: LeCarpApplicationStrategy new)
+						initializeApplication asElement ]
 ]
 
 { #category : #accessing }
 CarpEsugSlideShow >> carpAppetizerTwoFor: aSlide [
 	<gtSlide>
-	^ aSlide textAndElement
+	^ aSlide element
 		priority: (self priorityFor: #carpAppetizerTwoFor:);
-		newTextWithFormat: (self asHeader: 'Enter gt4carp') bold
-				, (self
-						asText: '
-... and an integration into Lepiter');
-		element: [ GtPager
-				createOn: (GtPagerWrapperElement new
-						tool: ((GtCarpCoderModel code: self exampleCode)
-								carpLinkApplicationStrategy: LeCarpApplicationStrategy new)
-								initializeApplication asElement;
-						embellisher: (GtPagerPageEmbellisher new extension: GtPagerPageEmbellisherExtension null)) ]
+		element: [ ((GtCarpCoderModel code: self exampleCode)
+						carpLinkApplicationStrategy: LeCarpApplicationStrategy new)
+						initializeApplication asElement hFitContent ]
 ]
 
 { #category : #accessing }
@@ -49,6 +74,16 @@ CarpEsugSlideShow >> carpBookFor: aSlide [
 	^ (aSlide lepiterPage)
 		priority: (self priorityFor: #carpBookFor:);
 		pageNamed: 'Adding a Language to Glamorous Toolkit' from: 'Adding a Language to Glamorous Toolkit'
+]
+
+{ #category : #accessing }
+CarpEsugSlideShow >> carpDebuggerFor: aSlide [
+	<gtSlide>
+	^ aSlide element
+		priority: (self priorityFor: #carpDebuggerFor:);
+		element: [ ((GtCarpCoderModel code: self exampleWrongCode)
+						carpLinkApplicationStrategy: LeCarpApplicationStrategy new)
+						initializeApplication asElement hFitContent ]
 ]
 
 { #category : #accessing }
@@ -105,15 +140,18 @@ CarpEsugSlideShow >> exampleModule [
 ]
 
 { #category : #accessing }
+CarpEsugSlideShow >> exampleWrongCode [
+	^ '(case true
+true "missing a case")'
+]
+
+{ #category : #accessing }
 CarpEsugSlideShow >> highlighterFor: aSlide [
 	<gtSlide>
-	^ aSlide textAndElement
+	^ aSlide element
 		priority: (self priorityFor: #highlighterFor:);
-		newTextWithFormat: (self asHeader: 'The highlighter') bold
-				, (self
-						asText: '
-Just a method in a GT class');
-		element: [ GtCoder forMethod: GtSmaCCParserStyler class>>#carpStyler: ]
+		element: [ GtPager
+				createWrappedOn: (GtCoder forMethod: GtSmaCCParserStyler class >> #carpStyler:) ]
 ]
 
 { #category : #accessing }
@@ -139,13 +177,9 @@ CarpEsugSlideShow >> ingredientsFor: aSlide [
 { #category : #accessing }
 CarpEsugSlideShow >> languageLinkFor: aSlide [
 	<gtSlide>
-	^ aSlide textAndElement
+	^ aSlide element
 		priority: (self priorityFor: #languageLinkFor:);
-		newTextWithFormat: (self asHeader: 'The LanguageLink') bold
-				, (self
-						asText: '
-The client runs inside GT, the server shall not be spoken of here');
-		element: [ GtCoder forMethod: LanguageLinkSettings class>>#carpDefaultSettings ]
+		element: [ GtPager createWrappedOn: (GtCoder forMethod: LanguageLinkSettings class>>#carpDefaultSettings) ]
 ]
 
 { #category : #accessing }
@@ -174,7 +208,10 @@ CarpEsugSlideShow >> pages [
 		motivationFor:
 		revealFor:
 		carpAppetizerFor:
+		carpAppetizerExpandedFor:
 		carpAppetizerTwoFor:
+		carpAppetizerTwoExpandedFor:
+		carpDebuggerFor:
 		carpDefFor:
 		carpMotivationFor:
 		carpBookFor:
@@ -193,13 +230,9 @@ CarpEsugSlideShow >> pages [
 { #category : #accessing }
 CarpEsugSlideShow >> parserFor: aSlide [
 	<gtSlide>
-	^ aSlide textAndElement
+	^ aSlide element
 		priority: (self priorityFor: #parserFor:);
-		newTextWithFormat: (self asHeader: 'The parser') bold
-				, (self
-						asText: '
-Simple enough, but using custom node types');
-		element: [ GtCoder forClass: CarpParser ]
+		element: [ GtPager createWrappedOn: (GtCoder forClass: CarpParser) ]
 ]
 
 { #category : #accessing }
@@ -226,13 +259,9 @@ CarpEsugSlideShow >> revealFor: aSlide [
 { #category : #accessing }
 CarpEsugSlideShow >> snippetFor: aSlide [
 	<gtSlide>
-	^ aSlide textAndElement
+	^ aSlide element
 		priority: (self priorityFor: #snippetFor:);
-		newTextWithFormat: (self asHeader: 'The snippet') bold
-				, (self
-						asText: '
-The Lepiter snippet is all over the place, but the central ingredient is the snippet class. Hooking up execution is optional!');
-		element: [ GtCoder forClass: LeCarpSnippet ]
+		element: [ GtPager createWrappedOn: (GtCoder forClass: LeCarpSnippet) ]
 ]
 
 { #category : #accessing }
