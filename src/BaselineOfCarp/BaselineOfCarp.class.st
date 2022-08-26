@@ -5,6 +5,22 @@ Class {
 }
 
 { #category : #baseline }
+BaselineOfCarp class >> loadLepiter [ [
+	| currentProperties |
+	currentProperties := LeDatabasesRegistry defaultLogicalDatabase properties.
+	currentProperties
+		addRegisteredDirectory: FileLocator imageDirectory
+			/ 'pharo-local'
+			/ 'iceberg'
+			/ 'carpentry-org'
+			/ 'gt4carp'
+			/ 'lepiter'.
+	
+	LeDatabasesRegistry default defaultLogicalDatabase reload.
+]
+]
+
+{ #category : #baseline }
 BaselineOfCarp >> baseline: spec [
 	<baseline>
 	spec

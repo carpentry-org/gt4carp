@@ -9,12 +9,13 @@ The repository contains:
 - a highlighter and styler for Carp code inside GT,
 - a snippet type for Carp Lepiter snippets,
 - a stand-alone code generator for Carp from an intermediate representation,
-- a work-in-progress booklet about the process of adding a language to GT, and
+- a booklet about the process of adding a language to GT, and
 - a work-in progress module IDE for Carp based on GT class coders.
 
 ## Installing
 
 ```
+"this will also register the Lepiter booklet"
 Metacello new
     baseline: 'Carp';
     repository: 'github://carpentry-org/gt4carp:master/src';
