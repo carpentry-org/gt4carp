@@ -19,7 +19,9 @@ The repository contains:
 Metacello new
     baseline: 'Carp';
     repository: 'github://carpentry-org/gt4carp:master/src';
-    load
+    load.
+ 
+"this will also register the Lepiter booklet"BaselineOfCarp loadLepiter
 ```
 
 ## Missing
