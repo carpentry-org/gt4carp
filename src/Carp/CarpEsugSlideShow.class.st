@@ -277,7 +277,7 @@ CarpEsugSlideShow >> takeawayFor: aSlide [
 							'
 • A non-trivial amount of work goes into building an IDE (duh!)
 • Most of it happens not in code, but in thinking about useful interactions and abstractions
-• And it can be done by a single father of a toddler in a few rare spare moments
+• And it can be done by a lone father of a toddler in a few rare spare moments
 ')
 ]
 

@@ -12,12 +12,20 @@ The repository contains:
 - a work-in-progress booklet about the process of adding a language to GT, and
 - a work-in progress module IDE for Carp based on GT class coders.
 
+## Installing
+
+```
+Metacello new
+    baseline: 'Carp';
+    repository: 'github://carpentry-org/gt4carp:master/src';
+    load
+```
+
 ## Missing
 
 Still left to do are:
-- Finish the booklet,
 - “finish” the IDE (i.e. bring to a stable, cute state),
-- write the `LanguageLink` server and client and find a way to distribute the server, and
+- find a way to distribute the server, and
 - get you involved!
 
 <hr/>

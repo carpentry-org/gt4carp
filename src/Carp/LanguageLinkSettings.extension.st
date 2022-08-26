@@ -11,7 +11,7 @@ LanguageLinkSettings class >> carpDefaultSettings [
 		messageBrokerStrategy: LanguageLinkHttpMessageBroker;
 		serverProcessClass: CarpPythonProcess;
 		platform: CarpPlatform new;
-		commandFactoryClass: LanguageLinkCommandFactory;
+		commandFactoryClass: CarpCommandFactory;
 		commandClass: CarpCommand;
 		serializerClass: LanguageLinkSerializer;
 		deserializerClass: CarpDeserializer;
