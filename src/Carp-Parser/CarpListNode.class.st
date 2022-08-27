@@ -15,6 +15,14 @@ CarpListNode >> acceptVisitor: anExpressionVisitor [
 	^ anExpressionVisitor visitList: self
 ]
 
+{ #category : #accessing }
+CarpListNode >> callVariable [
+	^ (self expressions size > 1
+		and: [ self expressions first isCallablePredicate ])
+		ifTrue: [ self expressions second ]
+		ifFalse: [ nil ]
+]
+
 { #category : #generated }
 CarpListNode >> compositeNodeVariables [
 
@@ -66,8 +74,55 @@ CarpListNode >> intoModel [
 ]
 
 { #category : #accessing }
+CarpListNode >> isCallableDefinition [
+	^ self callVariable isNotNil
+]
+
+{ #category : #accessing }
+CarpListNode >> isCase [
+	^ (self expressions size > 1
+		and: [ self expressions first isCase ])
+]
+
+{ #category : #accessing }
+CarpListNode >> isCond [
+	^ (self expressions size > 1
+		and: [ self expressions first isCond ])
+]
+
+{ #category : #accessing }
 CarpListNode >> isDefinition [
 	^ self definitionVariable isNotNil
+]
+
+{ #category : #accessing }
+CarpListNode >> isDo [
+	^ (self expressions size > 1
+		and: [ self expressions first isDo ])
+]
+
+{ #category : #accessing }
+CarpListNode >> isFn [
+	^ (self expressions size > 1
+		and: [ self expressions first isFn ])
+]
+
+{ #category : #accessing }
+CarpListNode >> isLet [
+	^ (self expressions size > 1
+		and: [ self expressions first isLet ])
+]
+
+{ #category : #accessing }
+CarpListNode >> isLoop [
+	^ (self expressions size > 1
+		and: [ self expressions first isLoop ])
+]
+
+{ #category : #accessing }
+CarpListNode >> isModuleDefinition [
+	^ (self expressions size > 1
+		and: [ self expressions first isDefModule ])
 ]
 
 { #category : #generated }

@@ -88,6 +88,16 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 	addOns
 		addStyler: (GtCoderAstSmaCCParserStyler new smaccStyler: CarpParser gtStyler).
 
+	addOns
+		addMainAction: 'Format' translated
+		icon: BrGlamorousVectorIcons clipboard
+		action: [ :aCoderUIModel :anElement | 
+			| source |
+			source := GtCarpFormatter uniqueInstance
+					format: (CarpParser parse: sourceCode currentSourceText wait value text).
+			self sourceCode: (GtCoderExplicitStringSource new source: source) ]
+		id: #'source-coder--format-action-id'.
+
 	carpLinkApplicationStrategy
 		ifNotNil: [ addOns
 				addMainAction: 'Evaluate' translated

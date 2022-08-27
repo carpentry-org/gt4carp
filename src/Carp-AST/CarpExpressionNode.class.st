@@ -17,12 +17,52 @@ CarpExpressionNode >> acceptVisitor: anExpressionVisitor [
 ]
 
 { #category : #accessing }
+CarpExpressionNode >> isCallablePredicate [
+	^ false
+]
+
+{ #category : #accessing }
+CarpExpressionNode >> isCase [
+	^ false
+]
+
+{ #category : #accessing }
+CarpExpressionNode >> isCond [
+	^ false
+]
+
+{ #category : #accessing }
+CarpExpressionNode >> isDefModule [
+	^ false
+]
+
+{ #category : #accessing }
 CarpExpressionNode >> isDefinition [
 	^ false
 ]
 
 { #category : #accessing }
 CarpExpressionNode >> isDefinitionPredicate [
+	^ false
+]
+
+{ #category : #accessing }
+CarpExpressionNode >> isDo [
+	^ false
+]
+
+{ #category : #accessing }
+CarpExpressionNode >> isFn [
+	^ false
+]
+
+{ #category : #accessing }
+CarpExpressionNode >> isLet [
+	^ false
+]
+
+{ #category : #accessing }
+CarpExpressionNode >> isLoop [
 	^ false
 ]
 
