@@ -9,13 +9,6 @@ Class {
 	#category : #'Carp-Coder'
 }
 
-{ #category : #'instance creation' }
-CarpTypeSignature class >> on: aValue using: aModel [
-	^ self new
-		fromAST: aValue;
-		model: aModel
-]
-
 { #category : #accessing }
 CarpTypeSignature >> elementsList [
 	| tokens verticalContainer docsRegex |

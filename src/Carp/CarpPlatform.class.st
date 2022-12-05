@@ -8,16 +8,6 @@ Class {
 }
 
 { #category : #accessing }
-CarpPlatform class >> uiManagerClass [
-	^ LanguageLinkPharoUiManager
-]
-
-{ #category : #hooks }
-CarpPlatform class >> weakRegistryClass [
-	^ LanguageLinkPharoWeakRegistry
-]
-
-{ #category : #accessing }
 CarpPlatform >> copyApplicationTo: appFolder application: application [
 	"Copy the Carp runtime environment to the specified folder"
 	| srcDir cpCommand proc error |

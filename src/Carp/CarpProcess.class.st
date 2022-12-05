@@ -12,34 +12,6 @@ Class {
 }
 
 { #category : #accessing }
-CarpProcess class >> program [
-	^ 'carp'
-]
-
-{ #category : #accessing }
-CarpProcess class >> resolveCarpPath [
-	| proc |
-	
-	proc := GtSubprocessWithInMemoryOutput new
-				command: 'which';
-				arguments: { self program}.
-	CarpPlatform subProcessEnvironmentDictionary keysAndValuesDo: [ :key :value |
-		proc environmentAt: key put: value ].
-	proc runAndWait.
-	(#(0 1) includes: proc exitCode) ifFalse:
-		[ self error: 'Unable to request', self program, ' location' ].
-	^ proc stdout trim asFileReference
-
-]
-
-{ #category : #accessing }
-CarpProcess class >> serverPath [
-	^ CarpPath 
-			ifNil: [ CarpPath := self resolveCarpPath ]
-			ifNotNil: [ CarpPath ]
-]
-
-{ #category : #accessing }
 CarpProcess >> exitCode [
 
 	^ process

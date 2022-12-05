@@ -10,11 +10,6 @@ Class {
 	#category : #'Carp-IDE'
 }
 
-{ #category : #'instance creation' }
-CarpModule class >> named: aString [
-	^ self new name: aString
-]
-
 { #category : #accessing }
 CarpModule >> addExpression: anExpression [
 	expressions add: anExpression

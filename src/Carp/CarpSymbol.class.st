@@ -7,11 +7,6 @@ Class {
 	#category : #'Carp-IDE'
 }
 
-{ #category : #'instance creation' }
-CarpSymbol class >> named: aString [
-	^ self new name: aString 
-]
-
 { #category : #accessing }
 CarpSymbol >> name [
 	^ name

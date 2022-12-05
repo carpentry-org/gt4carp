@@ -11,13 +11,6 @@ Class {
 	#category : #'Carp-Coder'
 }
 
-{ #category : #'instance creation' }
-GtCarpCoderModel class >> code: aString [
-
-	^ self new sourceCode:
-		  (GtCoderExplicitStringSource new source: aString)
-]
-
 { #category : #converting }
 GtCarpCoderModel >> asCoderViewModel [
 

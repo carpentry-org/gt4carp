@@ -4,12 +4,6 @@ Class {
 	#category : #'Carp-Serialization'
 }
 
-{ #category : #'instance creation' }
-CarpDeserializer class >> deserialize: anObject [
-	^ self new
-		deserialize: anObject
-]
-
 { #category : #accessing }
 CarpDeserializer >> buildProxyFor: rawObject [
 	| proxy |
