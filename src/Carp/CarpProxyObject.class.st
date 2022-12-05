@@ -10,6 +10,15 @@ Class {
 }
 
 { #category : #accessing }
+CarpProxyObject class >> carpType: aType var: aVar application: application [
+	^ self new
+		carpVariable: aVar;
+		carpType: aType;
+		application: application;
+		yourself
+]
+
+{ #category : #accessing }
 CarpProxyObject >> application: anObject [
 	application := anObject
 ]

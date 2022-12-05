@@ -7,6 +7,11 @@ Class {
 	#category : #'Carp-IDE'
 }
 
+{ #category : #'instance creation' }
+CarpCharacter class >> character: aCharacter [
+	^ self new character: aCharacter
+]
+
 { #category : #accessing }
 CarpCharacter >> character [
 	^ character

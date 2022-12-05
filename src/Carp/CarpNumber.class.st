@@ -7,6 +7,11 @@ Class {
 	#category : #'Carp-IDE'
 }
 
+{ #category : #'instance creation' }
+CarpNumber class >> number: aNumber [
+	^ self new number: aNumber
+]
+
 { #category : #acccessing }
 CarpNumber >> number: aNumber [ 
 	number := aNumber

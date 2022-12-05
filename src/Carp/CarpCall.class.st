@@ -8,6 +8,11 @@ Class {
 	#category : #'Carp-IDE'
 }
 
+{ #category : #'instance creation' }
+CarpCall class >> function: aSymbol arguments: aCollection [
+	^ self new name: aSymbol; arguments: aCollection
+]
+
 { #category : #accessing }
 CarpCall >> addArgument: anArgument [
 	arguments add: anArgument

@@ -7,6 +7,14 @@ Class {
 	#category : #'Carp-IDE'
 }
 
+{ #category : #'instance creation' }
+CarpVariable class >> named: aString binding: anExpression [
+
+	^ self new
+		name: aString;
+		binding: anExpression
+]
+
 { #category : #accessing }
 CarpVariable >> binding [
 	^ binding

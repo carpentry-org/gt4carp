@@ -7,6 +7,17 @@ Class {
 	#category : #'Carp-LanguageLink'
 }
 
+{ #category : #'start-stop' }
+CarpApplication class >> start [
+
+	^ self startWith: LanguageLinkSettings carpDefaultSettings.
+]
+
+{ #category : #'class initialization' }
+CarpApplication class >> startUp: resuming [
+	resuming ifTrue: [ self stop ]
+]
+
 { #category : #accessing }
 CarpApplication >> baseApplication [
 	^ CarpApplication

@@ -5,6 +5,12 @@ Class {
 }
 
 { #category : #accessing }
+LeCarpApplicationStrategy class >> strategyName [
+
+	^ #global
+]
+
+{ #category : #accessing }
 LeCarpApplicationStrategy >> applicationServer [
 
 	^ CarpApplication uniqueInstance

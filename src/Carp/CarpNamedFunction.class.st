@@ -8,6 +8,14 @@ Class {
 	#category : #'Carp-IDE'
 }
 
+{ #category : #'instance creation' }
+CarpNamedFunction class >> named: aString withArguments: aCollection andBody: anExpression [
+	^ self new 
+		name: aString;
+		arguments: aCollection;
+		body: anExpression
+]
+
 { #category : #accessing }
 CarpNamedFunction >> addArgument: anArgument [
 	arguments add: anArgument

@@ -8,6 +8,11 @@ Class {
 	#category : #'Carp-IDE'
 }
 
+{ #category : #'instance creation' }
+CarpSequence class >> contents: aCollection [
+	^ self new contents: aCollection
+]
+
 { #category : #accessing }
 CarpSequence >> close [
 	^ self subclassResponsibility

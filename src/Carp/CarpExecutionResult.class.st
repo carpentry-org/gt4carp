@@ -9,6 +9,13 @@ Class {
 	#category : #'Carp-Execution'
 }
 
+{ #category : #'instance creation' }
+CarpExecutionResult class >> from: aCarpResult [
+	^ self new
+		value: (aCarpResult at: #value);
+		warnings: (aCarpResult at: #warnings)
+]
+
 { #category : #accessing }
 CarpExecutionResult >> gtValueFor: aView [
 	<gtView>

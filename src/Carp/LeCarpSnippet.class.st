@@ -4,6 +4,26 @@ Class {
 	#category : #'Carp-Lepiter'
 }
 
+{ #category : #'api - accessing menu' }
+LeCarpSnippet class >> contextMenuItemSpecification [
+	<leSnippetSpecification>
+	^ LeContextMenuItemSpecification new
+		snippetClass: self;
+		title: 'Carp'
+]
+
+{ #category : #'lepiter-store' }
+LeCarpSnippet class >> leJsonV3Name [
+
+	^ 'carpSnippet'
+]
+
+{ #category : #'lepiter-store' }
+LeCarpSnippet class >> leJsonV4Name [
+
+	^ 'carpSnippet'
+]
+
 { #category : #visiting }
 LeCarpSnippet >> acceptVisitor: aVisitor [
 

@@ -8,6 +8,11 @@ Class {
 }
 
 { #category : #accessing }
+CarpCliOutput class >> text: aString [
+	^ self new text: aString
+]
+
+{ #category : #accessing }
 CarpCliOutput >> gtExitCodeFor: aView [
 	<gtView>
 	^ aView forward
