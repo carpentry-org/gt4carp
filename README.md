@@ -20,7 +20,7 @@ Metacello new
     repository: 'github://carpentry-org/gt4carp:master/src';
     load.
  
-"this will also register the Lepiter booklet"BaselineOfCarp loadLepiter
+"this will also register the Lepiter booklet"#BaselineOfCarp asClass loadLepiter
 ```
 
 ## Missing
