@@ -55,6 +55,27 @@ GtCarpRewrite >> gtCommentFor: aView [
 ]
 
 { #category : #accessing }
+GtCarpRewrite >> gtPlaygroundFor: aView [
+	<gtView>
+	| text |
+	text := '' asRopedText.
+	^ aView textEditor
+		title: 'Playground';
+		priority: 3;
+		styler: [ CarpParser gtStyler ];
+		text: [ text ];
+		actionButtonIcon: BrGlamorousVectorIcons play
+			tooltip: 'Rewrite'
+			action: [ :aButton | 
+				| rewrite engine |
+				rewrite := SmaCCRewriteFile new
+						parserClass: CarpParser;
+						addTransformation: self asSmaCCRewrite.
+				engine := SmaCCRewriteEngine new rewriteRule: rewrite.
+				aButton phlow spawnObject: (engine rewriteTree: (CarpParser parse: text)) ]
+]
+
+{ #category : #accessing }
 GtCarpRewrite >> gtTransformFor: aView [
 	<gtView>
 	^ aView explicit
