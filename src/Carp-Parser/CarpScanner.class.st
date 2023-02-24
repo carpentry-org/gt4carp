@@ -6,14 +6,12 @@ Class {
 
 { #category : #generated }
 CarpScanner >> emptySymbolTokenId [
-
-	^ 44
+	^ 45
 ]
 
 { #category : #generated }
 CarpScanner >> errorTokenId [
-
-	^ 45
+	^ 46
 ]
 
 { #category : #generated }
@@ -143,11 +141,27 @@ CarpScanner >> scan7 [
 ]
 
 { #category : #generated }
+CarpScanner >> scan8 [
+	[ self step.
+	currentCharacter == $` ifTrue: [ ^ self scan9 ].
+	true ] whileTrue
+]
+
+{ #category : #generated }
+CarpScanner >> scan9 [
+	self recordMatch: #(22).
+	self step.
+	currentCharacter == $` ifTrue: [ ^ self scan8 ].
+	^ self reportLastMatch
+]
+
+{ #category : #generated }
 CarpScanner >> scanForToken [
 	self step.
 	currentCharacter == $" ifTrue: [ ^ self scan1 ].
 	currentCharacter == $# ifTrue: [ ^ self recordAndReportMatch: #(1) ].
-	^ self scanForTokenX9
+	currentCharacter == $% ifTrue: [ ^ self scanForTokenX7 ].
+	^ self scanForTokenX10
 ]
 
 { #category : #generated }
@@ -205,6 +219,23 @@ CarpScanner >> scanForTokenX1 [
 		^ self reportLastMatch ].
 	currentCharacter == $u ifTrue: [ ^ self scanForTokenX1X1 ].
 	^ self recordAndReportMatch: #( 21 )
+]
+
+{ #category : #generated }
+CarpScanner >> scanForTokenX10 [
+	currentCharacter == $& ifTrue: [ ^ self recordAndReportMatch: #(4) ].
+	currentCharacter == $' ifTrue: [ ^ self recordAndReportMatch: #(12) ].
+	currentCharacter == $( ifTrue: [ ^ self recordAndReportMatch: #(10) ].
+	currentCharacter == $) ifTrue: [ ^ self recordAndReportMatch: #(11) ].
+	currentCharacter == $, ifTrue: [ ^ self recordAndReportMatch: #(19) ].
+	currentCharacter == $- ifTrue: [ ^ self scan2 ].
+	currentCharacter == $. ifTrue: [ ^ self recordAndReportMatch: #(15) ].
+	currentCharacter == $0 ifTrue: [ ^ self scanForTokenX2 ].
+	currentCharacter == $; ifTrue: [ ^ self scanForTokenX5 ].
+	currentCharacter == $@ ifTrue: [ ^ self recordAndReportMatch: #(5) ].
+	currentCharacter == $[ ifTrue: [ ^ self recordAndReportMatch: #(16) ].
+	currentCharacter == $\ ifTrue: [ ^ self scanForTokenX1 ].
+	^ self scanForTokenX9
 ]
 
 { #category : #generated }
@@ -319,13 +350,20 @@ CarpScanner >> scanForTokenX7 [
 
 { #category : #generated }
 CarpScanner >> scanForTokenX8 [
+	self recordMatch: #(12).
+	self step.
+	currentCharacter == $` ifTrue: [ ^ self scan9 ].
+	^ self scan8
+]
+
+{ #category : #generated }
+CarpScanner >> scanForTokenX9 [
 	currentCharacter == $] ifTrue: [ ^ self recordAndReportMatch: #(17) ].
+	currentCharacter == $` ifTrue: [ ^ self scanForTokenX8 ].
 	currentCharacter == ${ ifTrue: [ ^ self recordAndReportMatch: #(6) ].
 	currentCharacter == $} ifTrue: [ ^ self recordAndReportMatch: #(7) ].
 	currentCharacter == $~ ifTrue: [ ^ self recordAndReportMatch: #(8) ].
 	currentCharacter isDigit ifTrue: [ ^ self scan5 ].
-	('''`' includes: currentCharacter)
-		ifTrue: [ ^ self recordAndReportMatch: #(12) ].
 	(currentCharacter isSeparator or: [ currentCharacter == Character pageUp ])
 		ifTrue: [ ^ self scanForTokenX6 ].
 	currentCharacter isUppercase ifTrue: [ ^ self scanForTokenX3 ].
@@ -336,25 +374,6 @@ CarpScanner >> scanForTokenX8 [
 ]
 
 { #category : #generated }
-CarpScanner >> scanForTokenX9 [
-	currentCharacter == $% ifTrue: [ ^ self scanForTokenX7 ].
-	currentCharacter == $& ifTrue: [ ^ self recordAndReportMatch: #(4) ].
-	currentCharacter == $( ifTrue: [ ^ self recordAndReportMatch: #(10) ].
-	currentCharacter == $) ifTrue: [ ^ self recordAndReportMatch: #(11) ].
-	currentCharacter == $, ifTrue: [ ^ self recordAndReportMatch: #(19) ].
-	currentCharacter == $- ifTrue: [ ^ self scan2 ].
-	currentCharacter == $. ifTrue: [ ^ self recordAndReportMatch: #(15) ].
-	currentCharacter == $0 ifTrue: [ ^ self scanForTokenX2 ].
-	currentCharacter == $; ifTrue: [ ^ self scanForTokenX5 ].
-	currentCharacter == $@ ifTrue: [ ^ self recordAndReportMatch: #(5) ].
-	currentCharacter == $[ ifTrue: [ ^ self recordAndReportMatch: #(16) ].
-	currentCharacter == $\ ifTrue: [ ^ self scanForTokenX1 ].
-	^ self scanForTokenX8
-]
-
-{ #category : #generated }
 CarpScanner >> tokenActions [
-
-	^ #( nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil
-	     nil nil #comment #whitespace )
+	^ #(nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil #comment #whitespace nil #patternToken)
 ]

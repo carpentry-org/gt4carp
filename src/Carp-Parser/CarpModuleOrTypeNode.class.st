@@ -16,10 +16,12 @@ CarpModuleOrTypeNode >> acceptVisitor: anExpressionVisitor [
 
 { #category : #accessing }
 CarpModuleOrTypeNode >> intoModel [
-	^ CarpSymbol
-		named: ('.'
-				join: {module source.
-						value source})
+	^ value
+		ifNil: [ CarpSymbol named: module source ]
+		ifNotNil: [ CarpSymbol
+				named: ('.'
+						join: {module source.
+								value source}) ]
 ]
 
 { #category : #generated }
@@ -42,7 +44,9 @@ CarpModuleOrTypeNode >> nodeVariables [
 
 { #category : #accessing }
 CarpModuleOrTypeNode >> toPharo [
-	^ (module source, '.', value source) asSymbol
+	^ value
+		ifNil: [ module source asSymbol ]
+		ifNotNil: [ (module source , '.' , value source) asSymbol ]
 ]
 
 { #category : #generated }

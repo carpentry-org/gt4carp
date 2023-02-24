@@ -17,6 +17,43 @@ GtCarpFormatter >> defaultMaxWidth [
 ]
 
 { #category : #accessing }
+GtCarpFormatter >> format: anAst [
+	^ super format: (self prettifyAst: anAst)
+]
+
+{ #category : #accessing }
+GtCarpFormatter >> generatePrettificationEngine [
+	| rewrite |
+	rewrite := SmaCCRewriteFile new parserClass: CarpParser.
+
+	self prettifications
+		do: [ :aPrettification | rewrite addTransformation: aPrettification asSmaCCRewrite ].
+
+	^ SmaCCRewriteEngine new rewriteRule: rewrite
+]
+
+{ #category : #accessing }
+GtCarpFormatter >> prettifications [
+	^ {GtCarpRewrite
+			comment: 'ref reader macro'
+			from: '(ref `variable`)'
+			to: '&`variable`'.
+		GtCarpRewrite
+			comment: 'copy reader macro'
+			from: '(copy `variable`)'
+			to: '@`variable`'.
+		GtCarpRewrite
+			comment: 'deref reader macro'
+			from: '(deref `variable`)'
+			to: '~`variable`'}
+]
+
+{ #category : #accessing }
+GtCarpFormatter >> prettifyAst: anAst [
+	^ CarpParser parse: (self generatePrettificationEngine rewriteTree: anAst)
+]
+
+{ #category : #accessing }
 GtCarpFormatter >> visitArray: aList [
 	| res |
 	res := OrderedCollection
