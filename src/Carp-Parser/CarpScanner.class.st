@@ -260,26 +260,28 @@ CarpScanner >> scanForTokenX1X1 [
 
 { #category : #generated }
 CarpScanner >> scanForTokenX2 [
-
-	self recordMatch: #( 18 ).
+	self recordMatch: #(18).
 	self step.
 	currentCharacter == $. ifTrue: [ ^ self scan4 ].
-	currentCharacter == $b ifTrue: [ 
-		self recordMatch: #( 18 ).
-		self step.
-		(currentCharacter between: $0 and: $1) ifTrue: [ 
-			^ self recordAndReportMatch: #( 18 ) ].
-		^ self reportLastMatch ].
-	currentCharacter == $x ifTrue: [ 
-		self step.
-		(currentCharacter isDigit or: [ 
-			 (currentCharacter between: $A and: $F) or: [ 
-				 currentCharacter between: $a and: $f ] ]) ifTrue: [ 
-			^ self recordAndReportMatch: #( 18 ) ].
-		^ self reportLastMatch ].
+	currentCharacter == $b
+		ifTrue: [ [ self recordMatch: #(18).
+			self step.
+			currentCharacter between: $0 and: $1 ] whileTrue.
+			^ self reportLastMatch ].
+	currentCharacter == $x
+		ifTrue: [ self step.
+			(currentCharacter isDigit
+				or: [ (currentCharacter between: $A and: $F)
+						or: [ currentCharacter between: $a and: $f ] ])
+				ifTrue: [ [ self recordMatch: #(18).
+					self step.
+					currentCharacter isDigit
+						or: [ (currentCharacter between: $A and: $F)
+								or: [ currentCharacter between: $a and: $f ] ] ] whileTrue ].
+			^ self reportLastMatch ].
 	currentCharacter isDigit ifTrue: [ ^ self scan5 ].
-	('fl' includes: currentCharacter) ifTrue: [ 
-		^ self recordAndReportMatch: #( 18 ) ].
+	('fl' includes: currentCharacter)
+		ifTrue: [ ^ self recordAndReportMatch: #(18) ].
 	^ self reportLastMatch
 ]
 
