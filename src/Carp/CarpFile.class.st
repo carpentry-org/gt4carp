@@ -31,11 +31,11 @@ CarpFile class >> coreLoadStatements [
 		contents allNodesOfType: CarpListNode do: [ :c | nodes add: c ].
 
 		loadNodes := nodes select: [ :aNode | 
-			             (aNode expressions size > 0 and: [ 
-				              aNode expressions first isKindOf: CarpVariableNode ]) 
+			             aNode expressions size > 0 and: [ 
+				              (aNode expressions first isKindOf: CarpVariableNode)  
 				             and: [ 
 				             loadStatements includes:
-					             aNode expressions first value value ] ].
+					             aNode expressions first value value ] ] ].
 
 		aDict at: aCarpFile basename put: (loadNodes collect: [ :aNode | 
 				 s := aNode expressions second value value.
