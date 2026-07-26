@@ -14,8 +14,8 @@
 ;          (port 0 picks an OS-assigned port; it is logged to stderr.)
 
 (load "subprocess.carp")
-(load "/Users/veitheller/Documents/Code/Github/carp/archive/socket/socket.carp")
-(load "/Users/veitheller/Documents/Code/Github/carp/archive/json/json.carp")
+(load "git@github.com:carpentry-org/socket@0.2.3")
+(load "git@github.com:carpentry-org/json@0.5.0")
 
 (defmodule LL
   (private parse-int)
@@ -161,7 +161,7 @@
     (Result.Success listener)
       (do
         (IO.errorln &(String.append "languagelink listening on port "
-                                     &(str (TcpListener.local-port &listener))))
+                                     &(str port)))
         (accept-loop &child &listener)
         (TcpListener.close listener)))
   (Subprocess.close child))
