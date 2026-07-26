@@ -6,7 +6,8 @@ Class {
 		'carpLinkApplicationStrategy',
 		'exception',
 		'application',
-		'commandFactory'
+		'commandFactory',
+		'sessionId'
 	],
 	#category : #'Carp-Coder'
 }
@@ -98,34 +99,47 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 			self sourceCode: (GtCoderExplicitStringSource new source: source) ]
 		id: #'source-coder--format-action-id'.
 
+	addOns
+		addMainAction: 'Evaluate' translated
+		icon: BrGlamorousVectorIcons play
+		action: [ :aCoderUIModel :anElement |
+			GtCoderCodeExecutor doIt
+				coderViewModel: aCoderUIModel;
+				element: anElement;
+				execute ]
+		id: GtSourceCoderDoItActionId.
+	addOns
+		addMainAction: 'Inspect' translated
+		icon: BrGlamorousVectorIcons playinspect
+		action: [ :aCoderUIModel :anElement |
+			GtCoderCodeExecutor doItAndGo
+				coderViewModel: aCoderUIModel;
+				element: anElement;
+				execute ]
+		id: GtSourceCoderDoItAndGoActionId.
+
 	carpLinkApplicationStrategy
 		ifNotNil: [ addOns
-				addMainAction: 'Evaluate' translated
-				icon: BrGlamorousVectorIcons play
-				action: [ :aCoderUIModel :anElement | 
-					GtCoderCodeExecutor doIt
-						coderViewModel: aCoderUIModel;
-						element: anElement;
-						execute ]
-				id: GtSourceCoderDoItActionId.
-			addOns
-				addMainAction: 'Inspect' translated
-				icon: BrGlamorousVectorIcons playinspect
-				action: [ :aCoderUIModel :anElement | 
-					GtCoderCodeExecutor doItAndGo
-						coderViewModel: aCoderUIModel;
-						element: anElement;
-						execute ]
-				id: GtSourceCoderDoItAndGoActionId.
-			addOns
 				addMainAction: 'Expand Macros' translated
 				icon: BrGlamorousVectorIcons repair
-				action: [ :aCoderUIModel :anElement | 
+				action: [ :aCoderUIModel :anElement |
 					| source |
 					source := '(expand ''' , sourceCode currentSourceText wait value text , ')'.
 					anElement phlow
 						spawnObject: ((self bindAndExecute: source) parse view: #gtSourceFor:) ]
 				id: #'source-coder--macro-expand-action'.
+			addOns
+				addMainAction: 'Expand Step-by-Step' translated
+				icon: BrGlamorousVectorIcons right
+				action: [ :aCoderUIModel :anElement |
+					| source viewModel stepperElement |
+					source := sourceCode currentSourceText wait value text.
+					viewModel := CarpMacroExpansionViewModel
+						source: source
+						client: CarpMacroStepperExamples defaultClient.
+					stepperElement := CarpMacroExpansionElement onViewModel: viewModel.
+					anElement phlow spawnObject: stepperElement ]
+				id: #'source-coder--macro-step-action'.
 			addOns
 				addMainAction: 'Build and Run' translated
 				icon: BrGlamorousVectorIcons refresh
@@ -143,6 +157,13 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 ]
 
 { #category : #accessing }
+GtCarpCoderModel >> embeddedDebuggerAddOnFor: anAST into: coderAddOns [
+	"Deliberately empty: the inherited add-on attaches Pharo-AST stylers
+	(GtEmbeddedDebuggerStyler and friends) that choke on our SmaCC AST with
+	a #visitStart: DNU on every keystroke."
+]
+
+{ #category : #accessing }
 GtCarpCoderModel >> initializeApplication [
 	application := carpLinkApplicationStrategy applicationServer.
 	application isRunning ifFalse: [ application start ].
@@ -152,10 +173,9 @@ GtCarpCoderModel >> initializeApplication [
 GtCarpCoderModel >> initializeShortcuts: addOns [
 	super initializeShortcuts: addOns.
 
-	carpLinkApplicationStrategy
-		ifNotNil: [ addOns
-				addShortcut: GtSourceCoderDoItShortcut new;
-				addShortcut: GtSourceCoderDoItAndInspectShortcut new ]
+	addOns
+		addShortcut: GtSourceCoderDoItShortcut new;
+		addShortcut: GtSourceCoderDoItAndInspectShortcut new
 ]
 
 { #category : #accessing }
@@ -185,8 +205,24 @@ GtCarpCoderModel >> pharoBindings: anObject [
 
 { #category : #accessing }
 GtCarpCoderModel >> primitiveEvaluate: aSourceString inContext: aGtSourceCoderEvaluationContext onFailDo: anEvaluationFailBlock [
-	^ (self bindAndExecute: aSourceString) parse
-		transformValue: [ :aValue | aValue expressions first toPharo ]
+	^ [ (CarpServerClient default
+		evalSource: aSourceString
+		session: self sessionId) preferredInspectable ]
+		on: CarpServerError
+		do: [ :e | anEvaluationFailBlock cull: e ]
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> sessionId [
+	"The notebook session this coder evaluates in. Snippets on the same
+	Lepiter page share one session; a detached coder gets its own scratch."
+
+	^ sessionId ifNil: [ 'default' ]
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> sessionId: aString [
+	sessionId := aString
 ]
 
 { #category : #accessing }

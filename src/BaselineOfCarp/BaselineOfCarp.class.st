@@ -20,13 +20,31 @@ BaselineOfCarp >> baseline: spec [
 	<baseline>
 	spec
 		for: #common
-		do: [ spec
-				baseline: 'GToolkit4SmaCC'
-				with: [ spec repository: 'github://feenkcom/gt4smacc:main/src' ].
+		do: [ | externalDeps |
+			"GT images already ship SmaCC and gt4smacc; re-resolving them from
+			GitHub chases transitive pins (RemoteRunner) that break. Only declare
+			external dependencies that are actually missing from the image."
+			externalDeps := OrderedCollection new.
+			(Smalltalk globals includesKey: #GtSmaCCCoder)
+				ifFalse: [ spec
+						baseline: 'GToolkit4SmaCC'
+						with: [ spec repository: 'github://feenkcom/gt4smacc:main/src' ].
+					externalDeps add: 'GToolkit4SmaCC' ].
+			(Smalltalk globals includesKey: #GtFormatter)
+				ifFalse: [ spec
+						baseline: 'GToolkitFormatters'
+						with: [ spec repository: 'github://carpentry-org/gtoolkit-formatters:main/src' ].
+					externalDeps add: 'GToolkitFormatters' ].
 			spec
-				baseline: 'GToolkitFormatters'
-				with: [ spec repository: 'github://carpentry-org/gtoolkit-formatters:main/src' ].
-		spec package: 'Carp' with: [ spec requires: #('GToolkit4SmaCC' 'GToolkitFormatters' 'Carp-Parser') ].
-			spec package: 'Carp-AST' with: [ spec requires: #('GToolkit4SmaCC') ].
-			spec package: 'Carp-Parser' with: [ spec requires: #('GToolkit4SmaCC' 'Carp-AST') ] ]
+				package: 'Carp-AST'
+				with: [ spec requires: externalDeps asArray ].
+			spec
+				package: 'Carp-Parser'
+				with: [ spec requires: (externalDeps asArray , #('Carp-AST')) ].
+			spec
+				package: 'Carp-MacroStepper'
+				with: [ spec requires: externalDeps asArray ].
+			spec
+				package: 'Carp'
+				with: [ spec requires: (externalDeps asArray , #('Carp-Parser' 'Carp-MacroStepper')) ] ]
 ]

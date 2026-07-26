@@ -1,9 +1,6 @@
 Class {
 	#name : #LeCarpSnippetElement,
 	#superclass : #LeExternalEvaluatedSnippetElement,
-	#instVars : [
-		'serverStrategy'
-	],
 	#category : #'Carp-Lepiter'
 }
 
@@ -12,28 +9,20 @@ LeCarpSnippetElement >> onSnippetViewModelChanged [
 	super onSnippetViewModelChanged.
 
 	self updateLanguageLabel.
-	self coder
-		carpLinkApplicationStrategy: self serverStrategy;
-		pharoBindings: self snippetViewModel snippetBindings
-]
-
-{ #category : #accessing }
-LeCarpSnippetElement >> serverStrategy [
-
-	^ serverStrategy ifNil: 
-		[ serverStrategy := LeCarpApplicationStrategy new content: self snippet ].
+	self coder pharoBindings: self snippetViewModel snippetBindings
 ]
 
 { #category : #accessing }
 LeCarpSnippetElement >> updateLanguageLabel [
-	| serverAddress label |
-
-	serverAddress := self serverStrategy applicationSettings serverSocketAddress.
-	label := String streamContents: [ :stream |
-		stream
-			<< 'Carp @ ';
-			<< serverAddress ipOrName;
-			<< ':';
-			print: serverAddress port ].
-	languageElement text: (label asRopedText glamorousRegularFont foreground: BrGlamorousColors textMarkupColor).
+	| label |
+	label := String
+			streamContents: [ :stream |
+				stream << 'Carp · '.
+				CarpServerClient default isConnected
+					ifTrue: [ stream << ':' << CarpServerClient defaultPort printString ]
+					ifFalse: [ stream << 'server on demand' ].
+				stream << ' · ' << self coder sessionId ].
+	languageElement
+		text: (label asRopedText glamorousRegularFont
+				foreground: BrGlamorousColors textMarkupColor)
 ]

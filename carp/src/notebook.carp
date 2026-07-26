@@ -1,0 +1,521 @@
+; notebook.carp — value-host runtime for gt4carp notebook cells.
+;
+; The carp server wraps a cell's last expression in
+; (NB.capture-and-serve <expr> 0 ""). After the program has run, the process
+; stays alive as the session's VALUE HOST: the result is registered as a
+; live object with a vtable of declarative phlow views, and served over the
+; same HTTP+JSON protocol GT's Rust integration speaks
+; (GtPhlowRemoteRustClient) — so GT inspects Carp values with its own
+; remote-phlow machinery:
+;
+;   GET    /session                              -> "<token>"
+;   GET    /id                                   -> "carp-value-host"
+;   GET    /objects/{id}                         -> object dictionary
+;   GET    /objects/{id}/views                   -> [view specification…]
+;   GET    /objects/{id}/views/{selector}/items  -> [item node…]
+;   GET    /objects/{id}/views/{sel}/send/{oid}  -> object dictionary
+;   DELETE /session/{sid}/objects/{oid}          -> true
+;
+; Object registration builds per-type view vtables through the nb-register
+; interface: specific impls for containers, a sig'd generic str fallback for
+; everything else. Items are computed lazily from the live value and item
+; selection registers the selected element as a new live object.
+;
+; NOTE: the generic fallback plus specific impls resolves under
+; carpentry-org/carp-compiler (most-specific wins) but is currently broken
+; there for MULTI-parameter type constructors (Map, Pair pick the generic
+; impl); the reference compiler rejects the pattern entirely. Cells compile
+; with carp-compiler; the Map/Pair impls below are dormant until that fix.
+
+(load "git@github.com:carpentry-org/socket@0.2.3")
+
+(deftype NbView
+  [title String
+   selector String
+   kind String ; "list" | "text"
+   priority Int
+   text (Fn [] String)
+   count (Fn [] Int)
+   item-text (Fn [Int] String)
+   item-send (Fn [Int] Int)])
+
+(deftype NbObject
+  [type-name String
+   print (Fn [] String)
+   views (Array NbView)])
+
+(def *nb-objects* (the (Array NbObject) []))
+(def *nb-refs* (the (Array Int) []))
+(def *nb-view-memo* (the (Map String (Array Int)) {}))
+(def *nb-token* @"")
+(def *nb-server-object* 0)
+(def *nb-max-items* 256)
+(def *nb-max-print* 200)
+
+(defmodule NB
+  (defn push-object [object]
+    (do
+      (Array.push-back! &*nb-objects* object)
+      (Array.push-back! &*nb-refs* 1)
+      (- (Array.length &*nb-objects*) 1)))
+
+  (defn bump-ref! [id]
+    (Array.aset! &*nb-refs* id (+ 1 @(Array.unsafe-nth &*nb-refs* id))))
+
+  (defn drop-ref! [id]
+    (Array.aset! &*nb-refs* id (Int.max 0 (- @(Array.unsafe-nth &*nb-refs* id) 1))))
+
+  (defn object-count [] (Array.length &*nb-objects*))
+
+  (doc cap "limits a print string to *nb-max-print* bytes.")
+  (defn cap [s]
+    (if (> (String.length &s) *nb-max-print*)
+      (String.append &(String.prefix &s *nb-max-print*) "…")
+      s))
+
+  (doc text-view "a text view specification serving fixed content.")
+  (defn text-view [title selector priority content]
+    (NbView.init title
+                 selector
+                 @"text"
+                 priority
+                 (fn [] @&content)
+                 (fn [] 0)
+                 (fn [i] (do (ignore i) @""))
+                 (fn [i] (do (ignore i) -1))))
+
+  (doc leaf "registers a value that only shows its print string.")
+  (defn leaf [type-name print]
+    (let [capped (cap print)]
+      (push-object
+        (NbObject.init type-name
+                       (fn [] @&capped)
+                       [(text-view @"Value" @"gtValueFor" 1 @&capped)])))))
+
+; --- the registration interface -----------------------------------------
+
+(definterface nb-register (Fn [a] Int))
+
+(defmodule NbAny
+  (sig nb-register (Fn [a] Int))
+  (defn nb-register [x] (NB.leaf @"" (str &x)))
+  (implements nb-register NbAny.nb-register))
+
+(defmodule NbInt
+  (sig nb-register (Fn [Int] Int))
+  (defn nb-register [x] (NB.leaf @"Int" (str x)))
+  (implements nb-register NbInt.nb-register))
+
+(defmodule NbLong
+  (sig nb-register (Fn [Long] Int))
+  (defn nb-register [x] (NB.leaf @"Long" (str x)))
+  (implements nb-register NbLong.nb-register))
+
+(defmodule NbDouble
+  (sig nb-register (Fn [Double] Int))
+  (defn nb-register [x] (NB.leaf @"Double" (str x)))
+  (implements nb-register NbDouble.nb-register))
+
+(defmodule NbFloat
+  (sig nb-register (Fn [Float] Int))
+  (defn nb-register [x] (NB.leaf @"Float" (str x)))
+  (implements nb-register NbFloat.nb-register))
+
+(defmodule NbBool
+  (sig nb-register (Fn [Bool] Int))
+  (defn nb-register [x] (NB.leaf @"Bool" (str x)))
+  (implements nb-register NbBool.nb-register))
+
+(defmodule NbChar
+  (sig nb-register (Fn [Char] Int))
+  (defn nb-register [x] (NB.leaf @"Char" (str x)))
+  (implements nb-register NbChar.nb-register))
+
+(defmodule NbByte
+  (sig nb-register (Fn [Byte] Int))
+  (defn nb-register [x] (NB.leaf @"Byte" (str x)))
+  (implements nb-register NbByte.nb-register))
+
+(defmodule NbString
+  (sig nb-register (Fn [String] Int))
+  (defn nb-register [x]
+    (let [shown @&x]
+      (NB.push-object
+        (NbObject.init @"String"
+                       (fn [] (NB.cap @&shown))
+                       [(NB.text-view @"String" @"gtStringFor" 1 @&x)]))))
+  (implements nb-register NbString.nb-register))
+
+(defmodule NbArray
+  (defn nb-register [xs]
+    (let [n (Array.length &xs)
+          summary (fmt "(%d items)" n)]
+      (NB.push-object
+        (NbObject.init @"Array"
+                       (fn [] @&summary)
+                       [(NbView.init @"Items"
+                                     @"gtItemsFor"
+                                     @"list"
+                                     1
+                                     (fn [] @"")
+                                     (fn [] (Int.min (Array.length &xs) *nb-max-items*))
+                                     (fn [i] (NB.cap (str (Array.unsafe-nth &xs i))))
+                                     (fn [i] (nb-register @(Array.unsafe-nth &xs i))))]))))
+  (implements nb-register NbArray.nb-register))
+
+(defmodule NbMaybe
+  (defn nb-register [m]
+    (match m
+      (Maybe.Just x)
+        (let [kid-print (NB.cap (str &x))]
+          (NB.push-object
+            (NbObject.init @"Maybe"
+                           (fn [] (String.append "Just " &kid-print))
+                           [(NbView.init @"Just"
+                                         @"gtItemsFor"
+                                         @"list"
+                                         1
+                                         (fn [] @"")
+                                         (fn [] 1)
+                                         (fn [i] (do (ignore i) @&kid-print))
+                                         (fn [i] (do (ignore i) (nb-register @&x))))])))
+      (Maybe.Nothing) (NB.leaf @"Maybe" @"Nothing")))
+  (implements nb-register NbMaybe.nb-register))
+
+(defmodule NbResult
+  (defn nb-register [r]
+    (match r
+      (Result.Success x)
+        (let [kid-print (NB.cap (str &x))]
+          (NB.push-object
+            (NbObject.init @"Result"
+                           (fn [] (String.append "Success " &kid-print))
+                           [(NbView.init @"Success"
+                                         @"gtItemsFor"
+                                         @"list"
+                                         1
+                                         (fn [] @"")
+                                         (fn [] 1)
+                                         (fn [i] (do (ignore i) @&kid-print))
+                                         (fn [i] (do (ignore i) (nb-register @&x))))])))
+      (Result.Error e)
+        (let [kid-print (NB.cap (str &e))]
+          (NB.push-object
+            (NbObject.init @"Result"
+                           (fn [] (String.append "Error " &kid-print))
+                           [(NbView.init @"Error"
+                                         @"gtItemsFor"
+                                         @"list"
+                                         1
+                                         (fn [] @"")
+                                         (fn [] 1)
+                                         (fn [i] (do (ignore i) @&kid-print))
+                                         (fn [i] (do (ignore i) (nb-register @&e))))])))))
+  (implements nb-register NbResult.nb-register))
+
+(defmodule NbBox
+  (defn nb-register [b]
+    (let [x (Box.unbox b)
+          kid-print (NB.cap (str &x))]
+      (NB.push-object
+        (NbObject.init @"Box"
+                       (fn [] (String.append "Box " &kid-print))
+                       [(NbView.init @"Boxed"
+                                     @"gtItemsFor"
+                                     @"list"
+                                     1
+                                     (fn [] @"")
+                                     (fn [] 1)
+                                     (fn [i] (do (ignore i) @&kid-print))
+                                     (fn [i] (do (ignore i) (nb-register @&x))))]))))
+  (implements nb-register NbBox.nb-register))
+
+; dormant until carp-compiler resolves multi-parameter constructors against
+; the generic fallback correctly
+(defmodule NbPair
+  (defn nb-register [p]
+    (let [a-print (NB.cap (str (Pair.a &p)))
+          b-print (NB.cap (str (Pair.b &p)))]
+      (NB.push-object
+        (NbObject.init @"Pair"
+                       (fn [] (fmt "(%s %s)" &a-print &b-print))
+                       [(NbView.init @"Items"
+                                     @"gtItemsFor"
+                                     @"list"
+                                     1
+                                     (fn [] @"")
+                                     (fn [] 2)
+                                     (fn [i] (if (= i 0) @&a-print @&b-print))
+                                     (fn [i]
+                                       (if (= i 0)
+                                         (nb-register @(Pair.a &p))
+                                         (nb-register @(Pair.b &p)))))]))))
+  (implements nb-register NbPair.nb-register))
+
+(defmodule NbMap
+  (defn nb-register [m]
+    (let [pairs (Map.to-array &m)
+          n (Array.length &pairs)
+          summary (fmt "(%d entries)" n)]
+      (NB.push-object
+        (NbObject.init @"Map"
+                       (fn [] @&summary)
+                       [(NbView.init @"Entries"
+                                     @"gtItemsFor"
+                                     @"list"
+                                     1
+                                     (fn [] @"")
+                                     (fn [] (Int.min (Array.length &pairs) *nb-max-items*))
+                                     (fn [i]
+                                       (let [pair (Array.unsafe-nth &pairs i)]
+                                         (NB.cap (fmt "%s -> %s"
+                                                      &(str (Pair.a pair))
+                                                      &(str (Pair.b pair))))))
+                                     (fn [i] (nb-register @(Pair.b (Array.unsafe-nth &pairs i)))))]))))
+  (implements nb-register NbMap.nb-register))
+
+; --- json emission ------------------------------------------------------
+
+(defmodule NB
+  (defn json-escape [s]
+    (let-do [out @""]
+      (for [i 0 (String.length s)]
+        (let [n (Char.to-int (String.char-at s i))]
+          (set! out
+                (cond
+                  (= n 34) (String.append &out "\\\"")
+                  (= n 92) (String.append &out "\\\\")
+                  (= n 10) (String.append &out "\\n")
+                  (= n 9) (String.append &out "\\t")
+                  (= n 13) (String.append &out "\\r")
+                  (< n 32) (String.append &out " ")
+                  (String.append &out
+                                 &(String.from-bytes &[(Byte.from-int n)]))))))
+      out))
+
+  (defn object-json [id]
+    (let [object (Array.unsafe-nth &*nb-objects* id)]
+      (fmt "{\"id\": %d, \"object_type\": \"%s\", \"print_string\": \"%s\", \"reference_count\": %d, \"should_auto_release\": true}"
+           id
+           &(json-escape (NbObject.type-name object))
+           &(json-escape &(~(NbObject.print object)))
+           @(Array.unsafe-nth &*nb-refs* id))))
+
+  (defn objects-json []
+    (let-do [out @"["]
+      (for [i 0 (object-count)]
+        (do
+          (when (> i 0) (set! out (String.append &out ", ")))
+          (set! out (String.append &out &(object-json i)))))
+      (String.append &out "]")))
+
+  (defn view-json [view]
+    (if (String.= (NbView.kind view) "text")
+      (fmt "{\"viewName\": \"GtPhlowTextEditorViewSpecification\", \"title\": \"%s\", \"priority\": %d, \"dataTransport\": 1, \"methodSelector\": \"%s\", \"string\": \"%s\"}"
+           &(json-escape (NbView.title view))
+           @(NbView.priority view)
+           &(json-escape (NbView.selector view))
+           &(json-escape &(~(NbView.text view))))
+      (fmt "{\"viewName\": \"GtPhlowListViewSpecification\", \"title\": \"%s\", \"priority\": %d, \"dataTransport\": 2, \"methodSelector\": \"%s\"}"
+           &(json-escape (NbView.title view))
+           @(NbView.priority view)
+           &(json-escape (NbView.selector view)))))
+
+  (defn views-json [id]
+    (let-do [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))
+             out @"["]
+      (for [i 0 (Array.length views)]
+        (do
+          (when (> i 0) (set! out (String.append &out ", ")))
+          (set! out (String.append &out &(view-json (Array.unsafe-nth views i))))))
+      (String.append &out "]")))
+
+  (doc view-with-selector "the index of the view with the given selector,
+or -1.")
+  (defn view-with-selector [id selector]
+    (let-do [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))
+             found -1]
+      (for [i 0 (Array.length views)]
+        (when (String.= (NbView.selector (Array.unsafe-nth views i)) selector)
+          (set! found i)))
+      found))
+
+  (doc view-children "the registered child ids of a list view, computed once
+per (object, selector) and memoized.")
+  (defn view-children [id selector view-index]
+    (let [key (fmt "%d/%s" id selector)]
+      (match (Map.get-maybe &*nb-view-memo* &key)
+        (Maybe.Just ids) ids
+        (Maybe.Nothing)
+          (let-do [n (let [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))]
+                       (~(NbView.count (Array.unsafe-nth views view-index))))
+                   ids (the (Array Int) [])]
+            (for [i 0 n]
+              (let [child (let [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))]
+                            (~(NbView.item-send (Array.unsafe-nth views view-index)) i))]
+                (Array.push-back! &ids child)))
+            (Map.put! &*nb-view-memo* &key &ids)
+            ids))))
+
+  (defn items-json [id selector]
+    (let [view-index (view-with-selector id selector)]
+      (if (< view-index 0)
+        @"[]"
+        (let-do [ids (view-children id selector view-index)
+                 out @"["]
+          (for [i 0 (Array.length &ids)]
+            (do
+              (when (> i 0) (set! out (String.append &out ", ")))
+              (let [item-text (let [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))]
+                                (~(NbView.item-text (Array.unsafe-nth views view-index)) i))
+                    child @(Array.unsafe-nth &ids i)]
+                (do
+                  (bump-ref! child)
+                  (set! out
+                        (String.append &out
+                                       &(fmt "{\"nodeId\": %d, \"nodeValue\": {\"valueTypeName\": \"textualValue\", \"itemText\": \"%s\"}, \"phlowObject\": %s}"
+                                             child
+                                             &(json-escape &item-text)
+                                             &(object-json child))))))))
+          (String.append &out "]"))))))
+
+; --- http serving -------------------------------------------------------
+
+(defmodule NB
+  (def crlf (String.from-bytes &[(Byte.from-int 13) (Byte.from-int 10)]))
+
+  (defn http-response [body]
+    (String.concat &[@"HTTP/1.1 200 OK" @&crlf
+                     @"Content-Type: application/json" @&crlf
+                     @"Content-Length: " (str (String.length body)) @&crlf
+                     @"Connection: close" @&crlf
+                     @&crlf
+                     @body]))
+
+  (private parse-int-or)
+  (hidden parse-int-or)
+  (defn parse-int-or [s dflt] (Maybe.from (Int.from-string s) dflt))
+
+  (defn valid-id? [id]
+    (and (>= id 0) (< id (object-count))))
+
+  (doc route "answers the JSON body for a request.")
+  (defn route [verb path]
+    (let-do [segments (String.split-by path &[\/])
+             parts (the (Array String) [])]
+      (for [i 0 (Array.length &segments)]
+        (unless (String.empty? (Array.unsafe-nth &segments i))
+          (Array.push-back! &parts @(Array.unsafe-nth &segments i))))
+      (let [n (Array.length &parts)]
+        (cond
+          (String.= verb "DELETE")
+            (if (and (= n 4)
+                     (and (String.= (Array.unsafe-nth &parts 0) "session")
+                          (String.= (Array.unsafe-nth &parts 1) &*nb-token*)))
+              (let-do [id (parse-int-or (Array.unsafe-nth &parts 3) -1)]
+                (when (valid-id? id) (drop-ref! id))
+                @"true")
+              @"false")
+          (and (= n 1) (String.= (Array.unsafe-nth &parts 0) "session"))
+            (fmt "\"%s\"" &(json-escape &*nb-token*))
+          (and (= n 1) (String.= (Array.unsafe-nth &parts 0) "id"))
+            (str *nb-server-object*)
+          (and (= n 1) (String.= (Array.unsafe-nth &parts 0) "objects"))
+            (objects-json)
+          (and (= n 2) (String.= (Array.unsafe-nth &parts 0) "objects"))
+            (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)]
+              (if (valid-id? id)
+                (do (bump-ref! id) (object-json id))
+                @"{\"error\": \"no such object\"}"))
+          (and (= n 3)
+               (and (String.= (Array.unsafe-nth &parts 0) "objects")
+                    (String.= (Array.unsafe-nth &parts 2) "views")))
+            (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)]
+              (if (valid-id? id) (views-json id) @"[]"))
+          (and (= n 4)
+               (and (String.= (Array.unsafe-nth &parts 0) "objects")
+                    (String.= (Array.unsafe-nth &parts 2) "views")))
+            (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)
+                  view-index (if (valid-id? (parse-int-or (Array.unsafe-nth &parts 1) -1))
+                               (view-with-selector (parse-int-or (Array.unsafe-nth &parts 1) -1)
+                                                   (Array.unsafe-nth &parts 3))
+                               -1)]
+              (if (and (valid-id? id) (>= view-index 0))
+                (view-json (Array.unsafe-nth (NbObject.views (Array.unsafe-nth &*nb-objects* id)) view-index))
+                @"null"))
+          (and (= n 5)
+               (and (String.= (Array.unsafe-nth &parts 0) "objects")
+                    (and (String.= (Array.unsafe-nth &parts 2) "views")
+                         (String.= (Array.unsafe-nth &parts 4) "items"))))
+            (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)]
+              (if (valid-id? id)
+                (items-json id (Array.unsafe-nth &parts 3))
+                @"[]"))
+          (and (= n 6)
+               (and (String.= (Array.unsafe-nth &parts 0) "objects")
+                    (and (String.= (Array.unsafe-nth &parts 2) "views")
+                         (String.= (Array.unsafe-nth &parts 4) "send"))))
+            (let [id (parse-int-or (Array.unsafe-nth &parts 5) -1)]
+              (if (valid-id? id)
+                (do (bump-ref! id) (object-json id))
+                @"{\"error\": \"no such object\"}"))
+          @"{\"error\": \"no such route\"}"))))
+
+  (defn-do serve-conn [stream]
+    (let-do [br (TcpStream.buffered stream)]
+      (match (BufReader.read-line &br)
+        (Result.Error _) ()
+        (Result.Success request-line)
+          (let-do [tokens (String.words &(String.trim &request-line))
+                   verb (if (> (Array.length &tokens) 0)
+                          @(Array.unsafe-nth &tokens 0)
+                          @"GET")
+                   path (if (> (Array.length &tokens) 1)
+                          @(Array.unsafe-nth &tokens 1)
+                          @"/")
+                   draining true]
+            (while draining
+              (match (BufReader.read-line &br)
+                (Result.Error _) (set! draining false)
+                (Result.Success line)
+                  (when (< (String.length &(String.trim &line)) 1)
+                    (set! draining false))))
+            (ignore (BufReader.write &br &(http-response &(route &verb &path))))
+            (ignore (BufReader.flush &br))))
+      (BufReader.delete br)))
+
+  (defn serve [port]
+    (match (TcpListener.bind "127.0.0.1" port)
+      (Result.Error e)
+        (do
+          (IO.errorln &(String.append "nb bind failed: " &e))
+          (System.exit 17))
+      (Result.Success listener)
+        (let-do [running true]
+          (while running
+            (match (TcpListener.accept &listener)
+              (Result.Error _) (set! running false)
+              (Result.Success stream) (serve-conn stream)))))))
+
+; --- entry point --------------------------------------------------------
+
+(defmodule NB
+  (doc capture-and-serve "registers the cell's result value as live object 0
+and serves the phlow protocol forever. Wrapped around the last expression by
+the carp server; never returns. Port and token come from argv when present.")
+  (sig capture-and-serve (Fn [a Int (Ref String)] ()))
+  (defn capture-and-serve [value port token]
+    (let-do [rport (if (> (StaticArray.length &System.args) 1)
+                     (Maybe.from (Int.from-string (StaticArray.unsafe-nth &System.args 1))
+                                 port)
+                     port)
+             rtoken (if (> (StaticArray.length &System.args) 2)
+                      @(StaticArray.unsafe-nth &System.args 2)
+                      @token)]
+      (set! *nb-token* rtoken)
+      (ignore (IO.Raw.fflush IO.Raw.stdout))
+      (ignore (nb-register value))
+      (set! *nb-server-object*
+            (NB.leaf @"CarpValueHost"
+                     (fmt "carp value host on port %d" rport)))
+      (serve rport))))

@@ -1,0 +1,58 @@
+(load "../src/subprocess.carp")
+
+(defn main []
+  (let-do [args []]
+    (IO.println "--- spawn `echo hello world` ---")
+    (match (Subprocess.spawn "echo" &[@"hello" @"world"])
+      (Result.Error e) (do (IO.errorln &e) (System.exit 1))
+      (Result.Success p)
+        (do
+          (Subprocess.close-in &p)
+          (IO.print "stdout: ")
+          (IO.println &(Subprocess.read-all &p))
+          (Subprocess.close p)))
+
+    (IO.println "--- spawn `cat`, write 3 lines, close stdin, read all ---")
+    (match (Subprocess.spawn "cat" &args)
+      (Result.Error e) (do (IO.errorln &e) (System.exit 1))
+      (Result.Success p)
+        (do
+          (ignore (Subprocess.write-line &p "line 1"))
+          (ignore (Subprocess.write-line &p "line 2"))
+          (ignore (Subprocess.write-line &p "line 3"))
+          (Subprocess.close-in &p)
+          (IO.print "echoed: ")
+          (IO.println &(Subprocess.read-all &p))
+          (Subprocess.close p)))
+
+    (IO.println "--- spawn `cat`, read-until marker ---")
+    (match (Subprocess.spawn "cat" &args)
+      (Result.Error e) (do (IO.errorln &e) (System.exit 1))
+      (Result.Success p)
+        (do
+          (ignore (Subprocess.write-line &p "prefix"))
+          (ignore (Subprocess.write-line &p "MARKER"))
+          (match (Subprocess.read-until &p "MARKER")
+            (Result.Success s) (do (IO.print "read-until: ") (IO.println &s))
+            (Result.Error e) (IO.errorln &e))
+          (Subprocess.close p)))
+
+    (IO.println "--- spawn carp REPL, ask it to expand-1 ---")
+    (match (Subprocess.spawn "carp" &args)
+      (Result.Error e) (do (IO.errorln &e) (System.exit 1))
+      (Result.Success p)
+        (do
+          ; The REPL prints a prompt with " => " on results, plus the 鲤 mark.
+          ; Wait for the banner first.
+          (match (Subprocess.read-until &p "鲤")
+            (Result.Error e) (IO.errorln &e)
+            (Result.Success _) (IO.println "(banner received)"))
+          (ignore (Subprocess.write-line &p "(expand-1 '(when true 1))"))
+          (match (Subprocess.read-until &p "=> ")
+            (Result.Error e) (IO.errorln &e)
+            (Result.Success _) ())
+          (match (Subprocess.read-until &p "\n")
+            (Result.Error e) (IO.errorln &e)
+            (Result.Success line) (do (IO.print "carp said: ") (IO.print &line)))
+          (ignore (Subprocess.write-line &p "(quit)"))
+          (Subprocess.close p)))))

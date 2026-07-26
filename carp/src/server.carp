@@ -1,0 +1,650 @@
+; server.carp — notebook eval server for gt4carp.
+;
+; Speaks length-prefixed JSON over TCP. Evaluating a cell compiles the
+; session's accumulated definitions plus the cell with the self-hosted
+; carp-compiler and runs the result; definition forms in a successful cell
+; are absorbed into the session (re-definitions replace in place).
+;
+; When the cell ends in an expression (and a notebook runtime library is
+; configured), the last expression is wrapped in (NB.capture-and-serve …):
+; the compiled program stays alive after running as the session's VALUE
+; HOST, serving an inspection tree of the result over its own socket. The
+; server relays describe/children requests to it. A new evaluation (or
+; reset) replaces the session's host.
+;
+;   request:  <decimal length>\n<json bytes>
+;   response: <decimal length>\n<json bytes>
+;
+; Commands:
+;   {"id": n, "cmd": "ping"}
+;   {"id": n, "cmd": "eval",     "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "reset",    "session": "<name>"}
+;   {"id": n, "cmd": "describe", "session": "<name>", "ref": <int>}
+;   {"id": n, "cmd": "children", "session": "<name>", "ref": <int>,
+;                                "from": <int>, "to": <int>}
+;
+; Responses:
+;   eval:  {"id": n, "ok": {"exit": e, "stdout": s, "value": s,
+;                           "hasValue": b, "stderr": s}}
+;   describe/children: {"id": n, "ok": <the host's json>}
+;   other: {"id": n, "ok": "..."}
+;   error: {"id": n, "error": "<message>"}
+;
+; Usage: server <port> [compiler] [core-dir] [work-dir] [notebook-lib]
+;   compiler defaults to $CARP_COMPILER, core-dir to $CARP_DIR/core,
+;   notebook-lib to $CARP_NB_LIB (empty disables value hosts).
+
+(load "git@github.com:carpentry-org/socket@0.2.3")
+(load "git@github.com:carpentry-org/json@0.5.0")
+
+(Project.config "title" "carp-server")
+
+(relative-include "cloexec.h")
+(register set-cloexec (Fn [Int] Int) "set_cloexec")
+
+(def *compiler* @"")
+(def *core-dir* @"")
+(def *work-dir* @"")
+(def *nb-lib* @"")
+(def *server-port* 8765)
+
+(deftype SessionEntry [key String text String])
+(def *sessions* (the (Map String (Array SessionEntry)) {}))
+(def *session-ports* (the (Map String Int) {}))
+(def *nb-port-counter* 0)
+(def *nb-salt* @"")
+
+; --- cell scanning ------------------------------------------------------
+; Splits a cell into top-level forms and classifies them as definitions
+; (which persist in the session) or expressions (which run once).
+
+(defmodule Cell
+  (defn ws? [c]
+    (let [n (Char.to-int c)]
+      (or (= n 32) (or (= n 10) (or (= n 9) (= n 13))))))
+
+  (defn open? [c] (or (= c \() (or (= c \[) (= c \{))))
+  (defn close? [c] (or (= c \)) (or (= c \]) (= c \}))))
+
+  (defn delimiter? [c]
+    (or (ws? c) (or (open? c) (or (close? c) (or (= c \") (= c \;))))))
+
+  (doc top-level-spans "returns the (start, end-exclusive) byte spans of the
+top-level forms in ‘src’, skipping comments, strings and character literals.")
+  (defn top-level-spans [src]
+    (let-do [spans (the (Array (Pair Int Int)) [])
+             n (String.length src)
+             i 0
+             depth 0
+             start -1]
+      (while (< i n)
+        (let [c (String.char-at src i)]
+          (cond
+            (= c \;)
+              (do (while (and (< i n) (/= (String.char-at src i) \newline))
+                    (set! i (+ i 1)))
+                  ())
+            (= c \\) (set! i (+ i 2))
+            (= c \")
+              (do (set! i (+ i 1))
+                  (while (and (< i n) (/= (String.char-at src i) \"))
+                    (if (= (String.char-at src i) \\)
+                      (set! i (+ i 2))
+                      (set! i (+ i 1))))
+                  (set! i (+ i 1)))
+            (open? c)
+              (do (when (= depth 0) (set! start i))
+                  (set! depth (+ depth 1))
+                  (set! i (+ i 1)))
+            (close? c)
+              (do (set! depth (- depth 1))
+                  (when (and (= depth 0) (> start -1))
+                    (do (Array.push-back! &spans (Pair.init start (+ i 1)))
+                        (set! start -1)))
+                  (set! i (+ i 1)))
+            (and (= depth 0) (not (ws? c)))
+              (do (set! start i)
+                  (while (and (< i n)
+                              (not (delimiter? (String.char-at src i))))
+                    (set! i (+ i 1)))
+                  (Array.push-back! &spans (Pair.init start i))
+                  (set! start -1))
+            (set! i (+ i 1)))))
+      spans))
+
+  (defn span-text [src span]
+    (String.slice src @(Pair.a span) @(Pair.b span)))
+
+  (doc symbol-at "reads the symbol starting at byte ‘from’, skipping leading
+whitespace and opening parens first.")
+  (defn symbol-at [src from to]
+    (let-do [i from]
+      (while (and (< i to)
+                  (or (open? (String.char-at src i))
+                      (ws? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (let-do [begin i]
+        (while (and (< i to)
+                    (not (delimiter? (String.char-at src i))))
+          (set! i (+ i 1)))
+        (String.slice src begin i))))
+
+  (defn head-symbol [src span]
+    (symbol-at src @(Pair.a span) @(Pair.b span)))
+
+  (doc second-symbol "the symbol after the head — the name a definition
+defines.")
+  (defn second-symbol [src span]
+    (let-do [i @(Pair.a span)
+             to @(Pair.b span)]
+      ; skip the opening paren and the head symbol
+      (while (and (< i to)
+                  (or (open? (String.char-at src i))
+                      (ws? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (while (and (< i to)
+                  (not (delimiter? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (symbol-at src i to)))
+
+  (def def-heads
+    [@"defn" @"defn-" @"def" @"defmodule" @"deftype" @"defmacro"
+     @"defndynamic" @"defdynamic" @"definterface" @"defalias" @"sig" @"doc"
+     @"hidden" @"private" @"use" @"load" @"load-once" @"load-and-use"
+     @"register" @"register-type" @"deftemplate" @"derive" @"implements"
+     @"add-cflag" @"add-lib" @"add-pkg" @"relative-include" @"add-c"])
+
+  (defn def-head? [head]
+    (let-do [found false]
+      (for [i 0 (Array.length &def-heads)]
+        (when (String.= (Array.unsafe-nth &def-heads i) head)
+          (set! found true)))
+      found))
+
+  (doc last-form-expression? "whether the cell's final top-level form is an
+expression, i.e. whether it produces a result value.")
+  (defn last-form-expression? [src]
+    (let [spans (top-level-spans src)]
+      (if (= 0 (Array.length &spans))
+        false
+        (not (def-head? &(head-symbol src
+                                      (Array.unsafe-nth &spans
+                                                        (- (Array.length &spans)
+                                                           1)))))))))
+
+; --- sessions -----------------------------------------------------------
+
+(defmodule Session
+  (defn entries [sid]
+    (Map.get-with-default &*sessions* sid &(the (Array SessionEntry) [])))
+
+  (defn store! [sid entries]
+    (Map.put! &*sessions* sid &entries))
+
+  (defn reset! [sid]
+    (Map.put! &*sessions* sid &(the (Array SessionEntry) [])))
+
+  (doc defs-text "every session definition, in insertion order.")
+  (defn defs-text [entries]
+    (let-do [pieces (the (Array String) [])]
+      (for [i 0 (Array.length entries)]
+        (do (Array.push-back! &pieces
+                              @(SessionEntry.text (Array.unsafe-nth entries i)))
+            (Array.push-back! &pieces @"\n")))
+      (String.concat &pieces)))
+
+  (defn upsert! [entries entry]
+    (let-do [replaced false]
+      (for [i 0 (Array.length entries)]
+        (when (and (not replaced)
+                   (String.= (SessionEntry.key (Array.unsafe-nth entries i))
+                             (SessionEntry.key &entry)))
+          (do (Array.aset! entries i @&entry)
+              (set! replaced true))))
+      (unless replaced (Array.push-back! entries @&entry))))
+
+  (doc absorb! "retains a successful cell's definition forms in the session,
+replacing same-keyed definitions in place.")
+  (defn absorb! [sid cell]
+    (let-do [entries (Session.entries sid)
+             spans (Cell.top-level-spans cell)]
+      (for [i 0 (Array.length &spans)]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol cell span)]
+          (when (Cell.def-head? &head)
+            (let [name (Cell.second-symbol cell span)
+                  key (String.concat &[@&head @":" @&name])
+                  text (Cell.span-text cell span)]
+              (upsert! &entries (SessionEntry.init key text))))))
+      (store! sid entries))))
+
+; --- protocol framing ---------------------------------------------------
+
+(defmodule Server
+  (private parse-int)
+  (hidden parse-int)
+  (defn parse-int [s]
+    (Maybe.from (Int.from-string s) -1)) ; requests are trusted; -1 fails cleanly
+
+  (defn read-request [br]
+    (match (BufReader.read-line br)
+      (Result.Error e) (Result.Error e)
+      (Result.Success line)
+        (let [len (parse-int &(String.trim &line))]
+          (if (< len 0)
+            (Result.Error (String.append "bad length: " &line))
+            (match (BufReader.read-n br len)
+              (Result.Error e) (Result.Error e)
+              (Result.Success bytes)
+                (Result.Success (String.from-bytes &bytes)))))))
+
+  (defn-do write-response [br body]
+    (ignore (BufReader.write br &(String.append &(str (String.length body))
+                                                "\n")))
+    (ignore (BufReader.write br body))
+    (ignore (BufReader.flush br)))
+
+  ; --- json helpers -----------------------------------------------------
+
+  (defn get-str [j k]
+    (match (JSON.get j k)
+      (Maybe.Just (JSON.Str s)) (Result.Success s)
+      _ (Result.Error (String.append "missing or non-string field: " k))))
+
+  (defn get-num [j k]
+    (match (JSON.get j k)
+      (Maybe.Just (JSON.Num n)) (Result.Success n)
+      _ (Result.Error (String.append "missing or non-number field: " k))))
+
+  (defn get-int [j k dflt]
+    (match (JSON.get j k)
+      (Maybe.Just (JSON.Num n)) (Double.to-int n)
+      _ dflt))
+
+  (defn respond-ok [id ok]
+    (Result.unsafe-from-success
+      (JSON.str &(JSON.obj [(JSON.entry @"id" (JSON.Num id))
+                            (JSON.entry @"ok" (JSON.Str @ok))]))))
+
+  (defn respond-ok-json [id j]
+    (Result.unsafe-from-success
+      (JSON.str &(JSON.obj [(JSON.entry @"id" (JSON.Num id))
+                            (JSON.entry @"ok" j)]))))
+
+  (defn respond-err [id err]
+    (Result.unsafe-from-success
+      (JSON.str &(JSON.obj [(JSON.entry @"id" (JSON.Num id))
+                            (JSON.entry @"error" (JSON.Str @err))]))))
+
+  (defn respond-eval [id exit out value has-value host-port err]
+    (Result.unsafe-from-success
+      (JSON.str
+        &(JSON.obj
+           [(JSON.entry @"id" (JSON.Num id))
+            (JSON.entry @"ok"
+                        (JSON.obj
+                          [(JSON.entry @"exit"
+                                       (JSON.Num (Double.from-int exit)))
+                           (JSON.entry @"stdout" (JSON.Str @out))
+                           (JSON.entry @"value" (JSON.Str @value))
+                           (JSON.entry @"hasValue" (JSON.Bool has-value))
+                           (JSON.entry @"hostPort" (JSON.Num (Double.from-int host-port)))
+                           (JSON.entry @"stderr" (JSON.Str @err))]))]))))
+
+  ; --- session working directories --------------------------------------
+
+  (defn session-dir [sid]
+    (fmt "%s/%s" &*work-dir* sid))
+
+  (defn session-file [sid name]
+    (fmt "%s/%s/%s" &*work-dir* sid name))
+
+  (defn file-or [sid name dflt]
+    (match (IO.read-file &(session-file sid name))
+      (Result.Success text) text
+      (Result.Error _) @dflt))
+
+  (defn file-exists? [sid name]
+    (match (IO.read-file &(session-file sid name))
+      (Result.Success _) true
+      (Result.Error _) false))
+
+  ; --- value hosts ------------------------------------------------------
+
+  (defn next-port! []
+    (do
+      (set! *nb-port-counter* (+ *nb-port-counter* 1))
+      (+ (+ *server-port* 100) (Int.mod *nb-port-counter* 500))))
+
+  (defn session-port [sid]
+    (Map.get-with-default &*session-ports* sid &-1))
+
+  (doc kill-host! "kills the session's value host, if any. The binary path
+is unique per session, so pkill -f is safe.")
+  (defn kill-host! [sid]
+    (ignore (System.system &(fmt "pkill -f '%s/cell-host' 2> /dev/null"
+                                 &(session-dir sid)))))
+
+  (doc http-get "performs a minimal HTTP GET against a value host and
+answers the response body.")
+  (defn http-get [port path]
+    (match (TcpStream.connect "127.0.0.1" port)
+      (Result.Error e) (Result.Error e)
+      (Result.Success stream)
+        (let-do [br (do (ignore (set-cloexec (TcpStream.poll-fd &stream)))
+                        (TcpStream.buffered stream))]
+          (ignore (BufReader.write &br &(fmt "GET %s HTTP/1.0\r\n\r\n" path)))
+          (ignore (BufReader.flush &br))
+          (let-do [content-length -1
+                   reading true
+                   result (the (Result String String) (Result.Error @"no response"))]
+            (while reading
+              (match (BufReader.read-line &br)
+                (Result.Error e)
+                  (do (set! result (Result.Error e))
+                      (set! reading false))
+                (Result.Success line)
+                  (let [trimmed (String.trim &line)]
+                    (if (String.empty? &trimmed)
+                      (do
+                        (set! result
+                              (if (< content-length 0)
+                                (Result.Error @"no content length")
+                                (match (BufReader.read-n &br content-length)
+                                  (Result.Error e) (Result.Error e)
+                                  (Result.Success bytes)
+                                    (Result.Success (String.from-bytes &bytes)))))
+                        (set! reading false))
+                      (when (String.starts-with? &(String.ascii-to-lower &trimmed)
+                                                 "content-length:")
+                        (set! content-length
+                              (Maybe.from (Int.from-string &(String.trim &(String.suffix &trimmed 15)))
+                                          -1)))))))
+            (BufReader.delete br)
+            result))))
+
+  ; --- eval -------------------------------------------------------------
+
+  (doc wrap-cell "wraps the cell's last top-level expression in
+NB.capture-and-serve so the compiled program becomes the value host.")
+  (defn eval-token [sid attempt]
+    (fmt "%s-%s-%d-%d" &*nb-salt* sid attempt *nb-port-counter*))
+
+  (defn wrap-cell [src]
+    (let [spans (Cell.top-level-spans src)
+          last-span (Array.unsafe-nth &spans (- (Array.length &spans) 1))
+          s @(Pair.a last-span)
+          e @(Pair.b last-span)]
+      (String.concat &[(String.prefix src s)
+                       @"(NB.capture-and-serve "
+                       (String.slice src s e)
+                       @" 0 \"\")"
+                       (String.suffix src e)
+                       @"\n"])))
+
+  (private run-compile)
+  (hidden run-compile)
+  (doc run-compile "compiles the session's cell.carp; answers the exit code.")
+  (defn run-compile [sid extra-flags log-name]
+    (do
+      (ignore (System.system
+                &(fmt "cd '%s' && exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- 10>&- 11>&- 12>&-; '%s' %s -c '%s' cell.carp > %s 2> stderr.log; echo $? > exit.code"
+                      &(session-dir sid)
+                      &*compiler*
+                      extra-flags
+                      &*core-dir*
+                      log-name)))
+      (Maybe.from (Int.from-string &(String.trim &(file-or sid "exit.code" "-1")))
+                  -1)))
+
+  (private last-newline-index)
+  (hidden last-newline-index)
+  (defn last-newline-index [s]
+    (let-do [result -1
+             n (String.length s)]
+      (for [i 0 n]
+        (when (= (String.char-at s i) \newline) (set! result i)))
+      result))
+
+  (doc eval-plain "the value-host-free path: compile and run to completion.")
+  (defn-do eval-plain [id sid src]
+    (let-do [program (String.concat &[(Session.defs-text &(Session.entries sid))
+                                      @src
+                                      @"\n"])]
+      (ignore (IO.write-file &program &(session-file sid "cell.carp")))
+      (let-do [exit (run-compile sid "-x" "stdout.log")
+               out (file-or sid "stdout.log" "")
+               err (file-or sid "stderr.log" "")]
+        (when (= exit 0) (Session.absorb! sid src))
+        (if (and (= exit 0) (Cell.last-form-expression? src))
+          (let [n (String.length &out)
+                trimmed (if (and (> n 0)
+                                 (= (String.char-at &out (- n 1)) \newline))
+                          (String.prefix &out (- n 1))
+                          @&out)
+                idx (last-newline-index &trimmed)]
+            (if (< idx 0)
+              (respond-eval id exit "" &trimmed false 0 &err)
+              (respond-eval id
+                            exit
+                            &(String.prefix &trimmed (+ idx 1))
+                            &(String.suffix &trimmed (+ idx 1))
+                            false
+                            0
+                            &err)))
+          (respond-eval id exit &out "" false 0 &err)))))
+
+  (private host-token)
+  (hidden host-token)
+  (doc host-token "queries a host's session token; empty when unreachable.")
+  (defn host-token [port]
+    (match (http-get port "/session")
+      (Result.Error _) @""
+      (Result.Success body)
+        (match (JSON.parse &body)
+          (Result.Error _) @""
+          (Result.Success j)
+            (match j
+              (JSON.Str s) s
+              _ @""))))
+
+  (private host-success-response)
+  (hidden host-success-response)
+  (defn-do host-success-response [id sid src port]
+    (Map.put! &*session-ports* sid &port)
+    (Session.absorb! sid src)
+    (let [value (match (http-get port "/objects/0")
+                  (Result.Error _) @""
+                  (Result.Success body)
+                    (match (JSON.parse &body)
+                      (Result.Error _) @""
+                      (Result.Success j)
+                        (Result.from-success (get-str &j "print_string") @"")))]
+      (respond-eval id
+                    0
+                    &(file-or sid "stdout.log" "")
+                    &value
+                    true
+                    port
+                    &(file-or sid "stderr.log" ""))))
+
+  (private launch-host!)
+  (hidden launch-host!)
+  (defn launch-host! [sid port token]
+    (ignore (System.system
+              &(fmt "cd '%s' && rm -f run-exit.code stdout.log stderr.log && nohup sh -c 'exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- 10>&- 11>&- 12>&-; %s/cell-host %d %s > stdout.log 2> stderr.log; echo $? > run-exit.code' > /dev/null 2>&1 &"
+                    &(session-dir sid)
+                    &(session-dir sid)
+                    port
+                    token))))
+
+  (private wait-for-host)
+  (hidden wait-for-host)
+  (doc wait-for-host "waits for the launched program to either serve OUR
+token, exit, or time out. Answers Just a response when settled, Nothing when
+the port was taken (bind failure, exit 17) and the launch should be retried.")
+  (defn wait-for-host [id sid src port token tries]
+    (let-do [outcome (the (Maybe String) (Maybe.Nothing))
+             remaining tries
+             done false]
+      (while (and (not done) (> remaining 0))
+        (let [seen (host-token port)]
+          (cond
+            (String.= &seen token)
+              (do
+                (set! outcome (Maybe.Just (host-success-response id sid src port)))
+                (set! done true))
+            (file-exists? sid "run-exit.code")
+              (let-do [exit (Maybe.from (Int.from-string &(String.trim &(file-or sid "run-exit.code" "-1"))) -1)]
+                (if (= exit 17)
+                  ; bind failure: the port was taken, retry on another one
+                  (do (set! outcome (Maybe.Nothing))
+                      (set! done true))
+                  ; the program finished without serving: crash or plain exit
+                  (do
+                    (when (= exit 0) (Session.absorb! sid src))
+                    (set! outcome
+                          (Maybe.Just (respond-eval id
+                                                    exit
+                                                    &(file-or sid "stdout.log" "")
+                                                    ""
+                                                    false
+                                                    0
+                                                    &(file-or sid "stderr.log" ""))))
+                    (set! done true))))
+            (do
+              (System.sleep-micros 100000)
+              (set! remaining (- remaining 1))))))
+      (if done
+        outcome
+        (do
+          (kill-host! sid)
+          (Maybe.Just (respond-err id "value host did not come up within 60s"))))))
+
+  (doc eval-with-host "compiles the wrapped cell to a binary, then launches
+it as the session's value host, retrying on other ports when one is taken.")
+  (defn-do eval-with-host [id sid src]
+    (let-do [program (String.concat &[@"(load \"notebook.carp\")\n"
+                                      (Session.defs-text &(Session.entries sid))
+                                      (wrap-cell src)])]
+      (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
+                                   &*nb-lib*
+                                   &(session-dir sid))))
+      (ignore (IO.write-file &program &(session-file sid "cell.carp")))
+      (if (/= (run-compile sid "-b -o cell-host" "compile.log") 0)
+        ; the wrap can fail for value types the runtime cannot handle
+        ; (e.g. no str instance); fall back to the plain path
+        (eval-plain id sid src)
+        (let-do [response @""
+                 attempt 0
+                 done false]
+          (while-do (and (not done) (< attempt 5))
+            (let-do [port (next-port!)
+                     token (eval-token sid attempt)]
+              (launch-host! sid port &token)
+              (match (wait-for-host id sid src port &token 600)
+                (Maybe.Just resp) (do (set! response resp) (set! done true))
+                (Maybe.Nothing) ()))
+            (set! attempt (+ attempt 1)))
+          (if done
+            response
+            (respond-err id "could not start a value host: all ports taken"))))))
+
+  (defn-do eval-cell [id sid src]
+    (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
+    (kill-host! sid)
+    (if (and (not (String.empty? &*nb-lib*))
+             (Cell.last-form-expression? src))
+      (eval-with-host id sid src)
+      (eval-plain id sid src)))
+
+  ; --- request handling -------------------------------------------------
+
+  (defn handle [req-body]
+    (match (JSON.parse req-body)
+      (Result.Error _) (respond-err 0.0 "json parse error")
+      (Result.Success j)
+        (let [id (Result.from-success (get-num &j "id") 0.0)
+              cmd (Result.from-success (get-str &j "cmd") @"")]
+          (cond
+            (= &cmd "ping") (respond-ok id "pong")
+            (= &cmd "reset")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (do (Session.reset! &sid)
+                      (kill-host! &sid)
+                      (respond-ok id "reset")))
+            (= &cmd "eval")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "source")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success src) (eval-cell id &sid &src)))
+            (respond-err id &(String.append "unknown cmd: " &cmd))))))
+
+  (defn-do serve-one [stream]
+    (ignore (set-cloexec (TcpStream.poll-fd &stream)))
+    (let-do [br (TcpStream.buffered stream)
+             keep-running true]
+      (while keep-running
+        (match (read-request &br)
+          (Result.Error _) (set! keep-running false)
+          (Result.Success body)
+            (write-response &br &(handle &body))))
+      (BufReader.delete br)))
+
+  (defn accept-loop [listener]
+    (let-do [running true]
+      (while running
+        (match (TcpListener.accept listener)
+          (Result.Error _) (set! running false)
+          (Result.Success stream) (serve-one stream))))))
+
+; --- startup ------------------------------------------------------------
+
+(defn-do die [stage msg]
+  (IO.errorln &(String.append stage msg))
+  (System.exit 1))
+
+(defn arg-or [idx dflt]
+  (if (> (StaticArray.length &System.args) idx)
+    @(StaticArray.unsafe-nth &System.args idx)
+    dflt))
+
+(defn parse-port []
+  (Maybe.from (Int.from-string &(arg-or 1 @"8765")) 8765))
+
+(defn-do main []
+  (set! *compiler* (arg-or 2 (Maybe.from (IO.getenv "CARP_COMPILER") @"")))
+  (set! *core-dir*
+        (arg-or 3
+                (match (IO.getenv "CARP_DIR")
+                  (Maybe.Just dir) (String.append &dir "/core")
+                  (Maybe.Nothing) @"")))
+  (set! *work-dir* (arg-or 4 @"/tmp/carp-server-work"))
+  (set! *nb-lib* (arg-or 5 (Maybe.from (IO.getenv "CARP_NB_LIB") @"")))
+  (when (String.empty? &*compiler*)
+    (die "no compiler: " "pass one or set CARP_COMPILER"))
+  (when (String.empty? &*core-dir*)
+    (die "no core dir: " "pass one or set CARP_DIR"))
+  (ignore (System.system &(String.concat &[@"mkdir -p '" @&*work-dir* @"'"])))
+  ; kill every stale value host, whatever work dir spawned it: a wedged
+  ; foreign host on one of our ports can hang the token handshake
+  (ignore (System.system "pkill -f '/cell-host [0-9]' 2> /dev/null"))
+  (ignore (System.system &(fmt "head -c4 /dev/urandom | od -An -tu4 | tr -d ' \\n' > '%s/salt'" &*work-dir*)))
+  (set! *nb-salt* (String.trim &(match (IO.read-file &(fmt "%s/salt" &*work-dir*))
+                                  (Result.Success s) s
+                                  (Result.Error _) @"nosalt")))
+  (let [port (parse-port)]
+    (do
+      (set! *server-port* port)
+      (match (TcpListener.bind "127.0.0.1" port)
+        (Result.Error e) (die "bind: " &e)
+        (Result.Success listener)
+          (do
+            (ignore (set-cloexec (TcpListener.poll-fd &listener)))
+            (IO.errorln &(String.append "carp server listening on port "
+                                        &(str port)))
+            (Server.accept-loop &listener))))))
