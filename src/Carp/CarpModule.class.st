@@ -65,49 +65,6 @@ CarpModule >> carpCoderCommentsFor: aView [
 ]
 
 { #category : #coders }
-CarpModule >> carpCoderStreamingMethodsFor: aView context: aPhlowContext [
-	<gtModuleView>
-	| aMethodsCoder aMethodsCoderViewModel aNewMethodCoderHolder coderElement |
-	aNewMethodCoderHolder := ValueHolder new.
-
-	^ aView explicit
-		priority: 9;
-		title: 'Methods';
-		disableAsync;
-		actionDropdownButtonDo: [ :aDrodownAction | 
-			aDrodownAction dropdown
-				icon: BrGlamorousVectorIcons add;
-				tooltip: 'Add new function';
-				content: [ :aButton | 
-					| aNewMethodCoder aNewMethodCoderViewModel aHandler |
-					aNewMethodCoderHolder contents
-						ifNotNil: [ :aContents | aNewMethodCoderViewModel := aContents ]
-						ifNil: [ aNewMethodCoder := GtCarpNewFunctionCoderModel new
-									module: self;
-									carpLinkApplicationStrategy: LeCarpApplicationStrategy new;
-									onSave: [ aButton fireEvent: BrDropdownHideWish new.
-										coderElement initializeForModule ].
-
-							aNewMethodCoderViewModel := aNewMethodCoder asCoderViewModel.
-							aNewMethodCoderViewModel
-								withoutHeader;
-								expanded: true;
-								focused: true;
-								moveCursorAtEnd.
-
-							aNewMethodCoderHolder contents: aNewMethodCoderViewModel ].
-
-					(GtExpandedOnlyCoderElement new coderViewModel: aNewMethodCoderViewModel)
-						hExact: 300;
-						vFitContent;
-						background: Color white;
-						padding: (BlInsets all: 5);
-						addAptitude: BrGlamorousFocusableShadowAptitude new ];
-				name: #'button--add-new-expression' ];
-		stencil: [ coderElement := CarpStreamingMethodsCoderElement forModule: self ]
-]
-
-{ #category : #coders }
 CarpModule >> carpCoderStreamingTestsFor: aView context: aPhlowContext [
 	<gtModuleView>
 	| aMethodsCoder aMethodsCoderViewModel aNewMethodCoderHolder |

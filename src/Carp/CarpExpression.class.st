@@ -13,17 +13,6 @@ CarpExpression >> asElement [
 ]
 
 { #category : #accessing }
-CarpExpression >> asElementWithModule: aModule [
-	| applicationStrategy |
-	applicationStrategy := LeCarpApplicationStrategy new.
-	^ (GtExpandableSourceCoderElement new
-		coderViewModel: ((GtCarpIDECoderModel code: self toCarp)
-				module: aModule;
-				carpLinkApplicationStrategy: applicationStrategy;
-				expression: self) asCoderViewModel) collapse
-]
-
-{ #category : #accessing }
 CarpExpression >> documentation [
 	^ documentation ifNil: ['']
 ]
