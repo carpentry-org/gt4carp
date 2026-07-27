@@ -42,9 +42,6 @@ BaselineOfCarp >> baseline: spec [
 				package: 'Carp-Parser'
 				with: [ spec requires: (externalDeps asArray , #('Carp-AST')) ].
 			spec
-				package: 'Carp-MacroStepper'
-				with: [ spec requires: externalDeps asArray ].
-			spec
 				package: 'Carp'
-				with: [ spec requires: (externalDeps asArray , #('Carp-Parser' 'Carp-MacroStepper')) ] ]
+				with: [ spec requires: (externalDeps asArray , #('Carp-Parser')) ] ]
 ]

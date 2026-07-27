@@ -129,18 +129,6 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 						spawnObject: ((self bindAndExecute: source) parse view: #gtSourceFor:) ]
 				id: #'source-coder--macro-expand-action'.
 			addOns
-				addMainAction: 'Expand Step-by-Step' translated
-				icon: BrGlamorousVectorIcons right
-				action: [ :aCoderUIModel :anElement |
-					| source viewModel stepperElement |
-					source := sourceCode currentSourceText wait value text.
-					viewModel := CarpMacroExpansionViewModel
-						source: source
-						client: CarpMacroStepperExamples defaultClient.
-					stepperElement := CarpMacroExpansionElement onViewModel: viewModel.
-					anElement phlow spawnObject: stepperElement ]
-				id: #'source-coder--macro-step-action'.
-			addOns
 				addMainAction: 'Build and Run' translated
 				icon: BrGlamorousVectorIcons refresh
 				action: [ :aCoderUIModel :anElement | 
