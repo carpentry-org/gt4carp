@@ -66,8 +66,9 @@ LeCarpSnippet >> newCoder [
 	coder := GtCarpCoderModel new.
 	explicitSessionId
 		ifNotNil: [ :sid | coder sessionId: sid ]
-		ifNil: [ [ self page ifNotNil: [ :aPage | coder sessionId: aPage uid asString36 ] ]
-				on: Error
-				do: [ :e |  ] ].
+		ifNil: [ coder
+				sessionIdProvider: [ [ self page ifNotNil: [ :aPage | aPage uid asString36 ] ]
+						on: Error
+						do: [ :e | nil ] ] ].
 	^ coder
 ]

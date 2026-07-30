@@ -1,7 +1,8 @@
 "
 I make the inspector's embedded playground speak Carp: for a
-{{gtClass:name=CarpRemoteValue}} the playground page starts with a Carp
-snippet evaluating in the same notebook session as the inspected value, so
+{{gtClass:name=CarpRemoteValue}} the playground page is a
+{{gtClass:name=LeCarpSessionPageType}} page — one per notebook session —
+whose Carp snippet evaluates in the same session as the inspected value, so
 the session's definitions are available.
 "
 Class {
@@ -21,7 +22,10 @@ CarpInspectorPlaygroundPageStrategy >> configureExistingPage: aPage forObject: a
 { #category : #accessing }
 CarpInspectorPlaygroundPageStrategy >> createNewPageForObject: aValue [
 	| page snippet |
-	page := LePage named: (self pageDatabaseKeyBasedOnObject: aValue).
+	page := LePage new.
+	page type: (LeCarpSessionPageType
+			sessionId: (self pageDatabaseKeyBasedOnObject: aValue)
+			page: page).
 	snippet := LeCarpSnippet new.
 	snippet explicitSessionId: aValue carpSession.
 	page addSnippet: snippet.
@@ -30,5 +34,10 @@ CarpInspectorPlaygroundPageStrategy >> createNewPageForObject: aValue [
 
 { #category : #accessing }
 CarpInspectorPlaygroundPageStrategy >> pageDatabaseKeyBasedOnObject: aValue [
-	^ 'Carp session ' , (aValue carpSession ifNil: [ 'default' ])
+	^ aValue carpSession ifNil: [ 'default' ]
+]
+
+{ #category : #accessing }
+CarpInspectorPlaygroundPageStrategy >> playgroundPageType [
+	^ LeCarpSessionPageType
 ]

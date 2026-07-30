@@ -3,7 +3,15 @@ Class {
 	#superclass : #GtSourceCoder,
 	#instVars : [
 		'pharoBindings',
-		'sessionId'
+		'sessionId',
+		'sessionIdProvider',
+		'lifetimeHoverPosition',
+		'lintFindingsCache',
+		'lintFindingsHash',
+		'typeAnnotationsCache',
+		'typeAnnotationsHash',
+		'typeAnnotationsFailedHash',
+		'typeAnnotationsPending'
 	],
 	#category : #'Carp-Coder'
 }
@@ -18,7 +26,7 @@ GtCarpCoderModel class >> code: aString [
 { #category : #converting }
 GtCarpCoderModel >> asCoderViewModel [
 
-	^ GtSourceCoderViewModel new coder: self
+	^ GtCarpSnippetCoderViewModel new coder: self
 ]
 
 { #category : #accessing }
@@ -32,17 +40,30 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 	super initializeAddOns: addOns.
 
 	addOns
-		addStyler: (GtCoderAstSmaCCParserStyler new smaccStyler: CarpParser gtStyler).
+		addStyler: (GtCoderAstSmaCCParserStyler new smaccStyler: CarpParser gtStyler);
+		addStyler: CarpTypeAdornmentStyler new;
+		addStyler: CarpLifetimeHighlightStyler new;
+		addStyler: CarpLintHighlightStyler new.
 
 	addOns
 		addMainAction: 'Format' translated
-		icon: BrGlamorousVectorIcons clipboard
-		action: [ :aCoderUIModel :anElement | 
-			| source |
-			source := GtCarpFormatter uniqueInstance
-					format: (CarpParser parse: sourceCode currentSourceText wait value text).
-			self sourceCode: (GtCoderExplicitStringSource new source: source) ]
-		id: #'source-coder--format-action-id'.
+		icon: BrGlamorousVectorIcons edit
+		action: [ :aCoderUIModel :anElement |
+			[ | formatted |
+			formatted := CarpExternalTool format: self currentSourceString.
+			self sourceCode: (GtCoderExplicitStringSource new source: formatted) ]
+				on: Error
+				do: [ :e | anElement phlow spawnObject: (e messageText ifNil: [ e class name ]) ] ]
+		id: #'source-coder--carp-format-action-id'.
+
+	addOns
+		addMainAction: 'Lint' translated
+		icon: BrGlamorousVectorIcons repair
+		action: [ :aCoderUIModel :anElement |
+			[ anElement phlow spawnObject: (CarpLintReport onSource: self currentSourceString) ]
+				on: Error
+				do: [ :e | anElement phlow spawnObject: (e messageText ifNil: [ e class name ]) ] ]
+		id: #'source-coder--carp-lint-action-id'.
 
 	addOns
 		addMainAction: 'Evaluate' translated
@@ -61,7 +82,16 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 				coderViewModel: aCoderUIModel;
 				element: anElement;
 				execute ]
-		id: GtSourceCoderDoItAndGoActionId
+		id: GtSourceCoderDoItAndGoActionId.
+	addOns
+		addMainAction: 'Types' translated
+		icon: BrGlamorousVectorIcons twoColumnTable
+		action: [ :aCoderUIModel :anElement |
+			anElement phlow
+				spawnObject: (CarpServerClient default
+						annotateSource: self currentSourceString
+						session: self sessionId) ]
+		id: #'source-coder--carp-types-action'
 ]
 
 { #category : #accessing }
@@ -81,11 +111,6 @@ GtCarpCoderModel >> initializeShortcuts: addOns [
 ]
 
 { #category : #accessing }
-GtCarpCoderModel >> newCompletionStrategy [
-	^ GtCompletionStrategy new
-]
-
-{ #category : #accessing }
 GtCarpCoderModel >> pharoBindings: anObject [
 	pharoBindings := anObject
 ]
@@ -100,11 +125,87 @@ GtCarpCoderModel >> primitiveEvaluate: aSourceString inContext: aGtSourceCoderEv
 ]
 
 { #category : #accessing }
+GtCarpCoderModel >> lintFindingsFor: aString [
+	"angler findings for aString, cached by text hash. angler runs in
+	single-digit milliseconds, so this is synchronous; errors (missing
+	binary, tool failure) degrade to no findings."
+
+	| hash |
+	hash := aString hash.
+	lintFindingsHash = hash ifTrue: [ ^ lintFindingsCache ].
+	lintFindingsCache := [ CarpExternalTool lint: aString ] on: Error do: [ :e | #() ].
+	lintFindingsHash := hash.
+	^ lintFindingsCache
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> lifetimeHoverAt: aPositionOrNil [
+	"Set by the hover attributes the lifetime styler attaches to variable
+	occurrences; drives the lifetime highlight."
+
+	lifetimeHoverPosition = aPositionOrNil ifTrue: [ ^ self ].
+	lifetimeHoverPosition := aPositionOrNil.
+	[ self requestStyleSourceText ] on: Error do: [ :e |  ]
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> lifetimeHoverPosition [
+	^ lifetimeHoverPosition
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> typeAdornmentAnnotations [
+	"Answer the annotations matching the CURRENT source, or nil while they
+	are being computed. A single background worker tracks the text until it
+	stabilizes, fetches, then triggers a restyle."
+
+	| text hash |
+	text := [ self currentSourceString ] on: Error do: [ :e | ^ nil ].
+	hash := text hash.
+	typeAnnotationsHash = hash ifTrue: [ ^ typeAnnotationsCache ].
+	typeAnnotationsFailedHash = hash ifTrue: [ ^ nil ].
+	typeAnnotationsPending == true ifTrue: [ ^ nil ].
+	typeAnnotationsPending := true.
+	[ [ | current stable latest |
+	current := text.
+	stable := false.
+	[ stable ]
+		whileFalse: [ (Delay forMilliseconds: 300) wait.
+			latest := [ self currentSourceString ] on: Error do: [ :e | nil ].
+			latest
+				ifNil: [ stable := true ]
+				ifNotNil: [ latest = current
+						ifFalse: [ current := latest ]
+						ifTrue: [ stable := true.
+							(latest hash = typeAnnotationsHash
+								or: [ latest hash = typeAnnotationsFailedHash ])
+								ifFalse: [ [ typeAnnotationsCache := CarpServerClient default
+												annotateSource: latest
+												session: self sessionId.
+									typeAnnotationsHash := latest hash.
+									[ self requestStyleSourceText ] on: Error do: [ :e |  ] ]
+										on: Error
+										do: [ :e | typeAnnotationsFailedHash := latest hash ] ] ] ] ] ]
+		ensure: [ typeAnnotationsPending := false ] ]
+		forkNamed: 'carp-type-annotations'.
+	^ nil
+]
+
+{ #category : #accessing }
 GtCarpCoderModel >> sessionId [
 	"The notebook session this coder evaluates in. Snippets on the same
-	Lepiter page share one session; a detached coder gets its own scratch."
+	Lepiter page share one session; a detached coder gets its own scratch.
+	Computed lazily: snippet coders are created before their snippet is
+	attached to a page, so the page can only be asked at use time."
 
-	^ sessionId ifNil: [ 'default' ]
+	^ sessionId
+		ifNil: [ (sessionIdProvider ifNotNil: [ :aProvider | aProvider value ])
+				ifNil: [ 'default' ] ]
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> sessionIdProvider: aBlock [
+	sessionIdProvider := aBlock
 ]
 
 { #category : #accessing }

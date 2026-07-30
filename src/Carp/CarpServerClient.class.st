@@ -171,11 +171,54 @@ CarpServerClient >> disconnect [
 { #category : #private }
 CarpServerClient >> ensureConnected [
 	stream ifNotNil: [ ^ self ].
-	[ self connect ]
+	[ self connect.
+	self ensureFreshServer ]
 		on: Error
 		do: [ :e |
 			self startServer.
 			self waitForServer ]
+]
+
+{ #category : #'start-stop' }
+CarpServerClient >> ensureFreshServer [
+	"A server was already listening; replace it when it was built from an
+	older binary than the one on disk (its ping stamp differs from the
+	binary's --stamp)."
+
+	[ | running expected |
+	running := (self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'ping';
+					yourself)) at: 'stamp' ifAbsent: [ nil ].
+	expected := self binaryStamp.
+	(expected notNil and: [ running ~= expected ])
+		ifTrue: [ GtExternalProcessBuilder new
+				command: '/usr/bin/pkill';
+				args: {'-f'.
+						'carp-server ' , port printString};
+				output.
+			self disconnect.
+			self startServer.
+			self waitForServer ] ]
+		on: Error
+		do: [ :e | "never let the staleness check break connecting" ]
+]
+
+{ #category : #'start-stop' }
+CarpServerClient >> binaryStamp [
+	"The build stamp of the server binary on disk, or nil."
+
+	^ [ | out |
+	out := GtExternalProcessBuilder new
+			command: self class serverBinary;
+			args: {'--stamp'};
+			output.
+	out status isSuccess
+		ifTrue: [ out stdoutString trimBoth ]
+		ifFalse: [ nil ] ]
+		on: Error
+		do: [ :e | nil ]
 ]
 
 { #category : #initialization }
@@ -195,6 +238,87 @@ CarpServerClient >> isConnected [
 { #category : #private }
 CarpServerClient >> nextRequestId [
 	^ nextId := nextId + 1
+]
+
+{ #category : #'api - commands' }
+CarpServerClient >> completePrefix: aPrefixString session: aSessionString [
+	"Answer completion candidate dictionaries (name, kind, scheme, doc) for
+	the prefix, from the session's warm compiler state."
+
+	| response ok |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'complete';
+					at: 'session' put: aSessionString;
+					at: 'prefix' put: aPrefixString;
+					yourself).
+	ok := response
+			at: 'ok'
+			ifAbsent: [ ^ CarpServerError new
+					signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ].
+	^ ok at: 'candidates' ifAbsent: [ #() ]
+]
+
+{ #category : #'api - commands' }
+CarpServerClient >> docFor: aName session: aSessionString [
+	"Answer the documentation dictionary (name, kind, scheme, documentation)
+	for a definition, or nil when there is none."
+
+	| response |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'doc';
+					at: 'session' put: aSessionString;
+					at: 'name' put: aName;
+					yourself).
+	^ response at: 'ok' ifAbsent: [ nil ]
+]
+
+{ #category : #'api - commands' }
+CarpServerClient >> annotateSource: aSourceString session: aSessionString [
+	"Answer the inferred types of the session's definitions plus the given
+	source, as a CarpAnnotations."
+
+	| response ok |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'annotate';
+					at: 'session' put: aSessionString;
+					at: 'source' put: aSourceString;
+					yourself).
+	ok := response
+			at: 'ok'
+			ifAbsent: [ ^ CarpServerError new
+					signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ].
+	^ CarpAnnotations new
+		session: aSessionString;
+		source: aSourceString;
+		definitions: (ok at: 'definitions' ifAbsent: [ #() ]);
+		environment: (ok at: 'environment' ifAbsent: [ #() ]);
+		locals: (ok at: 'locals' ifAbsent: [ #() ])
+]
+
+{ #category : #'api - commands' }
+CarpServerClient >> ownershipSource: aSourceString session: aSessionString [
+	"Answer the compiler's move/borrow/delete plan rows for the session's
+	definitions plus the given source."
+
+	| response ok |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'ownership';
+					at: 'session' put: aSessionString;
+					at: 'source' put: aSourceString;
+					yourself).
+	ok := response
+			at: 'ok'
+			ifAbsent: [ ^ CarpServerError new
+					signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ].
+	^ ok at: 'ownership' ifAbsent: [ #() ]
 ]
 
 { #category : #'api - commands' }
