@@ -8,32 +8,36 @@
 ; When the cell ends in an expression (and a notebook runtime library is
 ; configured), the last expression is wrapped in (NB.capture-and-serve …):
 ; the compiled program stays alive after running as the session's VALUE
-; HOST, serving an inspection tree of the result over its own socket. The
-; server relays describe/children requests to it. A new evaluation (or
-; reset) replaces the session's host.
+; HOST, serving the result's remote-phlow views over its own HTTP socket,
+; which GT talks to directly. A new evaluation (or reset) replaces the
+; session's host.
 ;
 ;   request:  <decimal length>\n<json bytes>
 ;   response: <decimal length>\n<json bytes>
 ;
 ; Commands:
 ;   {"id": n, "cmd": "ping"}
-;   {"id": n, "cmd": "eval",     "session": "<name>", "source": "<carp>"}
-;   {"id": n, "cmd": "reset",    "session": "<name>"}
-;   {"id": n, "cmd": "describe", "session": "<name>", "ref": <int>}
-;   {"id": n, "cmd": "children", "session": "<name>", "ref": <int>,
-;                                "from": <int>, "to": <int>}
+;   {"id": n, "cmd": "eval",      "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "reset",     "session": "<name>"}
+;   {"id": n, "cmd": "annotate",  "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "ownership", "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "complete",  "session": "<name>", "prefix": "<text>"}
+;   {"id": n, "cmd": "doc",       "session": "<name>", "name": "<symbol>"}
 ;
 ; Responses:
+;   ping:  {"id": n, "ok": "pong", "stamp": "<build stamp>"}
 ;   eval:  {"id": n, "ok": {"exit": e, "stdout": s, "value": s,
-;                           "hasValue": b, "stderr": s}}
-;   describe/children: {"id": n, "ok": <the host's json>}
-;   other: {"id": n, "ok": "..."}
+;                           "hasValue": b, "hostPort": p, "stderr": s}}
+;   other: {"id": n, "ok": …}
 ;   error: {"id": n, "error": "<message>"}
 ;
 ; Usage: server <port> [compiler] [core-dir] [work-dir] [notebook-lib]
 ;   compiler defaults to $CARP_COMPILER, core-dir to $CARP_DIR/core,
 ;   notebook-lib to $CARP_NB_LIB (empty disables value hosts).
 
+; the warm compiler sessions: core is loaded and inferred once per notebook
+; session, cells are checked against that base (see Warm below)
+(load "../../../carpentry-org/carp-compiler/carp-session/carp-session.carp")
 (load "git@github.com:carpentry-org/socket@0.2.3")
 (load "git@github.com:carpentry-org/json@0.5.0")
 
@@ -41,6 +45,13 @@
 
 (relative-include "cloexec.h")
 (register set-cloexec (Fn [Int] Int) "set_cloexec")
+
+; compiled-in build stamp: lets clients detect a running server from an
+; older binary and replace it
+(deftemplate build-stamp (Fn [] String) "String $NAME(void)" "$DECL {
+  String value = __DATE__ \" \" __TIME__;
+  return String_copy(&value);
+}")
 
 (def *compiler* @"")
 (def *core-dir* @"")
@@ -59,6 +70,16 @@
 ; (which persist in the session) or expressions (which run once).
 
 (defmodule Cell
+  (doc byte-slice "slices ‘s’ by BYTE offsets. String.slice goes through
+chars and slices by codepoint index, so it silently shifts on multi-byte
+sources; every offset this module computes is a byte offset (char-at is a
+raw byte read), so every extraction must be byte-accurate too.")
+  (defn byte-slice [s a b]
+    (let-do [out (the (Array Byte) [])]
+      (for [i a b]
+        (Array.push-back! &out (Byte.from-int (Char.to-int (String.char-at s i)))))
+      (String.from-bytes &out)))
+
   (defn ws? [c]
     (let [n (Char.to-int c)]
       (or (= n 32) (or (= n 10) (or (= n 9) (= n 13))))))
@@ -103,17 +124,31 @@ top-level forms in ‘src’, skipping comments, strings and character literals.
                         (set! start -1)))
                   (set! i (+ i 1)))
             (and (= depth 0) (not (ws? c)))
-              (do (set! start i)
-                  (while (and (< i n)
-                              (not (delimiter? (String.char-at src i))))
-                    (set! i (+ i 1)))
-                  (Array.push-back! &spans (Pair.init start i))
-                  (set! start -1))
+              ; a top-level atom: strings ("hi") and char literals (\a) are
+              ; part of it, so @"hi!" stays one span for wrap-cell
+              (let-do [astart i
+                       scanning true]
+                (while (and (< i n) scanning)
+                  (let [d (String.char-at src i)]
+                    (cond
+                      (= d \")
+                        (do (set! i (+ i 1))
+                            (while (and (< i n) (/= (String.char-at src i) \"))
+                              (if (= (String.char-at src i) \\)
+                                (set! i (+ i 2))
+                                (set! i (+ i 1))))
+                            (set! i (+ i 1)))
+                      (= d \\) (set! i (+ i 2))
+                      (or (ws? d) (or (open? d) (or (close? d) (= d \;))))
+                        (set! scanning false)
+                      (set! i (+ i 1)))))
+                (Array.push-back! &spans (Pair.init astart i))
+                (set! start -1))
             (set! i (+ i 1)))))
       spans))
 
   (defn span-text [src span]
-    (String.slice src @(Pair.a span) @(Pair.b span)))
+    (byte-slice src @(Pair.a span) @(Pair.b span)))
 
   (doc symbol-at "reads the symbol starting at byte ‘from’, skipping leading
 whitespace and opening parens first.")
@@ -127,7 +162,7 @@ whitespace and opening parens first.")
         (while (and (< i to)
                     (not (delimiter? (String.char-at src i))))
           (set! i (+ i 1)))
-        (String.slice src begin i))))
+        (byte-slice src begin i))))
 
   (defn head-symbol [src span]
     (symbol-at src @(Pair.a span) @(Pair.b span)))
@@ -148,7 +183,7 @@ defines.")
       (symbol-at src i to)))
 
   (def def-heads
-    [@"defn" @"defn-" @"def" @"defmodule" @"deftype" @"defmacro"
+    [@"defn" @"defn-" @"def" @"defmodule" @"deftype" @"defmacro" @"defview"
      @"defndynamic" @"defdynamic" @"definterface" @"defalias" @"sig" @"doc"
      @"hidden" @"private" @"use" @"load" @"load-once" @"load-and-use"
      @"register" @"register-type" @"deftemplate" @"derive" @"implements"
@@ -184,7 +219,8 @@ expression, i.e. whether it produces a result value.")
   (defn reset! [sid]
     (Map.put! &*sessions* sid &(the (Array SessionEntry) [])))
 
-  (doc defs-text "every session definition, in insertion order.")
+  ; every session definition, in insertion order. (A doc form cannot be
+  ; used here: `doc` resolves to the session library's Session.doc.)
   (defn defs-text [entries]
     (let-do [pieces (the (Array String) [])]
       (for [i 0 (Array.length entries)]
@@ -203,8 +239,8 @@ expression, i.e. whether it produces a result value.")
               (set! replaced true))))
       (unless replaced (Array.push-back! entries @&entry))))
 
-  (doc absorb! "retains a successful cell's definition forms in the session,
-replacing same-keyed definitions in place.")
+  ; retains a successful cell's definition forms in the session, replacing
+  ; same-keyed definitions in place
   (defn absorb! [sid cell]
     (let-do [entries (Session.entries sid)
              spans (Cell.top-level-spans cell)]
@@ -217,6 +253,262 @@ replacing same-keyed definitions in place.")
                   text (Cell.span-text cell span)]
               (upsert! &entries (SessionEntry.init key text))))))
       (store! sid entries))))
+
+; --- warm compiler sessions ---------------------------------------------
+; One carp-session per notebook session: Session.create loads and infers
+; core once; definitions are mirrored into it on absorb and cells are
+; checked warm. The CLI paths remain the fallback when warm creation fails.
+
+(deftype WarmEntry [sid String state CompilerSession tainted Bool])
+(def *warm-sessions* (the (Array WarmEntry) []))
+
+(defmodule HostBase
+  ; builds the warm session base: core plus the socket library and the
+  ; notebook runtime, so cells that use NB (defview included) check warm.
+  ; Sources carry their real paths so relative-include headers resolve.
+
+  (private lib-cache)
+  (hidden lib-cache)
+  (defn lib-cache []
+    (match (IO.getenv "CARP_LIB_CACHE")
+      (Maybe.Just dir) dir
+      (Maybe.Nothing)
+        (String.concat &[(Maybe.from (IO.getenv "HOME") @"")
+                         @"/.cache/carp/libs/github.com_COLON_carpentry-org"])))
+
+  (private strip-git-loads)
+  (hidden strip-git-loads)
+  (defn strip-git-loads [source]
+    (let-do [lines (String.split-by &source &[\newline])
+             out (the (Array String) [])]
+      (for [i 0 (Array.length &lines)]
+        (let [line (Array.unsafe-nth &lines i)]
+          (unless (String.starts-with? line "(load \"git@")
+            (Array.push-back! &out @line))))
+      (String.join "\n" &out)))
+
+  (private push-source!)
+  (hidden push-source!)
+  ; answers false when the file cannot be read
+  (defn push-source! [sources name path]
+    (match (IO.read-file path)
+      (Result.Success source)
+        (do (Array.push-back! sources (ModuleSource.init @name @path source))
+            true)
+      (Result.Error e)
+        (do (IO.errorln &(fmt "host base: cannot read %s: %s" path &e))
+            false)))
+
+  (private push-core!)
+  (hidden push-core!)
+  (defn push-core! [sources name]
+    (let [path (String.concat &[@&*core-dir* @"/" @name])]
+      (push-source! sources name &path)))
+
+  (private push-notebook!)
+  (hidden push-notebook!)
+  (defn push-notebook! [sources]
+    (match (IO.read-file &*nb-lib*)
+      (Result.Success source)
+        (do (Array.push-back! sources
+                              (ModuleSource.init @"notebook.carp"
+                                                 @&*nb-lib*
+                                                 (strip-git-loads source)))
+            true)
+      (Result.Error e)
+        (do (IO.errorln &(fmt "host base: cannot read notebook: %s" &e))
+            false)))
+
+  ; copy of SessionCoreLoader's private boot prelude plus the host loads
+  (private root-source)
+  (hidden root-source)
+  (defn root-source []
+    (let [arch (session-host-arch)
+          os (session-host-os)]
+      (String.concat &[@"(defndynamic host-arch [] \"" (String.copy &arch) @"\")
+(defndynamic host-os [] \"" (String.copy &os) @"\")
+(def target-arch \"" arch @"\")
+(def target-os \"" os @"\")
+(def target-abi \"unknown\")
+(defmodule Project
+  (defndynamic config [key value] ())
+  (defndynamic no-echo [] ())
+  (defndynamic get-config [key]
+    (cond
+      (= key \"echo-c\") false
+      (= key \"title\") \"Untitled\"
+      (= key \"output-directory\") \"out\"
+      (= key \"load-stack\") (Unsafe.load-stack)
+      (= key \"cflag\") '()
+      (= key \"libflag\") '()
+      (= key \"pkgconfigflag\") '()
+      \"native\")))
+(load \"Core.carp\")
+(defmacro add-c [relpath]
+  (list (quote Unsafe.preproc)
+        (list (quote Unsafe.emit-c)
+              (String.concat [\"#include \\\"\" (relative-to (current-file) relpath) \"\\\"\"]))))
+(defmacro relative-include [path]
+  (list (quote Unsafe.preproc)
+        (list (quote Unsafe.emit-c)
+              (String.concat [\"#include \\\"\" (relative-to (current-file) path) \"\\\"\"]))))
+(load \"bufio.carp\")
+(load \"socket/interfaces.carp\")
+(load \"socket/tcp_stream.carp\")
+(load \"socket/tcp_listener.carp\")
+(load \"socket/udp_socket.carp\")
+(load \"socket/unix_stream.carp\")
+(load \"socket/unix_listener.carp\")
+(load \"socket/poll.carp\")
+(load \"notebook.carp\")
+"])))
+
+  (private socket-piece!)
+  (hidden socket-piece!)
+  (defn socket-piece! [sources name]
+    (let [key (fmt "socket/%s.carp" name)
+          path (fmt "%s/socket/0.2.3/src/%s.carp" &(lib-cache) name)]
+      (push-source! sources &key &path)))
+
+  (doc load-base "the loaded host base module, or the reason it cannot be
+built.")
+  (defn load-base []
+    (let-do [sources (the (Array ModuleSource) [])
+             ok true]
+      (for [i 0 (Array.length &session-core-files)]
+        (unless (push-core! &sources (Array.unsafe-nth &session-core-files i))
+          (set! ok false)))
+      (unless (push-source! &sources
+                            "bufio.carp"
+                            &(fmt "%s/bufio/0.1.0/bufio.carp" &(lib-cache)))
+        (set! ok false))
+      (unless (socket-piece! &sources "interfaces") (set! ok false))
+      (unless (socket-piece! &sources "tcp_stream") (set! ok false))
+      (unless (socket-piece! &sources "tcp_listener") (set! ok false))
+      (unless (socket-piece! &sources "udp_socket") (set! ok false))
+      (unless (socket-piece! &sources "unix_stream") (set! ok false))
+      (unless (socket-piece! &sources "unix_listener") (set! ok false))
+      (unless (socket-piece! &sources "poll") (set! ok false))
+      (unless (push-notebook! &sources) (set! ok false))
+      (Array.push-back! &sources
+                        (ModuleSource.init @"__host-root__.carp"
+                                           @"__host-root__.carp"
+                                           (root-source)))
+      (if (not ok)
+        (Result.Error (Diagnostic.init @"load" @"host base sources incomplete" (Maybe.Nothing)))
+        (match (ModuleLoader.load &sources "__host-root__.carp")
+          (Result.Success loaded)
+            (Result.Success (ModuleLoader.with-compiler-prelude &loaded))
+          (Result.Error e)
+            (Result.Error
+              (Diagnostic.init @"load"
+                               (String.concat &[@(ModuleError.path &e)
+                                                @": "
+                                                @(ModuleError.message &e)])
+                               (Maybe.Nothing)))))))
+
+  (doc create-session "a warm session over the host base, falling back to
+plain core when the base cannot be built.")
+  (defn create-session []
+    (match (load-base)
+      (Result.Success module)
+        (let [input (SourceInput.init @"session:host-core" @"")
+              sourced (SourcedSurfaceModule.init input module)
+              config (ExpandConfig.init [@"Dynamic"])]
+          (Session.create-from-module &sourced &config))
+      (Result.Error d)
+        (do
+          (IO.errorln &(fmt "host base failed (%s); falling back to plain core"
+                            (Diagnostic.message &d)))
+          (Session.create &*core-dir*)))))
+
+(defmodule Warm
+  (defn index-of [sid]
+    (let-do [found -1]
+      (for [i 0 (Array.length &*warm-sessions*)]
+        (when (String.= (WarmEntry.sid (Array.unsafe-nth &*warm-sessions* i)) sid)
+          (set! found i)))
+      found))
+
+  (doc usable "whether a session has warm state whose mirror is complete.")
+  (defn usable [sid]
+    (let [idx (index-of sid)]
+      (if (< idx 0)
+        -1
+        (if @(WarmEntry.tainted (Array.unsafe-nth &*warm-sessions* idx))
+          -1
+          idx))))
+
+  (private taint!)
+  (hidden taint!)
+  (defn taint! [idx]
+    (WarmEntry.set-tainted! (Array.unsafe-nth &*warm-sessions* idx) true))
+
+  (private mirror-upsert!)
+  (hidden mirror-upsert!)
+  ; a failed mirror taints the warm state: its view of the session is no
+  ; longer complete, so warm answers would lie
+  (defn mirror-upsert! [idx key text]
+    (match (Session.upsert (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                           &(SourceInput.init @key @text))
+      (Result.Error d)
+        (do
+          (IO.errorln &(fmt "warm upsert %s failed: %s" key (Diagnostic.message &d)))
+          (taint! idx))
+      (Result.Success _) ()))
+
+  (private replay!)
+  (hidden replay!)
+  (defn replay! [idx sid]
+    (let [entries (Session.entries sid)]
+      (for [i 0 (Array.length &entries)]
+        (let [entry (Array.unsafe-nth &entries i)]
+          (mirror-upsert! idx (SessionEntry.key entry) (SessionEntry.text entry))))))
+
+  (doc ensure! "the warm state index for a session, creating and replaying
+it on first use; -1 when none can be created or its mirror is incomplete.")
+  (defn ensure! [sid]
+    (let [existing (index-of sid)]
+      (if (> existing -1)
+        (usable sid)
+        (match (HostBase.create-session)
+          (Result.Error d)
+            (do
+              (IO.errorln &(fmt "warm create failed: %s" (Diagnostic.message &d)))
+              -1)
+          (Result.Success s)
+            (let-do [idx (Array.length &*warm-sessions*)]
+              (Array.push-back! &*warm-sessions* (WarmEntry.init @sid s false))
+              (replay! idx sid)
+              (usable sid))))))
+
+  (doc ensure-any! "like ensure!, but answers even a tainted session's index:
+for queries where a partial mirror (completion, documentation) beats none.")
+  (defn ensure-any! [sid]
+    (let [idx (ensure! sid)]
+      (if (> idx -1) idx (index-of sid))))
+
+  (doc absorb! "mirrors a successful cell's definition forms into the warm
+state, when one exists.")
+  (defn absorb! [sid cell]
+    (let [idx (index-of sid)]
+      (when (> idx -1)
+        (let [spans (Cell.top-level-spans cell)]
+          (for [i 0 (Array.length &spans)]
+            (let [span (Array.unsafe-nth &spans i)
+                  head (Cell.head-symbol cell span)]
+              (when (Cell.def-head? &head)
+                (mirror-upsert! idx
+                                &(String.concat &[@&head @":" (Cell.second-symbol cell span)])
+                                &(Cell.span-text cell span)))))))))
+
+  (doc reset! "drops a session's warm user overlay, keeping the warm core.")
+  (defn reset! [sid]
+    (let [idx (index-of sid)]
+      (when (> idx -1)
+        (do
+          (Session.reset (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx)))
+          (WarmEntry.set-tainted! (Array.unsafe-nth &*warm-sessions* idx) false))))))
 
 ; --- protocol framing ---------------------------------------------------
 
@@ -375,11 +667,11 @@ NB.capture-and-serve so the compiled program becomes the value host.")
           last-span (Array.unsafe-nth &spans (- (Array.length &spans) 1))
           s @(Pair.a last-span)
           e @(Pair.b last-span)]
-      (String.concat &[(String.prefix src s)
+      (String.concat &[(Cell.byte-slice src 0 s)
                        @"(NB.capture-and-serve "
-                       (String.slice src s e)
+                       (Cell.byte-slice src s e)
                        @" 0 \"\")"
-                       (String.suffix src e)
+                       (Cell.byte-slice src e (String.length src))
                        @"\n"])))
 
   (private run-compile)
@@ -406,29 +698,42 @@ NB.capture-and-serve so the compiled program becomes the value host.")
         (when (= (String.char-at s i) \newline) (set! result i)))
       result))
 
-  (doc eval-plain "the value-host-free path: compile and run to completion.")
+  (doc eval-plain "the value-host-free path: compile and run to completion.
+The notebook runtime is loaded when configured, so definition-only cells can
+use NB (defview and friends).")
   (defn-do eval-plain [id sid src]
-    (let-do [program (String.concat &[(Session.defs-text &(Session.entries sid))
+    (let-do [prelude (if (String.empty? &*nb-lib*)
+                       @""
+                       @"(load \"notebook.carp\")\n")
+             program (String.concat &[prelude
+                                      (Session.defs-text &(Session.entries sid))
                                       @src
                                       @"\n"])]
+      (unless (String.empty? &*nb-lib*)
+        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
+                                     &*nb-lib*
+                                     &(session-dir sid)))))
       (ignore (IO.write-file &program &(session-file sid "cell.carp")))
       (let-do [exit (run-compile sid "-x" "stdout.log")
                out (file-or sid "stdout.log" "")
                err (file-or sid "stderr.log" "")]
-        (when (= exit 0) (Session.absorb! sid src))
+        (when (= exit 0)
+          (do
+            (Session.absorb! sid src)
+            (Warm.absorb! sid src)))
         (if (and (= exit 0) (Cell.last-form-expression? src))
           (let [n (String.length &out)
                 trimmed (if (and (> n 0)
                                  (= (String.char-at &out (- n 1)) \newline))
-                          (String.prefix &out (- n 1))
+                          (Cell.byte-slice &out 0 (- n 1))
                           @&out)
                 idx (last-newline-index &trimmed)]
             (if (< idx 0)
               (respond-eval id exit "" &trimmed false 0 &err)
               (respond-eval id
                             exit
-                            &(String.prefix &trimmed (+ idx 1))
-                            &(String.suffix &trimmed (+ idx 1))
+                            &(Cell.byte-slice &trimmed 0 (+ idx 1))
+                            &(Cell.byte-slice &trimmed (+ idx 1) (String.length &trimmed))
                             false
                             0
                             &err)))
@@ -453,6 +758,7 @@ NB.capture-and-serve so the compiled program becomes the value host.")
   (defn-do host-success-response [id sid src port]
     (Map.put! &*session-ports* sid &port)
     (Session.absorb! sid src)
+    (Warm.absorb! sid src)
     (let [value (match (http-get port "/objects/0")
                   (Result.Error _) @""
                   (Result.Success body)
@@ -502,7 +808,10 @@ the port was taken (bind failure, exit 17) and the launch should be retried.")
                       (set! done true))
                   ; the program finished without serving: crash or plain exit
                   (do
-                    (when (= exit 0) (Session.absorb! sid src))
+                    (when (= exit 0)
+          (do
+            (Session.absorb! sid src)
+            (Warm.absorb! sid src)))
                     (set! outcome
                           (Maybe.Just (respond-eval id
                                                     exit
@@ -521,11 +830,76 @@ the port was taken (bind failure, exit 17) and the launch should be retried.")
           (kill-host! sid)
           (Maybe.Just (respond-err id "value host did not come up within 60s"))))))
 
+  (doc eval-def-warm "the definition-only cell path against the warm
+compiler state: infer the cell, absorb its definitions, done — no compile,
+no run. Definition initializers do not execute here; they run as part of
+every later cell, since sessions replay definitions. Falls back to the
+plain path when no warm state exists.")
+  (defn eval-def-warm [id sid src]
+    (let [idx (Warm.ensure! sid)]
+      (if (< idx 0)
+        (eval-plain id sid src)
+        (match (Session.infer-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                   &(SourceInput.init @"cell" @src))
+          ; a warm error may mean a construct the warm base does not know
+          ; (a load, a macro from a loaded library) — the CLI pipeline is
+          ; the source of truth, so let it decide
+          (Result.Error _) (eval-plain id sid src)
+          (Result.Success _)
+            (do
+              (Session.absorb! sid src)
+              (Warm.absorb! sid src)
+              (respond-eval id 0 "" "" false 0 ""))))))
+
+  (private carp-str-escape)
+  (hidden carp-str-escape)
+  (defn carp-str-escape [s]
+    (let-do [out (the (Array String) [])
+             n (String.length s)]
+      (for [i 0 n]
+        (let [c (String.char-at s i)]
+          (cond
+            (= c \") (Array.push-back! &out @"\\\"")
+            (= c \\) (Array.push-back! &out @"\\\\")
+            (= c \newline) (Array.push-back! &out @"\\n")
+            (Array.push-back! &out (String.from-bytes &[(Byte.from-int (Char.to-int c))])))))
+      (String.concat &out)))
+
+  (private view-source-overrides)
+  (hidden view-source-overrides)
+  (doc view-source-overrides "one (NB.view-source …) call per top-level
+defview in the program, so served view specifications carry the source as
+the user wrote it rather than the macro's re-printed stamp.")
+  (defn view-source-overrides [program]
+    (let-do [spans (Cell.top-level-spans program)
+             out (the (Array String) [])]
+      (for [i 0 (Array.length &spans)]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol program span)]
+          (when (String.= &head "defview")
+            (let [name (Cell.second-symbol program span)
+                  text (Cell.span-text program span)]
+              (Array.push-back! &out
+                                (fmt "(NB.view-source @\"%s\" @\"%s\")\n"
+                                     &name
+                                     &(carp-str-escape &text)))))))
+      (String.concat &out)))
+
   (doc eval-with-host "compiles the wrapped cell to a binary, then launches
 it as the session's value host, retrying on other ports when one is taken.")
   (defn-do eval-with-host [id sid src]
-    (let-do [program (String.concat &[@"(load \"notebook.carp\")\n"
-                                      (Session.defs-text &(Session.entries sid))
+    (let-do [defs (Session.defs-text &(Session.entries sid))
+             ; notebook.carp's own defviews (the built-in views) get their
+             ; verbatim source the same way cell defviews do; cell overrides
+             ; come second so redefinitions win
+             nb-src (match (IO.read-file &*nb-lib*)
+                      (Result.Success s) s
+                      (Result.Error _) @"")
+             overrides (String.concat &[(view-source-overrides &nb-src)
+                                        (view-source-overrides &(String.concat &[@&defs @src]))])
+             program (String.concat &[@"(load \"notebook.carp\")\n"
+                                      defs
+                                      overrides
                                       (wrap-cell src)])]
       (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
                                    &*nb-lib*
@@ -550,13 +924,328 @@ it as the session's value host, retrying on other ports when one is taken.")
             response
             (respond-err id "could not start a value host: all ports taken"))))))
 
+  (private program-def-names)
+  (hidden program-def-names)
+  (doc program-def-names "the names defined by a program's top-level forms —
+used to filter annotation output down to user definitions.")
+  (defn program-def-names [program]
+    (let-do [spans (Cell.top-level-spans program)
+             names (the (Array String) [])]
+      (for [i 0 (Array.length &spans)]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol program span)]
+          (when (Cell.def-head? &head)
+            (Array.push-back! &names (Cell.second-symbol program span)))))
+      names))
+
+  (private program-expression-texts)
+  (hidden program-expression-texts)
+  (doc program-expression-texts "the source texts of a program's top-level
+non-definition forms, in order.")
+  (defn program-expression-texts [program]
+    (let-do [spans (Cell.top-level-spans program)
+             texts (the (Array String) [])]
+      (for [i 0 (Array.length &spans)]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol program span)]
+          (unless (Cell.def-head? &head)
+            (Array.push-back! &texts (Cell.span-text program span)))))
+      texts))
+
+  (private program-def-sources)
+  (hidden program-def-sources)
+  (doc program-def-sources "pairs of (defined name, form source) for a
+program's top-level definition forms.")
+  (defn program-def-sources [program]
+    (let-do [spans (Cell.top-level-spans program)
+             sources (the (Array (Pair String String)) [])]
+      (for [i 0 (Array.length &spans)]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol program span)]
+          (when (Cell.def-head? &head)
+            (Array.push-back! &sources
+                              (Pair.init (Cell.second-symbol program span)
+                                         (Cell.span-text program span))))))
+      sources))
+
+  (private source-for)
+  (hidden source-for)
+  (defn source-for [name sources]
+    (let-do [found @""]
+      (for [i 0 (Array.length sources)]
+        (let [pair (Array.unsafe-nth sources i)]
+          (when (or (String.= name (Pair.a pair))
+                    (String.starts-with? name &(String.append (Pair.a pair) ".")))
+            (set! found @(Pair.b pair)))))
+      found))
+
+  (private annotation-matches?)
+  (hidden annotation-matches?)
+  (defn annotation-matches? [name names]
+    (let-do [found false]
+      (for [i 0 (Array.length names)]
+        (let [local (Array.unsafe-nth names i)]
+          (when (or (String.= name local)
+                    (String.starts-with? name &(String.append local ".")))
+            (set! found true))))
+      found))
+
+  (private slice-span)
+  (hidden slice-span)
+  (defn slice-span [src span]
+    (Cell.byte-slice src
+                     (Int.min @(SourceSpan.start span) (String.length src))
+                     (Int.min @(SourceSpan.end span) (String.length src))))
+
+  (private owner-of)
+  (hidden owner-of)
+  (doc owner-of "the name of the cell definition whose span contains the
+given span, or empty.")
+  (defn owner-of [definitions span]
+    (let-do [owner @""]
+      (for [i 0 (Array.length definitions)]
+        (let [definition (Array.unsafe-nth definitions i)
+              dspan (SessionDefInfo.span definition)]
+          (when (and (<= @(SourceSpan.start dspan) @(SourceSpan.start span))
+                     (>= @(SourceSpan.end dspan) @(SourceSpan.end span)))
+            (set! owner @(SessionDefInfo.name definition)))))
+      owner))
+
+  (private annotate-json)
+  (hidden annotate-json)
+  (doc annotate-json "the annotate response from a warm cell report: the
+cell's typed forms (definitions carry their source), the visible environment,
+and span-tagged locals with their owning definition.")
+  (defn annotate-json [idx cell src]
+    (let-do [kept (the (Array (Box JSON)) [])
+             forms (CellReport.forms cell)
+             definitions (CellReport.definitions cell)]
+      (for [i 0 (Array.length forms)]
+        (let [form (Array.unsafe-nth forms i)]
+          (if (String.= (SessionTypedEntity.kind form) "definition")
+            (match-ref (SessionTypedEntity.name form)
+              (Maybe.Just name)
+                (Array.push-back! &kept
+                                  (Box.init
+                                    (JSON.obj [(JSON.entry @"name" (JSON.Str @name))
+                                               (JSON.entry @"type" (JSON.Str @(SessionTypedEntity.type form)))
+                                               (JSON.entry @"source" (JSON.Str (slice-span src (SessionTypedEntity.span form))))])))
+              (Maybe.Nothing) ())
+            (Array.push-back! &kept
+                              (Box.init
+                                (JSON.obj [(JSON.entry @"name" (JSON.Str (slice-span src (SessionTypedEntity.span form))))
+                                           (JSON.entry @"type" (JSON.Str @(SessionTypedEntity.type form)))]))))))
+      (let-do [environment (the (Array (Box JSON)) [])
+               candidates (Session.complete (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx)) "")]
+        (for [i 0 (Array.length &candidates)]
+          (let [candidate (Array.unsafe-nth &candidates i)]
+            (Array.push-back! &environment
+                              (Box.init
+                                (JSON.obj [(JSON.entry @"name" (JSON.Str @(Candidate.name candidate)))
+                                           (JSON.entry @"type" (JSON.Str @(Candidate.scheme candidate)))])))))
+        (let-do [kept-locals (the (Array (Box JSON)) [])
+                 locals (CellReport.locals cell)]
+          (for [i 0 (Array.length locals)]
+            (let [local (Array.unsafe-nth locals i)
+                  span (SessionTypedEntity.span local)]
+              (Array.push-back! &kept-locals
+                                (Box.init
+                                  (JSON.obj [(JSON.entry @"owner" (JSON.Str (owner-of definitions span)))
+                                             (JSON.entry @"name" (JSON.Str (match-ref (SessionTypedEntity.name local)
+                                                                             (Maybe.Just n) @n
+                                                                             (Maybe.Nothing) @"")))
+                                             (JSON.entry @"type" (JSON.Str @(SessionTypedEntity.type local)))
+                                             (JSON.entry @"start" (JSON.Num (Double.from-int @(SourceSpan.start span))))
+                                             (JSON.entry @"end" (JSON.Num (Double.from-int @(SourceSpan.end span))))])))))
+          (JSON.obj [(JSON.entry @"definitions" (JSON.Arr kept))
+                     (JSON.entry @"environment" (JSON.Arr environment))
+                     (JSON.entry @"locals" (JSON.Arr kept-locals))])))))
+
+  (doc annotate-cell-cli "runs the compiler's annotate mode over the session's
+definitions plus the given source and answers the inferred types of the
+program's own definitions.")
+  (defn-do annotate-cell-cli [id sid src]
+    (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
+    (let-do [program (String.concat &[(Session.defs-text &(Session.entries sid))
+                                      @src
+                                      @"\n"])]
+      (ignore (IO.write-file &program &(session-file sid "annotate.carp")))
+      (ignore (System.system
+                &(fmt "cd '%s' && exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- 10>&- 11>&- 12>&-; '%s' --annotate -c '%s' annotate.carp > annotate.json 2> annotate.err; echo $? > annotate.exit"
+                      &(session-dir sid)
+                      &*compiler*
+                      &*core-dir*)))
+      (if (/= 0 (Maybe.from (Int.from-string &(String.trim &(file-or sid "annotate.exit" "-1"))) -1))
+        (respond-err id &(file-or sid "annotate.err" "annotate failed"))
+        (match (JSON.parse &(file-or sid "annotate.json" "{}"))
+          (Result.Error _) (respond-err id "malformed annotate output")
+          (Result.Success j)
+            (match (JSON.get &j "definitions")
+              (Maybe.Just (JSON.Arr definitions))
+                (let-do [names (program-def-names &program)
+                         kept (the (Array (Box JSON)) [])]
+                  ; the cell's expressions first: their types are the last K
+                  ; entries of the emitted expression list (the compiler's
+                  ; boot prelude contributes leading ones)
+                  (match (JSON.get &j "expressions")
+                    (Maybe.Just (JSON.Arr expressions))
+                      (let-do [texts (program-expression-texts &program)
+                               k (Array.length &texts)
+                               m (Array.length &expressions)
+                               offset (Int.max 0 (- m k))]
+                        (for [i 0 (Int.min k m)]
+                          (match (JSON.get (Box.peek (Array.unsafe-nth &expressions (+ offset i))) "type")
+                            (Maybe.Just (JSON.Str type-name))
+                              (Array.push-back! &kept
+                                                (Box.init
+                                                  (JSON.obj [(JSON.entry @"name"
+                                                                         (JSON.Str @(Array.unsafe-nth &texts i)))
+                                                             (JSON.entry @"type"
+                                                                         (JSON.Str @&type-name))])))
+                            _ ())))
+                    _ ())
+                  (let-do [sources (program-def-sources &program)
+                           environment (the (Array (Box JSON)) [])]
+                    (for [i 0 (Array.length &definitions)]
+                      (let [definition (Box.peek (Array.unsafe-nth &definitions i))]
+                        (match (JSON.get definition "name")
+                          (Maybe.Just (JSON.Str name))
+                            (do
+                              (Array.push-back! &environment
+                                                (Box.init (JSON.copy definition)))
+                              (when (annotation-matches? &name &names)
+                                (let [source (source-for &name &sources)]
+                                  (Array.push-back! &kept
+                                                    (Box.init
+                                                      (JSON.obj [(JSON.entry @"name" (JSON.Str @&name))
+                                                                 (JSON.entry @"type"
+                                                                             (JSON.Str (match (JSON.get definition "type")
+                                                                                         (Maybe.Just (JSON.Str t)) t
+                                                                                         _ @"")))
+                                                                 (JSON.entry @"source" (JSON.Str source))]))))))
+                          _ ())))
+                    (let-do [kept-locals (the (Array (Box JSON)) [])]
+                      (match (JSON.get &j "locals")
+                        (Maybe.Just (JSON.Arr all-locals))
+                          (for [i 0 (Array.length &all-locals)]
+                            (let [row (Box.peek (Array.unsafe-nth &all-locals i))]
+                              (match (JSON.get row "owner")
+                                (Maybe.Just (JSON.Str owner))
+                                  (when (annotation-matches? &owner &names)
+                                    (Array.push-back! &kept-locals
+                                                      (Box.init (JSON.copy row))))
+                                _ ())))
+                        _ ())
+                      (respond-ok-json id
+                                       (JSON.obj [(JSON.entry @"definitions"
+                                                              (JSON.Arr kept))
+                                                  (JSON.entry @"environment"
+                                                              (JSON.Arr environment))
+                                                  (JSON.entry @"locals"
+                                                              (JSON.Arr kept-locals))])))))
+              _ (respond-err id "malformed annotate output"))))))
+
+  (doc annotate-cell "answers the inferred types of a cell against the
+session's warm compiler state, falling back to the CLI's annotate mode when
+no warm state can be created.")
+  (defn annotate-cell [id sid src]
+    (let [idx (Warm.ensure! sid)]
+      (if (< idx 0)
+        (annotate-cell-cli id sid src)
+        (match (Session.infer-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                   &(SourceInput.init @"cell" @src))
+          (Result.Error d) (respond-err id (Diagnostic.message &d))
+          (Result.Success cell) (respond-ok-json id (annotate-json idx &cell src))))))
+
+  (private kind-string)
+  (hidden kind-string)
+  (defn kind-string [kind]
+    (match-ref kind
+      (SessionDefKind.Function) @"function"
+      (SessionDefKind.Value) @"value"
+      (SessionDefKind.External) @"external"
+      (SessionDefKind.Interface) @"interface"
+      (SessionDefKind.Other o) @o))
+
+  (doc complete-cell "answers warm completion candidates for a prefix:
+name, kind, scheme and documentation, capped at 200.")
+  (defn complete-cell [id sid prefix]
+    (let [idx (Warm.ensure-any! sid)]
+      (if (< idx 0)
+        (respond-err id "completion needs a warm session and none could be created")
+        (let-do [candidates (Session.complete (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                              prefix)
+                 out (the (Array (Box JSON)) [])
+                 n (Int.min (Array.length &candidates) 200)]
+          (for [i 0 n]
+            (let [candidate (Array.unsafe-nth &candidates i)]
+              (Array.push-back! &out
+                                (Box.init
+                                  (JSON.obj [(JSON.entry @"name" (JSON.Str @(Candidate.name candidate)))
+                                             (JSON.entry @"kind" (JSON.Str (kind-string (Candidate.kind candidate))))
+                                             (JSON.entry @"scheme" (JSON.Str @(Candidate.scheme candidate)))
+                                             (JSON.entry @"doc" (match-ref (Candidate.documentation candidate)
+                                                                  (Maybe.Just d) (JSON.Str @d)
+                                                                  (Maybe.Nothing) (JSON.Null)))])))))
+          (respond-ok-json id (JSON.obj [(JSON.entry @"candidates" (JSON.Arr out))]))))))
+
+  (doc doc-lookup "answers the warm documentation entry for a name.")
+  (defn doc-lookup [id sid name]
+    (let [idx (Warm.ensure-any! sid)]
+      (if (< idx 0)
+        (respond-err id "documentation needs a warm session and none could be created")
+        (match (Session.doc (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx)) name)
+          (Maybe.Just info)
+            (respond-ok-json id
+                             (JSON.obj [(JSON.entry @"name" (JSON.Str @(DocInfo.name &info)))
+                                        (JSON.entry @"kind" (JSON.Str (kind-string (DocInfo.kind &info))))
+                                        (JSON.entry @"scheme" (JSON.Str @(DocInfo.scheme &info)))
+                                        (JSON.entry @"documentation" (JSON.Str @(DocInfo.documentation &info)))]))
+          (Maybe.Nothing) (respond-err id "no documentation entry")))))
+
+  (doc ownership-cell "runs the compiler's ownership mode over the session's
+definitions plus the given source and answers the plan rows for the
+program's own definitions.")
+  (defn-do ownership-cell [id sid src]
+    (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
+    (let-do [program (String.concat &[(Session.defs-text &(Session.entries sid))
+                                      @src
+                                      @"\n"])]
+      (ignore (IO.write-file &program &(session-file sid "ownership.carp")))
+      (ignore (System.system
+                &(fmt "cd '%s' && exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- 10>&- 11>&- 12>&-; '%s' --ownership -c '%s' ownership.carp > ownership.json 2> ownership.err; echo $? > ownership.exit"
+                      &(session-dir sid)
+                      &*compiler*
+                      &*core-dir*)))
+      (if (/= 0 (Maybe.from (Int.from-string &(String.trim &(file-or sid "ownership.exit" "-1"))) -1))
+        (respond-err id &(file-or sid "ownership.err" "ownership failed"))
+        (match (JSON.parse &(file-or sid "ownership.json" "{}"))
+          (Result.Error _) (respond-err id "malformed ownership output")
+          (Result.Success j)
+            (match (JSON.get &j "ownership")
+              (Maybe.Just (JSON.Arr rows))
+                (let-do [names (program-def-names &program)
+                         kept (the (Array (Box JSON)) [])]
+                  (for [i 0 (Array.length &rows)]
+                    (let [row (Box.peek (Array.unsafe-nth &rows i))]
+                      (match (JSON.get row "owner")
+                        (Maybe.Just (JSON.Str owner))
+                          (when (annotation-matches? &owner &names)
+                            (Array.push-back! &kept
+                                              (Box.init (JSON.copy row))))
+                        _ ())))
+                  (respond-ok-json id
+                                   (JSON.obj [(JSON.entry @"ownership"
+                                                          (JSON.Arr kept))])))
+              _ (respond-err id "malformed ownership output"))))))
+
   (defn-do eval-cell [id sid src]
     (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
     (kill-host! sid)
     (if (and (not (String.empty? &*nb-lib*))
              (Cell.last-form-expression? src))
       (eval-with-host id sid src)
-      (eval-plain id sid src)))
+      (eval-def-warm id sid src)))
 
   ; --- request handling -------------------------------------------------
 
@@ -567,14 +1256,47 @@ it as the session's value host, retrying on other ports when one is taken.")
         (let [id (Result.from-success (get-num &j "id") 0.0)
               cmd (Result.from-success (get-str &j "cmd") @"")]
           (cond
-            (= &cmd "ping") (respond-ok id "pong")
+            (= &cmd "ping")
+              (Result.unsafe-from-success
+                (JSON.str &(JSON.obj [(JSON.entry @"id" (JSON.Num id))
+                                      (JSON.entry @"ok" (JSON.Str @"pong"))
+                                      (JSON.entry @"stamp" (JSON.Str (build-stamp)))])))
             (= &cmd "reset")
               (match (get-str &j "session")
                 (Result.Error e) (respond-err id &e)
                 (Result.Success sid)
                   (do (Session.reset! &sid)
+                      (Warm.reset! &sid)
                       (kill-host! &sid)
                       (respond-ok id "reset")))
+            (= &cmd "ownership")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "source")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success src) (ownership-cell id &sid &src)))
+            (= &cmd "complete")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "prefix")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success prefix) (complete-cell id &sid &prefix)))
+            (= &cmd "doc")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "name")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success name) (doc-lookup id &sid &name)))
+            (= &cmd "annotate")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "source")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success src) (annotate-cell id &sid &src)))
             (= &cmd "eval")
               (match (get-str &j "session")
                 (Result.Error e) (respond-err id &e)
@@ -617,6 +1339,11 @@ it as the session's value host, retrying on other ports when one is taken.")
   (Maybe.from (Int.from-string &(arg-or 1 @"8765")) 8765))
 
 (defn-do main []
+  (when (and (> (StaticArray.length &System.args) 1)
+             (String.= (StaticArray.unsafe-nth &System.args 1) "--stamp"))
+    (do
+      (IO.println &(build-stamp))
+      (System.exit 0)))
   (set! *compiler* (arg-or 2 (Maybe.from (IO.getenv "CARP_COMPILER") @"")))
   (set! *core-dir*
         (arg-or 3
