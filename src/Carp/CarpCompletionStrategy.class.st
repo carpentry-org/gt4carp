@@ -53,10 +53,10 @@ CarpCompletionStrategy >> completionRowsStartingWith: aPrefixString [
 
 { #category : #accessing }
 CarpCompletionStrategy >> labelForRow: aRow withSearch: aPrefix [
-	"The candidate's name with the matched characters highlighted, its kind
-	and (truncated) scheme appended muted."
+	"The candidate's name with the matched characters highlighted, followed
+	muted by its kind, type scheme, and documented purpose."
 
-	| text detail |
+	| text detail documentation |
 	text := self labelFor: (aRow at: 'name') withSearch: aPrefix.
 	detail := String
 			streamContents: [ :s |
@@ -70,6 +70,19 @@ CarpCompletionStrategy >> labelForRow: aRow withSearch: aPrefix [
 						s nextPutAll: (scheme size <= 40
 							ifTrue: [ scheme ]
 							ifFalse: [ (scheme first: 39) , '…' ]) ] ].
+	"The documented purpose, when the compiler has one: the first line is the
+	summary a reader needs while choosing between candidates."
+	documentation := aRow at: 'doc' ifAbsent: [ nil ].
+	(documentation isString and: [ documentation notEmpty ])
+		ifTrue: [ | summary |
+			summary := documentation lines
+					ifEmpty: [ '' ]
+					ifNotEmpty: [ :allLines | allLines first trimBoth ].
+			summary
+				ifNotEmpty: [ detail := detail , ' — '
+							, (summary size <= 60
+									ifTrue: [ summary ]
+									ifFalse: [ (summary first: 59) , '…' ]) ] ].
 	detail
 		ifNotEmpty: [ text
 				append: (detail asRopedText glamorousCodeFont
