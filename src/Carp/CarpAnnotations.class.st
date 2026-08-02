@@ -24,7 +24,10 @@ Class {
 }
 
 { #category : #accessing }
-CarpAnnotations >> definitions [
+CarpAnnotations >> definitionRows [
+	"The server's rows, as parsed. Prefer #definitions unless you need the
+	wire representation."
+
 	^ definitions
 ]
 
@@ -34,9 +37,12 @@ CarpAnnotations >> definitions: aCollection [
 ]
 
 { #category : #accessing }
-CarpAnnotations >> definitionObjects [
+CarpAnnotations >> definitions [
+	"The typed definitions as navigable objects; the rows themselves are a
+	transport detail."
+
 	^ definitionObjects
-		ifNil: [ definitionObjects := self definitions
+		ifNil: [ definitionObjects := self definitionRows
 					collect: [ :each |
 						CarpDefinition new
 							name: (each at: 'name');
@@ -52,7 +58,7 @@ CarpAnnotations >> definitionNamed: aNameOrNil [
 	compiler side) or for a cell expression (keyed by its source text)."
 
 	aNameOrNil ifNil: [ ^ nil ].
-	^ self definitionObjects
+	^ self definitions
 		detect: [ :each | each name = aNameOrNil
 				or: [ each name endsWith: '.' , aNameOrNil ] ]
 		ifNone: [ nil ]
@@ -133,7 +139,7 @@ CarpAnnotations >> gtTypesFor: aView [
 { #category : #printing }
 CarpAnnotations >> printOn: aStream [
 	aStream
-		nextPutAll: self definitions size printString;
+		nextPutAll: self definitionRows size printString;
 		nextPutAll: ' typed definitions in ';
 		nextPutAll: (session ifNil: [ '?' ])
 ]
