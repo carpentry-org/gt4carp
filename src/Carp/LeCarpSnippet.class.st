@@ -55,9 +55,32 @@ LeCarpSnippet >> explicitSessionId [
 { #category : #accessing }
 LeCarpSnippet >> explicitSessionId: aString [
 	"Pin this snippet to a specific notebook session (used by the inspector
-	playground); by default the session derives from the page."
+	playground); by default the session derives from the page. The coder is
+	built in the superclass' initialize, so it already exists by the time a
+	pin arrives and has to be retargeted here."
 
-	explicitSessionId := aString
+	explicitSessionId := aString.
+	coder ifNotNil: [ :aCoder | aCoder sessionId: aString ]
+]
+
+{ #category : #accessing }
+LeCarpSnippet class >> displayNameForSession: aSessionId [
+	"Resolve a session id back to a name a reader recognizes. Sessions are
+	keyed by the page uid, which reads as a random string; answer that
+	page's title instead. Ids that are no page of any registered database
+	(e.g. 'default', or a page that is not loaded) answer themselves.
+	Resolved at label time, not at coder creation: snippets cache their
+	coder, so anything seeded at construction misses existing snippets."
+
+	aSessionId ifNil: [ ^ '' ].
+	[ LeDatabasesRegistry defaultLogicalDatabase
+		databasesDo: [ :db |
+			db pagesDo: [ :p |
+				([ p uid asString36 ] on: Error do: [ :e | nil ]) = aSessionId
+					ifTrue: [ ^ p title ifEmpty: [ aSessionId ] ] ] ] ]
+		on: Error
+		do: [ :e |  ].
+	^ aSessionId
 ]
 
 { #category : #accessing }

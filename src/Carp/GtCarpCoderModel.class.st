@@ -208,6 +208,7 @@ GtCarpCoderModel >> sessionIdProvider: aBlock [
 	sessionIdProvider := aBlock
 ]
 
+
 { #category : #accessing }
 GtCarpCoderModel >> sessionId: aString [
 	sessionId := aString
