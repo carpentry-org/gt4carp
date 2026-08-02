@@ -156,6 +156,13 @@ CarpServerClient >> evalSource: aSourceString session: aSessionString [
 	^ result
 ]
 
+{ #category : #accessing }
+CarpServerClient >> address [
+	"Where the server is, or will be started: what the snippet label shows."
+
+	^ host , ':' , port printString
+]
+
 { #category : #private }
 CarpServerClient >> connect [
 	stream := SocketStream openConnectionToHostNamed: host port: port.

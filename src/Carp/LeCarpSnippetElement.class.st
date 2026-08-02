@@ -35,10 +35,7 @@ LeCarpSnippetElement >> updateLanguageLabel [
 	| label |
 	label := String
 			streamContents: [ :stream |
-				stream << 'Carp · '.
-				CarpServerClient default isConnected
-					ifTrue: [ stream << ':' << CarpServerClient defaultPort printString ]
-					ifFalse: [ stream << 'server on demand' ].
+				stream << 'Carp @ ' << CarpServerClient default address.
 				self foreignSessionName
 					ifNotNil: [ :aName | stream << ' · ' << aName ] ].
 	languageElement
