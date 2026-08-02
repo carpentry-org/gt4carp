@@ -1317,12 +1317,22 @@ program's own definitions.")
             (write-response &br &(handle &body))))
       (BufReader.delete br)))
 
+  (doc accept-loop "serves connections one at a time, forever. A failed
+accept is NOT fatal: a client that goes away between connect and accept
+(an aborted or timed-out request) makes accept fail, and quitting there
+kills the server under everyone else. Only a listener that fails
+repeatedly, which means the socket itself is gone, ends the loop.")
   (defn accept-loop [listener]
-    (let-do [running true]
+    (let-do [running true
+             failures 0]
       (while running
         (match (TcpListener.accept listener)
-          (Result.Error _) (set! running false)
-          (Result.Success stream) (serve-one stream))))))
+          (Result.Error _)
+            (do (set! failures (+ failures 1))
+                (when (> failures 64) (set! running false)))
+          (Result.Success stream)
+            (do (set! failures 0)
+                (serve-one stream)))))))
 
 ; --- startup ------------------------------------------------------------
 

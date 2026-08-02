@@ -19,6 +19,7 @@ Class {
 		'stream',
 		'nextId',
 		'mutex',
+		'checkedFreshness',
 		'serverProcess'
 	],
 	#classVars : [
@@ -164,9 +165,16 @@ CarpServerClient >> address [
 ]
 
 { #category : #private }
-CarpServerClient >> connect [
-	stream := SocketStream openConnectionToHostNamed: host port: port.
-	stream binary
+CarpServerClient >> openConnection [
+	"A connection for one request. The server serves connections one at a
+	time and reads a held connection to EOF, so a client that keeps a socket
+	open between requests starves every other client — and an idle one wedges
+	the notebook. One request per connection keeps the server shared."
+
+	| aStream |
+	aStream := SocketStream openConnectionToHostNamed: host port: port.
+	aStream binary.
+	^ aStream
 ]
 
 { #category : #private }
@@ -176,14 +184,17 @@ CarpServerClient >> disconnect [
 ]
 
 { #category : #private }
-CarpServerClient >> ensureConnected [
-	stream ifNotNil: [ ^ self ].
-	[ self connect.
-	self ensureFreshServer ]
-		on: Error
-		do: [ :e |
-			self startServer.
-			self waitForServer ]
+CarpServerClient >> ensureServerRunning [
+	"Answer once a server is listening, starting one if none is. The
+	freshness check runs once per client: it costs a request of its own, so
+	doing it per call would double every round trip."
+
+	self isConnected
+		ifFalse: [ self startServer.
+			self waitForServer ].
+	checkedFreshness == true
+		ifFalse: [ checkedFreshness := true.
+			self ensureFreshServer ]
 ]
 
 { #category : #'start-stop' }
@@ -205,7 +216,6 @@ CarpServerClient >> ensureFreshServer [
 				args: {'-f'.
 						'carp-server ' , port printString};
 				output.
-			self disconnect.
 			self startServer.
 			self waitForServer ] ]
 		on: Error
@@ -234,12 +244,19 @@ CarpServerClient >> initialize [
 	host := '127.0.0.1'.
 	port := self class defaultPort.
 	nextId := 0.
+	checkedFreshness := false.
 	mutex := Mutex new
 ]
 
 { #category : #testing }
 CarpServerClient >> isConnected [
-	^ stream notNil
+	"Whether a server is listening. Connections live for one request, so
+	this probes rather than reporting a held socket."
+
+	^ [ self openConnection close.
+	true ]
+		on: Error
+		do: [ :e | false ]
 ]
 
 { #category : #private }
@@ -358,17 +375,19 @@ CarpServerClient >> resetSession: aSessionString [
 { #category : #private }
 CarpServerClient >> rpc: aDictionary [
 	^ mutex critical: [ | attempts |
-			self ensureConnected.
+			self ensureServerRunning.
 			attempts := 0.
-			[ self sendFrame: (STONJSON toString: aDictionary) utf8Encoded.
+			[ [ stream := self openConnection.
+			self sendFrame: (STONJSON toString: aDictionary) utf8Encoded.
 			STONJSON fromString: self readFrame ]
+				ensure: [ self disconnect ] ]
 				on: NetworkError , ZnCharacterEncodingError
 				do: [ :e |
-					"one reconnect attempt: the server may have been restarted"
+					"one more attempt: the server may have been restarted"
 					attempts := attempts + 1.
 					self disconnect.
 					attempts > 1 ifTrue: [ e pass ].
-					self ensureConnected.
+					self ensureServerRunning.
 					e retry ] ]
 ]
 
@@ -408,7 +427,7 @@ CarpServerClient >> stop [
 CarpServerClient >> waitForServer [
 	50
 		timesRepeat: [ (Delay forMilliseconds: 100) wait.
-			[ ^ self connect ] on: Error do: [ :e |  ] ].
+			self isConnected ifTrue: [ ^ self ] ].
 	^ CarpServerError new
 		signal: 'carp server did not come up on port ' , port printString
 ]
