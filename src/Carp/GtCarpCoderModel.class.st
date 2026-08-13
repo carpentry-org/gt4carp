@@ -88,7 +88,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 		id: GtSourceCoderDoItAndGoActionId.
 	addOns
 		addMainAction: 'Expand' translated
-		icon: BrGlamorousVectorIcons branching
+		icon: BrGlamorousVectorIcons emphasizedInspect
 		action: [ :aCoderUIModel :anElement |
 			[ | expansion |
 			expansion := CarpMacroExpansion
@@ -97,17 +97,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 			anElement phlow spawnObject: expansion ]
 				on: Error
 				do: [ :e | anElement phlow spawnObject: (e messageText ifNil: [ e class name ]) ] ]
-		id: #'source-coder--carp-expand-action-id'.
-
-	addOns
-		addMainAction: 'Types' translated
-		icon: BrGlamorousVectorIcons classicon
-		action: [ :aCoderUIModel :anElement |
-			anElement phlow
-				spawnObject: (CarpServerClient default
-						annotateSource: self currentSourceString
-						session: self sessionId) ]
-		id: #'source-coder--carp-types-action'
+		id: #'source-coder--carp-expand-action-id'
 ]
 
 { #category : #accessing }
