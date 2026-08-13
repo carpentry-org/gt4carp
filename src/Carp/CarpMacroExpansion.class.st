@@ -93,6 +93,45 @@ CarpMacroExpansion >> expandFully [
 		do: [ :e | self current ]
 ]
 
+{ #category : #actions }
+CarpMacroExpansion >> gtActionBackFor: anAction [
+	"Navigation belongs to the whole inspector: stepping while reading the
+	diff is the point, and every view follows the model."
+
+	<gtAction>
+	^ anAction button
+		icon: BrGlamorousVectorIcons left;
+		tooltip: 'Back one expansion';
+		action: [ :aButton | self stepBack ]
+]
+
+{ #category : #actions }
+CarpMacroExpansion >> gtActionStepFor: anAction [
+	<gtAction>
+	^ anAction button
+		icon: BrGlamorousVectorIcons right;
+		tooltip: 'Expand one step';
+		action: [ :aButton | self step ]
+]
+
+{ #category : #actions }
+CarpMacroExpansion >> gtActionFixpointFor: anAction [
+	<gtAction>
+	^ anAction button
+		icon: BrGlamorousVectorIcons rightSide;
+		tooltip: 'Expand to the fixpoint';
+		action: [ :aButton | self stepToFixpoint ]
+]
+
+{ #category : #actions }
+CarpMacroExpansion >> gtActionResetFor: anAction [
+	<gtAction>
+	^ anAction button
+		icon: BrGlamorousVectorIcons restart;
+		tooltip: 'Back to the form as written';
+		action: [ :aButton | self reset ]
+]
+
 { #category : #accessing }
 CarpMacroExpansion >> gtDiffFor: aView [
 	"What the current step actually rewrote. Two long forms differ in one
@@ -142,24 +181,27 @@ CarpMacroExpansion >> gtStepperFor: aView [
 	^ aView explicit
 		title: 'Stepper';
 		priority: 1;
-		stencil: [ self newStepperElement ]
+		stencil: [ self newStepperElement ];
+		updateWhen: CarpMacroExpansionChanged in: [ self announcer ]
 ]
 
 { #category : #ui }
 CarpMacroExpansion >> newStepperElement [
-	| editor status pane buttons refresh button |
+	"The form at the current position, with where we are underneath. The
+	buttons that move it are the inspector's own actions."
+
+	| editor status |
 	editor := BrEditor new
 			aptitude: BrGlamorousCodeEditorAptitude new;
 			styler: CarpParser gtStyler;
 			beReadOnlyWithSelection;
 			padding: (BlInsets all: 6);
+			text: self current asRopedText;
 			hMatchParent;
 			vMatchParent.
 	status := BrLabel new
 			aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
-			padding: (BlInsets all: 6).
-	refresh := [ editor text: self current asRopedText.
-		status
+			padding: (BlInsets all: 6);
 			text: (String
 					streamContents: [ :aStream |
 						self position = 1
@@ -169,32 +211,13 @@ CarpMacroExpansion >> newStepperElement [
 									print: self position - 1;
 									nextPutAll: ' of ';
 									print: self stepCount ].
-						self isAtFixpoint ifTrue: [ aStream nextPutAll: ' · fully expanded' ] ]) ].
-	button := [ :aLabel :anAction |
-		BrButton new
-			aptitude: BrGlamorousButtonWithLabelAptitude;
-			label: aLabel;
-			action: [ anAction value. refresh value ];
-			yourself ].
-	buttons := BrHorizontalPane new
-			hMatchParent;
-			vFitContent;
-			alignCenterLeft;
-			padding: (BlInsets all: 4);
-			cellSpacing: 4;
-			addChild: (button value: 'Step' value: [ self step ]);
-			addChild: (button value: 'Back' value: [ self stepBack ]);
-			addChild: (button value: 'Reset' value: [ self reset ]);
-			addChild: (button value: 'To fixpoint' value: [ self stepToFixpoint ]);
-			addChild: status;
-			yourself.
-	refresh value.
-	pane := BrVerticalPane new
-			hMatchParent;
-			vMatchParent;
-			addChild: editor;
-			addChild: buttons.
-	^ pane
+						self isAtFixpoint ifTrue: [ aStream nextPutAll: ' · fully expanded' ] ]).
+	^ BrVerticalPane new
+		hMatchParent;
+		vMatchParent;
+		addChild: editor;
+		addChild: status;
+		yourself
 ]
 
 { #category : #stepping }
