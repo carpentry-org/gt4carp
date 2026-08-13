@@ -25,6 +25,8 @@
 ;   {"id": n, "cmd": "doc",       "session": "<name>", "name": "<symbol>"}
 ;   {"id": n, "cmd": "expand",    "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "expand-1",  "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "project",      "root": "<repo>" [, "entry": "<file>"]}
+;   {"id": n, "cmd": "load-project", "session": "<name>", "root": "<repo>"}
 ;
 ; Responses:
 ;   ping:  {"id": n, "ok": "pong", "stamp": "<build stamp>"}
@@ -647,10 +649,11 @@ order the compiler would see them.")
         (do (IO.errorln &(fmt "host base: cannot read notebook: %s" &e))
             false)))
 
-  ; copy of SessionCoreLoader's private boot prelude plus the host loads
-  (private root-source)
-  (hidden root-source)
-  (defn root-source []
+  ; copy of SessionCoreLoader's private boot prelude: everything a base
+  ; needs before its own files are loaded. Shared with ProjectBase.
+  (doc boot-prelude "the compile-time environment a session base starts
+from: host facts, a stub Project module, core, and the include macros.")
+  (defn boot-prelude []
     (let [arch (session-host-arch)
           os (session-host-os)]
       (String.concat &[@"(defndynamic host-arch [] \"" (String.copy &arch) @"\")
@@ -680,7 +683,12 @@ order the compiler would see them.")
   (list (quote Unsafe.preproc)
         (list (quote Unsafe.emit-c)
               (String.concat [\"#include \\\"\" (relative-to (current-file) path) \"\\\"\"]))))
-(load \"bufio.carp\")
+"])))
+
+  (private root-source)
+  (hidden root-source)
+  (defn root-source []
+    (String.concat &[(boot-prelude) @"(load \"bufio.carp\")
 (load \"socket/interfaces.carp\")
 (load \"socket/tcp_stream.carp\")
 (load \"socket/tcp_listener.carp\")
@@ -689,7 +697,7 @@ order the compiler would see them.")
 (load \"socket/unix_listener.carp\")
 (load \"socket/poll.carp\")
 (load \"notebook.carp\")
-"])))
+"]))
 
   (private socket-piece!)
   (hidden socket-piece!)
@@ -750,6 +758,77 @@ plain core when the base cannot be built.")
                             (Diagnostic.message &d)))
           (Session.create &*core-dir*)))))
 
+; --- project sessions ---------------------------------------------------
+; A session whose base is a whole project: core, then the project's
+; dependencies and its own files in load order, each with its loads and
+; build configuration blanked out. The IDE decides the file set and the
+; order — the session never resolves a load — so browsing a definition can
+; ask for its type, its diagnostics and its documentation against the rest
+; of the project.
+
+(defmodule ProjectBase
+  (private root-source)
+  (hidden root-source)
+  (doc root-source "the boot prelude followed by one load per project file,
+in the order the compiler would see them.")
+  (defn root-source [files]
+    (let-do [out (the (Array String) [(HostBase.boot-prelude)])
+             n (Array.length files)]
+      (for [i 0 n]
+        (Array.push-back! &out
+                          (fmt "(load \"%s\")\n" (ProjectFile.path (Array.unsafe-nth files i)))))
+      (String.concat &out)))
+
+  (doc load-base "the project as one loaded module, or the reason it cannot
+be built.")
+  (defn load-base [root entry]
+    (let-do [files (Project.load-order root entry)
+             sources (the (Array ModuleSource) [])
+             ok true
+             n (Array.length &files)]
+      (for [i 0 (Array.length &session-core-files)]
+        (let [name (Array.unsafe-nth &session-core-files i)
+              path (String.concat &[@&*core-dir* @"/" @name])]
+          (match (IO.read-file &path)
+            (Result.Success source)
+              (Array.push-back! &sources (ModuleSource.init @name @&path source))
+            (Result.Error e)
+              (do (IO.errorln &(fmt "project base: cannot read %s: %s" &path &e))
+                  (set! ok false)))))
+      (for [i 0 n]
+        (let [file (Array.unsafe-nth &files i)
+              path (ProjectFile.path file)]
+          (Array.push-back! &sources
+                            (ModuleSource.init @path
+                                               @path
+                                               (Project.definition-source (ProjectFile.source file))))))
+      (Array.push-back! &sources
+                        (ModuleSource.init @"__project-root__.carp"
+                                           @"__project-root__.carp"
+                                           (root-source &files)))
+      (if (not ok)
+        (Result.Error (Diagnostic.init @"load" @"project base sources incomplete" (Maybe.Nothing)))
+        (match (ModuleLoader.load &sources "__project-root__.carp")
+          (Result.Success loaded)
+            (Result.Success (ModuleLoader.with-compiler-prelude &loaded))
+          (Result.Error e)
+            (Result.Error
+              (Diagnostic.init @"load"
+                               (String.concat &[@(ModuleError.path &e)
+                                                @": "
+                                                @(ModuleError.message &e)])
+                               (Maybe.Nothing)))))))
+
+  (doc create-session "a warm session whose base is the whole project.")
+  (defn create-session [root entry]
+    (match (load-base root entry)
+      (Result.Success module)
+        (let [input (SourceInput.init @"session:project" @"")
+              sourced (SourcedSurfaceModule.init input module)
+              config (ExpandConfig.init [@"Dynamic"])]
+          (Session.create-from-module &sourced &config))
+      (Result.Error d) (Result.Error d))))
+
 (defmodule Warm
   (defn index-of [sid]
     (let-do [found -1]
@@ -792,6 +871,15 @@ plain core when the base cannot be built.")
       (for [i 0 (Array.length &entries)]
         (let [entry (Array.unsafe-nth &entries i)]
           (mirror-upsert! idx (SessionEntry.key entry) (SessionEntry.text entry))))))
+
+  (doc install! "replaces a session's warm state with one built elsewhere —
+a project base, say. The mirror starts complete: nothing has been absorbed
+on top of it yet.")
+  (defn install! [sid state]
+    (let [existing (index-of sid)]
+      (if (> existing -1)
+        (Array.aset! &*warm-sessions* existing (WarmEntry.init @sid state false))
+        (Array.push-back! &*warm-sessions* (WarmEntry.init @sid state false)))))
 
   (doc ensure! "the warm state index for a session, creating and replaying
 it on first use; -1 when none can be created or its mirror is incomplete.")
@@ -1621,6 +1709,27 @@ anything to the session.")
                                    (JSON.obj [(JSON.entry @"expansion" (JSON.Str @src))
                                               (JSON.entry @"changed" (JSON.Bool false))]))))))))
 
+  (doc load-project "warms a session whose base is a whole project, so
+annotate, complete and doc in that session see every project definition.
+Answers how long it took and how many files went in.")
+  (defn-do load-project [id sid root entry]
+    (let-do [start (System.nanotime)
+             files (Project.load-order root entry)
+             n (Array.length &files)]
+      (match (ProjectBase.create-session root entry)
+        (Result.Error d)
+          (respond-err id &(String.concat &[@"project session failed: "
+                                            @(Diagnostic.message &d)]))
+        (Result.Success state)
+          (do
+            (Warm.install! sid state)
+            (Session.reset! sid)
+            (respond-ok-json id
+                             (JSON.obj [(JSON.entry @"files" (JSON.Num (Double.from-int n)))
+                                        (JSON.entry @"millis"
+                                                    (JSON.Num (Double./ (Double.from-long (Uint64.to-long (Uint64.- (System.nanotime) start)))
+                                                                        1000000.0)))]))))))
+
   (doc doc-lookup "answers the warm documentation entry for a name.")
   (defn doc-lookup [id sid name]
     (let [idx (Warm.ensure-any! sid)]
@@ -1737,6 +1846,17 @@ program's own definitions.")
                     (Result.Error e) (respond-err id &e)
                     (Result.Success src)
                       (expand-cell id &sid &src (= &cmd "expand-1"))))
+            (= &cmd "load-project")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "root")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success root)
+                      (let [start (Project.normalize &(if (String.empty? &(Result.from-success (get-str &j "entry") @""))
+                                                        (Project.entry-path &root)
+                                                        (Result.from-success (get-str &j "entry") @"")))]
+                        (load-project id &sid &root &start))))
             (= &cmd "project")
               (match (get-str &j "root")
                 (Result.Error e) (respond-err id &e)
