@@ -94,7 +94,6 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 			expansion := CarpMacroExpansion
 					onSource: self currentSourceString
 					session: self sessionId.
-			expansion stepToFixpoint.
 			anElement phlow spawnObject: expansion ]
 				on: Error
 				do: [ :e | anElement phlow spawnObject: (e messageText ifNil: [ e class name ]) ] ]

@@ -20,7 +20,9 @@ Class {
 	#superclass : #Object,
 	#instVars : [
 		'session',
-		'steps'
+		'steps',
+		'position',
+		'exhausted'
 	],
 	#category : #'Carp-Tools'
 }
@@ -35,7 +37,21 @@ CarpMacroExpansion class >> onSource: aSourceString session: aSessionString [
 
 { #category : #accessing }
 CarpMacroExpansion >> current [
-	^ self steps last
+	^ self steps at: self position
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> position [
+	"Where we are in the history: 1 is the form as written."
+
+	^ position ifNil: [ position := 1 ]
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> stepCount [
+	"How many expansions have been discovered."
+
+	^ self steps size - 1
 ]
 
 { #category : #accessing }
@@ -92,12 +108,14 @@ CarpMacroExpansion >> newStepperElement [
 		status
 			text: (String
 					streamContents: [ :aStream |
-						aStream
-							nextPutAll: 'step ';
-							print: self steps size - 1;
-							nextPutAll: ' of ';
-							print: self steps size - 1.
-						self isAtFixpoint ifTrue: [ aStream nextPutAll: ' · fixpoint' ] ]) ].
+						self position = 1
+							ifTrue: [ aStream nextPutAll: 'as written' ]
+							ifFalse: [ aStream
+									nextPutAll: 'step ';
+									print: self position - 1;
+									nextPutAll: ' of ';
+									print: self stepCount ].
+						self isAtFixpoint ifTrue: [ aStream nextPutAll: ' · fully expanded' ] ]) ].
 	button := [ :aLabel :anAction |
 		BrButton new
 			aptitude: BrGlamorousButtonWithLabelAptitude;
@@ -127,9 +145,9 @@ CarpMacroExpansion >> newStepperElement [
 
 { #category : #stepping }
 CarpMacroExpansion >> reset [
-	"Back to the form as written."
+	"Back to the form as written, keeping what we already expanded."
 
-	steps := OrderedCollection with: self steps first
+	position := 1
 ]
 
 { #category : #accessing }
@@ -139,24 +157,25 @@ CarpMacroExpansion >> gtStepsFor: aView [
 		title: 'Steps';
 		priority: 2;
 		items: [ self steps withIndexCollect: [ :each :index | index -> each ] ];
-		column: '#' text: [ :each | each key ] width: 40;
+		column: '#' text: [ :each | each key = self position ifTrue: [ '▶ ' , each key printString ] ifFalse: [ each key printString ] ] width: 50;
 		column: 'Form' text: [ :each | each value ];
 		send: [ :each | each value ]
 ]
 
 { #category : #testing }
 CarpMacroExpansion >> isAtFixpoint [
-	"Whether the last step expanded nothing further."
+	"Whether we are at the end of the history AND a step there found nothing
+	more to expand. Unknown until a step has actually been attempted."
 
-	^ self steps size > 1 and: [ self steps last = (self steps at: self steps size - 1) ]
+	^ exhausted == true and: [ self position = self steps size ]
 ]
 
 { #category : #printing }
 CarpMacroExpansion >> printOn: aStream [
 	aStream
 		nextPutAll: 'expansion: ';
-		print: self steps size - 1;
-		nextPutAll: (self steps size = 2
+		print: self stepCount;
+		nextPutAll: (self stepCount = 1
 				ifTrue: [ ' step' ]
 				ifFalse: [ ' steps' ])
 ]
@@ -173,7 +192,9 @@ CarpMacroExpansion >> session: aString [
 
 { #category : #accessing }
 CarpMacroExpansion >> source: aString [
-	steps := OrderedCollection with: aString
+	steps := OrderedCollection with: aString.
+	position := 1.
+	exhausted := false
 ]
 
 { #category : #stepping }
@@ -234,19 +255,27 @@ CarpMacroExpansion >> reduceWithin: aNode of: aFormString [
 
 { #category : #stepping }
 CarpMacroExpansion >> step [
-	"Take one expansion step from the current form. Answers whether it
-	changed anything; at the fixpoint nothing is appended."
+	"Move one expansion forward. Stepping back and forward again replays the
+	history rather than recomputing it; only past the end is a new reduction
+	asked for. Answers whether anything moved."
 
+	self position < self steps size
+		ifTrue: [ position := self position + 1.
+			^ true ].
 	(self reduceOnce: self current)
-		ifNil: [ ^ false ]
+		ifNil: [ exhausted := true.
+			^ false ]
 		ifNotNil: [ :reduced |
 			steps add: reduced.
+			position := steps size.
 			^ true ]
 ]
 
 { #category : #stepping }
 CarpMacroExpansion >> stepBack [
-	self steps size > 1 ifTrue: [ steps removeLast ]
+	"Back one expansion, keeping the history so Step can go forward again."
+
+	self position > 1 ifTrue: [ position := self position - 1 ]
 ]
 
 { #category : #accessing }
