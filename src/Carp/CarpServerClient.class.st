@@ -327,6 +327,26 @@ CarpServerClient >> annotateSource: aSourceString session: aSessionString [
 ]
 
 { #category : #'api - commands' }
+CarpServerClient >> projectAt: aRootPathString [
+	"Answer the project rooted at a repository: its load order, which files
+	are its own and which are dependencies, and every definition with its
+	span in file coordinates."
+
+	| response |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'project';
+					at: 'root' put: aRootPathString;
+					yourself).
+	^ CarpProject
+		fromDictionary: (response
+				at: 'ok'
+				ifAbsent: [ ^ CarpServerError new
+						signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ])
+]
+
+{ #category : #'api - commands' }
 CarpServerClient >> expandSource: aSourceString session: aSessionString once: aBoolean [
 	"Answer the expansion of a form against the session's compile-time
 	environment as {expansion, changed}. With once: true this is a single
