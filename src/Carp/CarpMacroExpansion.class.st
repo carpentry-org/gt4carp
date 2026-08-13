@@ -22,7 +22,8 @@ Class {
 		'session',
 		'steps',
 		'position',
-		'exhausted'
+		'exhausted',
+		'expander'
 	],
 	#category : #'Carp-Tools'
 }
@@ -38,6 +39,20 @@ CarpMacroExpansion class >> onSource: aSourceString session: aSessionString [
 { #category : #accessing }
 CarpMacroExpansion >> current [
 	^ self steps at: self position
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> expander [
+	"Whoever answers expansions — the server client by default. A stand-in
+	responding to expandSource:session:once: lets the stepper be exercised
+	with no server at all."
+
+	^ expander ifNil: [ expander := CarpServerClient default ]
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> expander: anObject [
+	expander := anObject
 ]
 
 { #category : #accessing }
@@ -59,7 +74,7 @@ CarpMacroExpansion >> expandFully [
 	"The form with every macro expanded, or the current form when the
 	session cannot expand it."
 
-	^ [ (CarpServerClient default
+	^ [ (self expander
 		expandSource: self current
 		session: session
 		once: false) at: 'expansion' ifAbsent: [ self current ] ]
@@ -68,11 +83,38 @@ CarpMacroExpansion >> expandFully [
 ]
 
 { #category : #accessing }
+CarpMacroExpansion >> gtDiffFor: aView [
+	"What the current step actually rewrote. Two long forms differ in one
+	subform and finding it by eye is the whole difficulty, so the tokens are
+	split with Carp's own scanner rather than by line."
+
+	<gtView>
+	self position = 1 ifTrue: [ ^ aView empty ].
+	^ aView diff
+		title: 'Diff';
+		priority: 2;
+		fromLabel: 'before';
+		toLabel: 'after';
+		from: [ self previous ];
+		to: [ self current ];
+		splitter: [ GtSmaCCDiffSplitter new scannerClass: CarpScanner ]
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> previous [
+	"The form this step expanded, or the current one at the beginning."
+
+	^ self position > 1
+		ifTrue: [ self steps at: self position - 1 ]
+		ifFalse: [ self current ]
+]
+
+{ #category : #accessing }
 CarpMacroExpansion >> gtFullyExpandedFor: aView [
 	<gtView>
 	^ aView textEditor
 		title: 'Fully expanded';
-		priority: 3;
+		priority: 4;
 		aptitude: [ BrGlamorousCodeEditorAptitude ];
 		styler: [ CarpParser gtStyler ];
 		text: [ self expandFully ]
@@ -155,7 +197,7 @@ CarpMacroExpansion >> gtStepsFor: aView [
 	<gtView>
 	^ aView columnedList
 		title: 'Steps';
-		priority: 2;
+		priority: 3;
 		items: [ self steps withIndexCollect: [ :each :index | index -> each ] ];
 		column: '#' text: [ :each | each key = self position ifTrue: [ '▶ ' , each key printString ] ifFalse: [ each key printString ] ] width: 50;
 		column: 'Form' text: [ :each | each value ];
@@ -202,7 +244,7 @@ CarpMacroExpansion >> expandOnce: aFormString [
 	"One expansion of a form, or nil when it expands to itself."
 
 	| answer |
-	answer := [ CarpServerClient default
+	answer := [ self expander
 			expandSource: aFormString
 			session: session
 			once: true ]
