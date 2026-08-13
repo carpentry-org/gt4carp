@@ -88,7 +88,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 		id: GtSourceCoderDoItAndGoActionId.
 	addOns
 		addMainAction: 'Expand' translated
-		icon: BrGlamorousVectorIcons expandvertical
+		icon: BrGlamorousVectorIcons branching
 		action: [ :aCoderUIModel :anElement |
 			[ | expansion |
 			expansion := CarpMacroExpansion
@@ -101,7 +101,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 
 	addOns
 		addMainAction: 'Types' translated
-		icon: BrGlamorousVectorIcons twoColumnTable
+		icon: BrGlamorousVectorIcons classicon
 		action: [ :aCoderUIModel :anElement |
 			anElement phlow
 				spawnObject: (CarpServerClient default

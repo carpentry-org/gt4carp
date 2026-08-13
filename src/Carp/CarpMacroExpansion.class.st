@@ -100,6 +100,7 @@ CarpMacroExpansion >> gtActionBackFor: anAction [
 
 	<gtAction>
 	^ anAction button
+		priority: 2;
 		icon: BrGlamorousVectorIcons left;
 		tooltip: 'Back one expansion';
 		action: [ :aButton | self stepBack ]
@@ -109,6 +110,7 @@ CarpMacroExpansion >> gtActionBackFor: anAction [
 CarpMacroExpansion >> gtActionStepFor: anAction [
 	<gtAction>
 	^ anAction button
+		priority: 3;
 		icon: BrGlamorousVectorIcons right;
 		tooltip: 'Expand one step';
 		action: [ :aButton | self step ]
@@ -118,6 +120,7 @@ CarpMacroExpansion >> gtActionStepFor: anAction [
 CarpMacroExpansion >> gtActionFixpointFor: anAction [
 	<gtAction>
 	^ anAction button
+		priority: 4;
 		icon: BrGlamorousVectorIcons rightSide;
 		tooltip: 'Expand to the fixpoint';
 		action: [ :aButton | self stepToFixpoint ]
@@ -127,7 +130,8 @@ CarpMacroExpansion >> gtActionFixpointFor: anAction [
 CarpMacroExpansion >> gtActionResetFor: anAction [
 	<gtAction>
 	^ anAction button
-		icon: BrGlamorousVectorIcons restart;
+		priority: 1;
+		icon: BrGlamorousVectorIcons leftSide;
 		tooltip: 'Back to the form as written';
 		action: [ :aButton | self reset ]
 ]
