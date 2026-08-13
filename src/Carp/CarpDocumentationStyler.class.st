@@ -65,27 +65,53 @@ CarpDocumentationStyler >> symbolsIn: aNode do: aBlock [
 ]
 
 { #category : #accessing }
+CarpDocumentationStyler >> paragraphFor: aText width: aNumber [
+	"A wrapping, read-only line of text. BrLabel is single-line — it does not
+	even break on newlines — so a doc string needs an editor to wrap."
+
+	^ BrEditor new
+		aptitude: BrGlamorousRegularEditorAptitude new;
+		beReadOnlyWithSelection;
+		text: aText;
+		constraintsDo: [ :c |
+			c horizontal exact: aNumber.
+			c vertical fitContent ]
+]
+
+{ #category : #accessing }
+CarpDocumentationStyler >> tooltipContentFor: aName row: aRow coder: aCoder annotations: annotations [
+	| element documentation signature |
+	signature := aName asRopedText glamorousCodeFontAndSmallSize
+			, ((' : ' , (annotations prettify: (aRow at: 'type' ifAbsent: [ '' ]))) asRopedText
+					glamorousCodeFontAndSmallSize
+					foreground: BrGlamorousColors disabledButtonTextColor).
+	element := BlElement new
+			layout: BlLinearLayout vertical;
+			padding: (BlInsets all: 4);
+			constraintsDo: [ :c |
+				c horizontal fitContent.
+				c vertical fitContent ];
+			addChild: (self paragraphFor: signature width: 420).
+	documentation := aCoder documentationFor: aName.
+	documentation
+		ifNotNil: [ element
+				addChild: (self paragraphFor: documentation asRopedText glamorousRegularFont width: 420) ].
+	^ element
+]
+
+{ #category : #accessing }
 CarpDocumentationStyler >> tooltipFor: aName row: aRow coder: aCoder annotations: annotations [
+	"Built the way BrTextTooltipAttribute>>#stencil: builds its own aptitude,
+	but with an element instead of a menu item: a menu item is one clipped
+	line, and a type plus a doc string needs two wrapping ones."
+
 	^ BrTextTooltipAttribute new
-		stencil: [ :aContext |
-			| documentation label |
-			documentation := aCoder documentationFor: aName.
-			label := aName asRopedText glamorousCodeFontAndSmallSize
-					, ((' : ' , (annotations prettify: (aRow at: 'type' ifAbsent: [ '' ]))) asRopedText
-							glamorousCodeFontAndSmallSize
-							foreground: BrGlamorousColors disabledButtonTextColor).
-			documentation
-				ifNotNil: [ label := label , String cr asRopedText
-									, (documentation first: (documentation size min: 240)) asRopedText
-											glamorousRegularFont ].
-			BrMenuExplicitHandle new
-				menu: (BrMenuActionItem new
-						label: label;
-						action: [ :anElement :aButtonModel :anEvent |
-							anElement phlow
-								spawnObject: (CarpDefinition new
-										name: aName;
-										type: (aRow at: 'type' ifAbsent: [ '' ]);
-										annotations: annotations;
-										yourself) ]) ]
+		tooltipStencil: [ BrGlamorousWithExplicitTooltipAptitude new
+				mouseEventHandler: BrTextTooltipMouseHoverEventHandler new;
+				content: [ self
+						tooltipContentFor: aName
+						row: aRow
+						coder: aCoder
+						annotations: annotations ] ];
+		yourself
 ]
