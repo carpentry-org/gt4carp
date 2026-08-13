@@ -138,7 +138,7 @@ CarpMacroExpansion >> gtActionFixpointFor: anAction [
 	<gtAction>
 	^ anAction button
 		priority: 4;
-		icon: [ self doubleChevron: BrGlamorousVectorIcons right ];
+		icon: (self doubleChevron: BrGlamorousVectorIcons right);
 		tooltip: 'Expand to the fixpoint';
 		action: [ :aButton | self stepToFixpoint ]
 ]
@@ -148,7 +148,7 @@ CarpMacroExpansion >> gtActionResetFor: anAction [
 	<gtAction>
 	^ anAction button
 		priority: 1;
-		icon: [ self doubleChevron: BrGlamorousVectorIcons left ];
+		icon: (self doubleChevron: BrGlamorousVectorIcons left);
 		tooltip: 'Back to the form as written';
 		action: [ :aButton | self reset ]
 ]
