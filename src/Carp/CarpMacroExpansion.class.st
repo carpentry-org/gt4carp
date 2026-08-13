@@ -56,10 +56,80 @@ CarpMacroExpansion >> gtFullyExpandedFor: aView [
 	<gtView>
 	^ aView textEditor
 		title: 'Fully expanded';
-		priority: 2;
+		priority: 3;
 		aptitude: [ BrGlamorousCodeEditorAptitude ];
 		styler: [ CarpParser gtStyler ];
 		text: [ self expandFully ]
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> gtStepperFor: aView [
+	"The stepper proper: the current form, and buttons that walk it. The UI
+	lives on the model as a view — there is no separate widget to keep in
+	sync."
+
+	<gtView>
+	^ aView explicit
+		title: 'Stepper';
+		priority: 1;
+		stencil: [ self newStepperElement ]
+]
+
+{ #category : #ui }
+CarpMacroExpansion >> newStepperElement [
+	| editor status pane buttons refresh button |
+	editor := BrEditor new
+			aptitude: BrGlamorousCodeEditorAptitude new;
+			styler: CarpParser gtStyler;
+			beReadOnlyWithSelection;
+			padding: (BlInsets all: 6);
+			hMatchParent;
+			vMatchParent.
+	status := BrLabel new
+			aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+			padding: (BlInsets all: 6).
+	refresh := [ editor text: self current asRopedText.
+		status
+			text: (String
+					streamContents: [ :aStream |
+						aStream
+							nextPutAll: 'step ';
+							print: self steps size - 1;
+							nextPutAll: ' of ';
+							print: self steps size - 1.
+						self isAtFixpoint ifTrue: [ aStream nextPutAll: ' · fixpoint' ] ]) ].
+	button := [ :aLabel :anAction |
+		BrButton new
+			aptitude: BrGlamorousButtonWithLabelAptitude;
+			label: aLabel;
+			action: [ anAction value. refresh value ];
+			yourself ].
+	buttons := BrHorizontalPane new
+			hMatchParent;
+			vFitContent;
+			alignCenterLeft;
+			padding: (BlInsets all: 4);
+			cellSpacing: 4;
+			addChild: (button value: 'Step' value: [ self step ]);
+			addChild: (button value: 'Back' value: [ self stepBack ]);
+			addChild: (button value: 'Reset' value: [ self reset ]);
+			addChild: (button value: 'To fixpoint' value: [ self stepToFixpoint ]);
+			addChild: status;
+			yourself.
+	refresh value.
+	pane := BrVerticalPane new
+			hMatchParent;
+			vMatchParent;
+			addChild: editor;
+			addChild: buttons.
+	^ pane
+]
+
+{ #category : #stepping }
+CarpMacroExpansion >> reset [
+	"Back to the form as written."
+
+	steps := OrderedCollection with: self steps first
 ]
 
 { #category : #accessing }
@@ -67,7 +137,7 @@ CarpMacroExpansion >> gtStepsFor: aView [
 	<gtView>
 	^ aView columnedList
 		title: 'Steps';
-		priority: 1;
+		priority: 2;
 		items: [ self steps withIndexCollect: [ :each :index | index -> each ] ];
 		column: '#' text: [ :each | each key ] width: 40;
 		column: 'Form' text: [ :each | each value ];
