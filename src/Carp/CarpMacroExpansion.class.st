@@ -23,7 +23,8 @@ Class {
 		'steps',
 		'position',
 		'exhausted',
-		'expander'
+		'expander',
+		'announcer'
 	],
 	#category : #'Carp-Tools'
 }
@@ -39,6 +40,16 @@ CarpMacroExpansion class >> onSource: aSourceString session: aSessionString [
 { #category : #accessing }
 CarpMacroExpansion >> current [
 	^ self steps at: self position
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> announcer [
+	^ announcer ifNil: [ announcer := Announcer new ]
+]
+
+{ #category : #accessing }
+CarpMacroExpansion >> changed [
+	self announcer announce: CarpMacroExpansionChanged new
 ]
 
 { #category : #accessing }
@@ -89,15 +100,15 @@ CarpMacroExpansion >> gtDiffFor: aView [
 	split with Carp's own scanner rather than by line."
 
 	<gtView>
-	self position = 1 ifTrue: [ ^ aView empty ].
 	^ aView diff
 		title: 'Diff';
 		priority: 2;
-		fromLabel: 'before';
-		toLabel: 'after';
+		fromLabel: [ self position = 1 ifTrue: [ 'as written' ] ifFalse: [ 'step ' , (self position - 2 max: 0) printString ] ];
+		toLabel: [ self position = 1 ifTrue: [ 'as written (nothing expanded yet)' ] ifFalse: [ 'step ' , (self position - 1) printString ] ];
 		from: [ self previous ];
 		to: [ self current ];
-		splitter: [ GtSmaCCDiffSplitter new scannerClass: CarpScanner ]
+		splitter: [ GtSmaCCDiffSplitter new scannerClass: CarpScanner ];
+		updateWhen: CarpMacroExpansionChanged in: [ self announcer ]
 ]
 
 { #category : #accessing }
@@ -117,7 +128,8 @@ CarpMacroExpansion >> gtFullyExpandedFor: aView [
 		priority: 4;
 		aptitude: [ BrGlamorousCodeEditorAptitude ];
 		styler: [ CarpParser gtStyler ];
-		text: [ self expandFully ]
+		text: [ self expandFully ];
+		updateWhen: CarpMacroExpansionChanged in: [ self announcer ]
 ]
 
 { #category : #accessing }
@@ -189,7 +201,8 @@ CarpMacroExpansion >> newStepperElement [
 CarpMacroExpansion >> reset [
 	"Back to the form as written, keeping what we already expanded."
 
-	position := 1
+	position := 1.
+	self changed
 ]
 
 { #category : #accessing }
@@ -201,7 +214,9 @@ CarpMacroExpansion >> gtStepsFor: aView [
 		items: [ self steps withIndexCollect: [ :each :index | index -> each ] ];
 		column: '#' text: [ :each | each key = self position ifTrue: [ '▶ ' , each key printString ] ifFalse: [ each key printString ] ] width: 50;
 		column: 'Form' text: [ :each | each value ];
-		send: [ :each | each value ]
+		send: [ :each | each value ];
+		actionUpdateButton;
+		updateWhen: CarpMacroExpansionChanged in: [ self announcer ]
 ]
 
 { #category : #testing }
@@ -303,13 +318,16 @@ CarpMacroExpansion >> step [
 
 	self position < self steps size
 		ifTrue: [ position := self position + 1.
+			self changed.
 			^ true ].
 	(self reduceOnce: self current)
 		ifNil: [ exhausted := true.
+			self changed.
 			^ false ]
 		ifNotNil: [ :reduced |
 			steps add: reduced.
 			position := steps size.
+			self changed.
 			^ true ]
 ]
 
@@ -317,7 +335,9 @@ CarpMacroExpansion >> step [
 CarpMacroExpansion >> stepBack [
 	"Back one expansion, keeping the history so Step can go forward again."
 
-	self position > 1 ifTrue: [ position := self position - 1 ]
+	self position > 1
+		ifTrue: [ position := self position - 1.
+			self changed ]
 ]
 
 { #category : #accessing }
