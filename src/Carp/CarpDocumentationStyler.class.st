@@ -70,12 +70,14 @@ CarpDocumentationStyler >> tooltipFor: aName row: aRow coder: aCoder annotations
 		stencil: [ :aContext |
 			| documentation label |
 			documentation := aCoder documentationFor: aName.
-			label := aName asRopedText glamorousCodeSmallFont
-					, (' : ' , (annotations prettify: (aRow at: 'type' ifAbsent: [ '' ]))) asRopedText
-							glamorousCodeSmallFont foreground: BrGlamorousColors disabledButtonTextColor.
+			label := aName asRopedText glamorousCodeFontAndSmallSize
+					, ((' : ' , (annotations prettify: (aRow at: 'type' ifAbsent: [ '' ]))) asRopedText
+							glamorousCodeFontAndSmallSize
+							foreground: BrGlamorousColors disabledButtonTextColor).
 			documentation
 				ifNotNil: [ label := label , String cr asRopedText
-									, (documentation first: (documentation size min: 240)) asRopedText ].
+									, (documentation first: (documentation size min: 240)) asRopedText
+											glamorousRegularFont ].
 			BrMenuExplicitHandle new
 				menu: (BrMenuActionItem new
 						label: label;
