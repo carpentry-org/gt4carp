@@ -82,14 +82,31 @@ CarpSourceDefinition >> gtSourceFor: aView [
 		stencil: [ self newCoder asCoderViewModel asElement ]
 ]
 
+{ #category : #saving }
+CarpSourceDefinition >> save: aSourceString [
+	"Write this definition back through its span and commit the file into the
+	session. The file is the truth: the bytes are replaced in place, every
+	span after this one shifts by the length change, and the session is told
+	about the file as a whole so a rename or a deletion reconciles."
+
+	| shift boundary |
+	aSourceString = self source ifTrue: [ ^ self ].
+	boundary := stop.
+	shift := self file replaceBytesFrom: start to: stop with: aSourceString.
+	"shift the definitions below BEFORE moving this one's own end, or the
+	boundary they are compared against has already moved"
+	self file shiftDefinitionsAfter: boundary by: shift.
+	stop := stop + shift.
+	self file commit.
+	self project ifNotNil: [ :aProject | aProject changed ]
+]
+
 { #category : #accessing }
 CarpSourceDefinition >> newCoder [
-	"The definition's own text in a coder bound to the project's session."
+	"The definition's own text in a coder bound to the project's session,
+	which writes back through this definition's span when saved."
 
-	| coder |
-	coder := GtCarpCoderModel code: self source.
-	coder sessionId: self project sessionId.
-	^ coder
+	^ GtCarpDefinitionCoderModel on: self
 ]
 
 { #category : #accessing }

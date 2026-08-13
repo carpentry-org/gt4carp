@@ -327,6 +327,27 @@ CarpServerClient >> annotateSource: aSourceString session: aSessionString [
 ]
 
 { #category : #'api - commands' }
+CarpServerClient >> upsertFile: aPathString session: aSessionString [
+	"Commit a file into a session — every definition it holds, reconciled by
+	path. Answers the committed definitions with their new spans."
+
+	| response |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'upsert-file';
+					at: 'session' put: aSessionString;
+					at: 'path' put: aPathString;
+					yourself).
+	^ (response
+		at: 'ok'
+		ifAbsent: [ ^ CarpServerError new
+				signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ])
+		at: 'definitions'
+		ifAbsent: [ #() ]
+]
+
+{ #category : #'api - commands' }
 CarpServerClient >> loadProjectAt: aRootPathString session: aSessionString [
 	"Warm a session whose base is the whole project, so annotate, complete
 	and doc in it see every project definition. Answers {files, millis}.

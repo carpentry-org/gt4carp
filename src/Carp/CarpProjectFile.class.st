@@ -86,6 +86,50 @@ CarpProjectFile >> definitions: aCollection [
 	definitions := aCollection
 ]
 
+{ #category : #saving }
+CarpProjectFile >> commit [
+	"Commit the file into the project's session, so everything it defines is
+	current. Answers the committed definitions, or nil when there is no
+	session to commit into."
+
+	self project ifNil: [ ^ nil ].
+	self project isSessionLoaded ifFalse: [ ^ nil ].
+	^ [ CarpServerClient default
+		upsertFile: self path
+		session: self project sessionId ]
+		on: Error
+		do: [ :e | nil ]
+]
+
+{ #category : #saving }
+CarpProjectFile >> shiftDefinitionsAfter: aByteOffset by: aNumber [
+	"Editing one definition moves every definition below it in the file."
+
+	aNumber = 0 ifTrue: [ ^ self ].
+	self definitions
+		do: [ :each |
+			each start >= aByteOffset
+				ifTrue: [ each start: each start + aNumber.
+					each stop: each stop + aNumber ] ]
+]
+
+{ #category : #saving }
+CarpProjectFile >> replaceBytesFrom: aStart to: aStop with: aString [
+	"Write over exactly those bytes and leave the rest of the file alone:
+	comments, formatting and neighbouring definitions are none of our
+	business. Answers the length change, so spans after it can follow."
+
+	| bytes replacement updated |
+	bytes := self contentsBytes.
+	replacement := aString utf8Encoded.
+	updated := (bytes first: aStart) , replacement
+			, (bytes allButFirst: (aStop min: bytes size)).
+	self path asFileReference
+		binaryWriteStreamDo: [ :stream | stream nextPutAll: updated ].
+	contents := nil.
+	^ replacement size - (aStop - aStart)
+]
+
 { #category : #accessing }
 CarpProjectFile >> gtDefinitionsFor: aView [
 	<gtView>
