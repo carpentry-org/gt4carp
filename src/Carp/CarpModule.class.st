@@ -75,6 +75,22 @@ CarpModule >> moduleFormOrNil [
 		ifNone: [ nil ]
 ]
 
+{ #category : #actions }
+CarpModule >> gtActionAddDefinitionFor: anAction [
+	"Add a definition to this module. It lands in the module's own file, at
+	the end of its body, and the file is committed into the session."
+
+	<gtAction>
+	^ anAction button
+		priority: 1;
+		icon: BrGlamorousVectorIcons add;
+		tooltip: 'Add a definition to this module';
+		action: [ :aButton |
+			self addDefinition: '(defn unnamed [] ())'.
+			self project reload.
+			aButton phlow spawnObject: (self project moduleNamed: self name) ]
+]
+
 { #category : #accessing }
 CarpModule >> gtDefinitionsFor: aView [
 	<gtView>
@@ -85,7 +101,9 @@ CarpModule >> gtDefinitionsFor: aView [
 		column: 'Name' text: [ :each | each shortName ];
 		column: 'Kind' text: [ :each | each head ] width: 110;
 		column: 'File' text: [ :each | each file basename ] width: 160;
-		send: [ :each | each ]
+		send: [ :each | each ];
+		actionUpdateButton;
+		updateWhen: CarpProjectChanged in: [ self project announcer ]
 ]
 
 { #category : #accessing }

@@ -206,6 +206,37 @@ CarpProject >> gtDefaultInspectorTool [
 ]
 
 { #category : #accessing }
+CarpProject >> gtDefinitionsFor: aView [
+	"Every definition of the repository, searchable by name — the way you
+	find something when you know what it is called but not where it lives."
+
+	<gtView>
+	^ aView columnedList
+		title: 'Definitions';
+		priority: 3;
+		items: [ self definitions reject: [ :each | each isModule ] ];
+		column: 'Name' text: [ :each | each name ];
+		column: 'Kind' text: [ :each | each head ] width: 100;
+		column: 'File' text: [ :each | each file basename ] width: 180;
+		send: [ :each | each ];
+		actionUpdateButton;
+		updateWhen: CarpProjectChanged in: [ self announcer ]
+]
+
+{ #category : #actions }
+CarpProject >> gtActionReloadFor: anAction [
+	"Re-read the tree from disk: the repository is the truth, and it changes
+	under us whenever git does."
+
+	<gtAction>
+	^ anAction button
+		priority: 2;
+		icon: BrGlamorousVectorIcons refresh;
+		tooltip: 'Re-read the project from disk';
+		action: [ :aButton | self reload ]
+]
+
+{ #category : #accessing }
 CarpProject >> gtDependenciesFor: aView [
 	<gtView>
 	self dependencyFiles ifEmpty: [ ^ aView empty ].
