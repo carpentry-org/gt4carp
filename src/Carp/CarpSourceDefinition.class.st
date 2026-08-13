@@ -62,16 +62,39 @@ CarpSourceDefinition >> gtDocumentationFor: aView [
 
 { #category : #accessing }
 CarpSourceDefinition >> gtSourceFor: aView [
-	"Read-only for now: a coder here would annotate against a session that
-	does not hold the project, and report every project binding as unknown."
+	"A coder once the project's session is warm, so the definition is typed,
+	checked, completed and documented against the rest of the project.
+	Before that a coder would annotate against a session that does not hold
+	the project and call every project binding unknown, so the source is
+	shown plainly instead."
 
 	<gtView>
-	^ aView textEditor
+	self project isSessionLoaded
+		ifFalse: [ ^ aView textEditor
+				title: 'Source';
+				priority: 1;
+				aptitude: [ BrGlamorousCodeEditorAptitude ];
+				styler: [ CarpParser gtStyler ];
+				text: [ self source ] ].
+	^ aView explicit
 		title: 'Source';
 		priority: 1;
-		aptitude: [ BrGlamorousCodeEditorAptitude ];
-		styler: [ CarpParser gtStyler ];
-		text: [ self source ]
+		stencil: [ self newCoder asCoderViewModel asElement ]
+]
+
+{ #category : #accessing }
+CarpSourceDefinition >> newCoder [
+	"The definition's own text in a coder bound to the project's session."
+
+	| coder |
+	coder := GtCarpCoderModel code: self source.
+	coder sessionId: self project sessionId.
+	^ coder
+]
+
+{ #category : #accessing }
+CarpSourceDefinition >> project [
+	^ file ifNil: [ nil ] ifNotNil: [ :aFile | aFile project ]
 ]
 
 { #category : #accessing }

@@ -14,7 +14,8 @@ Class {
 		'path',
 		'kind',
 		'definitions',
-		'contents'
+		'contents',
+		'project'
 	],
 	#category : #'Carp-Project'
 }
@@ -63,6 +64,16 @@ CarpProjectFile >> contents [
 { #category : #accessing }
 CarpProjectFile >> contentsBytes [
 	^ self contents utf8Encoded
+]
+
+{ #category : #accessing }
+CarpProjectFile >> project [
+	^ project
+]
+
+{ #category : #accessing }
+CarpProjectFile >> project: aCarpProject [
+	project := aCarpProject
 ]
 
 { #category : #accessing }

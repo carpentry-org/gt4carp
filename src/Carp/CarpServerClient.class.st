@@ -327,6 +327,27 @@ CarpServerClient >> annotateSource: aSourceString session: aSessionString [
 ]
 
 { #category : #'api - commands' }
+CarpServerClient >> loadProjectAt: aRootPathString session: aSessionString [
+	"Warm a session whose base is the whole project, so annotate, complete
+	and doc in it see every project definition. Answers {files, millis}.
+	This is the expensive one — a whole compiler front end over the
+	repository — so it is called deliberately, not per view."
+
+	| response |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: 'load-project';
+					at: 'session' put: aSessionString;
+					at: 'root' put: aRootPathString;
+					yourself).
+	^ response
+		at: 'ok'
+		ifAbsent: [ ^ CarpServerError new
+				signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ]
+]
+
+{ #category : #'api - commands' }
 CarpServerClient >> projectAt: aRootPathString [
 	"Answer the project rooted at a repository: its load order, which files
 	are its own and which are dependencies, and every definition with its
