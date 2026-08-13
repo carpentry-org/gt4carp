@@ -327,6 +327,26 @@ CarpServerClient >> annotateSource: aSourceString session: aSessionString [
 ]
 
 { #category : #'api - commands' }
+CarpServerClient >> expandSource: aSourceString session: aSessionString once: aBoolean [
+	"Answer the expansion of a form against the session's compile-time
+	environment as {expansion, changed}. With once: true this is a single
+	expansion step — the macro stepper's unit."
+
+	| response |
+	response := self
+			rpc: (Dictionary new
+					at: 'id' put: self nextRequestId;
+					at: 'cmd' put: (aBoolean ifTrue: [ 'expand-1' ] ifFalse: [ 'expand' ]);
+					at: 'session' put: aSessionString;
+					at: 'source' put: aSourceString;
+					yourself).
+	^ response
+		at: 'ok'
+		ifAbsent: [ ^ CarpServerError new
+				signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ]
+]
+
+{ #category : #'api - commands' }
 CarpServerClient >> ownershipSource: aSourceString session: aSessionString [
 	"Answer the compiler's move/borrow/delete plan rows for the session's
 	definitions plus the given source."

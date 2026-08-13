@@ -23,6 +23,8 @@
 ;   {"id": n, "cmd": "ownership", "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "complete",  "session": "<name>", "prefix": "<text>"}
 ;   {"id": n, "cmd": "doc",       "session": "<name>", "name": "<symbol>"}
+;   {"id": n, "cmd": "expand",    "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "expand-1",  "session": "<name>", "source": "<carp>"}
 ;
 ; Responses:
 ;   ping:  {"id": n, "ok": "pong", "stamp": "<build stamp>"}
@@ -1592,6 +1594,33 @@ touched.")
         (respond-err id &(String.concat &[@"no entry file at " @&start]))
         (respond-ok-json id (project-json root &start)))))
 
+  (doc expand-cell "expands a form against the session's warm compile-time
+environment. `once` takes a single expansion step — the macro stepper's
+unit — and answers changed:false at the fixpoint, where nothing expanded
+any further; otherwise the form is expanded to completion. Neither commits
+anything to the session.")
+  (defn expand-cell [id sid src once]
+    (let [idx (Warm.ensure-any! sid)]
+      (if (< idx 0)
+        (respond-err id "expansion needs a warm session and none could be created")
+        (let [state (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+              input (SourceInput.init @"cell" @src)
+              result (if once
+                       (Session.expand-1 state &input)
+                       (Session.expand state &input))]
+          (match result
+            (Result.Error d) (respond-err id (Diagnostic.message &d))
+            (Result.Success expansion)
+              (match expansion
+                (Maybe.Just rendered)
+                  (respond-ok-json id
+                                   (JSON.obj [(JSON.entry @"expansion" (JSON.Str rendered))
+                                              (JSON.entry @"changed" (JSON.Bool true))]))
+                (Maybe.Nothing)
+                  (respond-ok-json id
+                                   (JSON.obj [(JSON.entry @"expansion" (JSON.Str @src))
+                                              (JSON.entry @"changed" (JSON.Bool false))]))))))))
+
   (doc doc-lookup "answers the warm documentation entry for a name.")
   (defn doc-lookup [id sid name]
     (let [idx (Warm.ensure-any! sid)]
@@ -1700,6 +1729,14 @@ program's own definitions.")
                   (match (get-str &j "source")
                     (Result.Error e) (respond-err id &e)
                     (Result.Success src) (annotate-cell id &sid &src)))
+            (or (= &cmd "expand") (= &cmd "expand-1"))
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "source")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success src)
+                      (expand-cell id &sid &src (= &cmd "expand-1"))))
             (= &cmd "project")
               (match (get-str &j "root")
                 (Result.Error e) (respond-err id &e)

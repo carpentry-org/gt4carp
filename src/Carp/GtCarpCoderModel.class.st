@@ -87,6 +87,20 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 				execute ]
 		id: GtSourceCoderDoItAndGoActionId.
 	addOns
+		addMainAction: 'Expand' translated
+		icon: BrGlamorousVectorIcons expandvertical
+		action: [ :aCoderUIModel :anElement |
+			[ | expansion |
+			expansion := CarpMacroExpansion
+					onSource: self currentSourceString
+					session: self sessionId.
+			expansion stepToFixpoint.
+			anElement phlow spawnObject: expansion ]
+				on: Error
+				do: [ :e | anElement phlow spawnObject: (e messageText ifNil: [ e class name ]) ] ]
+		id: #'source-coder--carp-expand-action-id'.
+
+	addOns
 		addMainAction: 'Types' translated
 		icon: BrGlamorousVectorIcons twoColumnTable
 		action: [ :aCoderUIModel :anElement |
