@@ -11,7 +11,8 @@ Class {
 		'typeAnnotationsCache',
 		'typeAnnotationsHash',
 		'typeAnnotationsFailedHash',
-		'typeAnnotationsPending'
+		'typeAnnotationsPending',
+		'documentationCache'
 	],
 	#category : #'Carp-Coder'
 }
@@ -44,6 +45,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 		addStyler: CarpTypeAdornmentStyler new;
 		addStyler: CarpLifetimeHighlightStyler new;
 		addStyler: CarpDiagnosticHighlightStyler new;
+		addStyler: CarpDocumentationStyler new;
 		addStyler: CarpLintHighlightStyler new.
 
 	addOns
@@ -137,6 +139,22 @@ GtCarpCoderModel >> lintFindingsFor: aString [
 	lintFindingsCache := [ CarpExternalTool lint: aString ] on: Error do: [ :e | #() ].
 	lintFindingsHash := hash.
 	^ lintFindingsCache
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> documentationFor: aName [
+	"The session's doc string for a name, or nil. Cached per name for the
+	life of the coder: docs are fetched when a tooltip is shown, and the
+	same symbol is hovered again and again."
+
+	documentationCache ifNil: [ documentationCache := Dictionary new ].
+	^ (documentationCache
+		at: aName
+		ifAbsentPut: [ [ (CarpServerClient default docFor: aName session: self sessionId)
+				ifNil: [ '' ]
+				ifNotNil: [ :aDictionary | aDictionary at: 'documentation' ifAbsent: [ '' ] ] ]
+				on: Error
+				do: [ :e | '' ] ]) ifEmpty: [ nil ]
 ]
 
 { #category : #accessing }

@@ -19,7 +19,8 @@ Class {
 		'diagnostics',
 		'definitionObjects',
 		'environmentObjects',
-		'prettifyMappings'
+		'prettifyMappings',
+		'environmentIndex'
 	],
 	#category : #'Carp-Execution'
 }
@@ -119,6 +120,22 @@ CarpAnnotations >> environmentDefinitions [
 							type: (each at: 'type');
 							annotations: self;
 							yourself ] ]
+]
+
+{ #category : #accessing }
+CarpAnnotations >> environmentRowNamed: aName [
+	"The visible definition of that name, or nil. Indexed on first use: the
+	environment is every binding the session can see, so a scan per symbol
+	occurrence would be thousands of comparisons per styling pass."
+
+	environmentIndex
+		ifNil: [ environmentIndex := Dictionary new.
+			self environment
+				do: [ :each |
+					environmentIndex
+						at: (each at: 'name' ifAbsent: [ '' ])
+						ifAbsentPut: [ each ] ] ].
+	^ environmentIndex at: aName ifAbsent: [ nil ]
 ]
 
 { #category : #accessing }

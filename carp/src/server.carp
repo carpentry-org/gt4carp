@@ -1338,6 +1338,24 @@ given span, or empty.")
       owner))
 
   (private annotate-json)
+  (private environment-json)
+  (hidden environment-json)
+  (doc environment-json "every binding the session can see, with its scheme:
+what the editor needs for hovers and context. Answered whether or not the
+cell itself checks — a broken cell must not blind the editor to the rest of
+the world.")
+  (defn environment-json [idx]
+    (let-do [environment (the (Array (Box JSON)) [])
+             candidates (Session.complete (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx)) "")
+             n (Array.length &candidates)]
+      (for [i 0 n]
+        (let [candidate (Array.unsafe-nth &candidates i)]
+          (Array.push-back! &environment
+                            (Box.init
+                              (JSON.obj [(JSON.entry @"name" (JSON.Str @(Candidate.name candidate)))
+                                         (JSON.entry @"type" (JSON.Str @(Candidate.scheme candidate)))])))))
+      environment))
+
   (hidden annotate-json)
   (doc annotate-json "the annotate response from a warm cell report: the
 cell's typed forms (definitions carry their source), the visible environment,
@@ -1361,14 +1379,7 @@ and span-tagged locals with their owning definition.")
                               (Box.init
                                 (JSON.obj [(JSON.entry @"name" (JSON.Str (slice-span src (SessionTypedEntity.span form))))
                                            (JSON.entry @"type" (JSON.Str @(SessionTypedEntity.type form)))]))))))
-      (let-do [environment (the (Array (Box JSON)) [])
-               candidates (Session.complete (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx)) "")]
-        (for [i 0 (Array.length &candidates)]
-          (let [candidate (Array.unsafe-nth &candidates i)]
-            (Array.push-back! &environment
-                              (Box.init
-                                (JSON.obj [(JSON.entry @"name" (JSON.Str @(Candidate.name candidate)))
-                                           (JSON.entry @"type" (JSON.Str @(Candidate.scheme candidate)))])))))
+      (let-do [environment (environment-json idx)]
         (let-do [kept-locals (the (Array (Box JSON)) [])
                  locals (CellReport.locals cell)]
           (for [i 0 (Array.length locals)]
@@ -1385,7 +1396,8 @@ and span-tagged locals with their owning definition.")
                                              (JSON.entry @"end" (JSON.Num (Double.from-int @(SourceSpan.end span))))])))))
           (JSON.obj [(JSON.entry @"definitions" (JSON.Arr kept))
                      (JSON.entry @"environment" (JSON.Arr environment))
-                     (JSON.entry @"locals" (JSON.Arr kept-locals))])))))
+                     (JSON.entry @"locals" (JSON.Arr kept-locals))
+                     (JSON.entry @"diagnostics" (JSON.Arr (the (Array (Box JSON)) [])))])))))
 
   (doc annotate-cell-cli "runs the compiler's annotate mode over the session's
 definitions plus the given source and answers the inferred types of the
@@ -1504,7 +1516,7 @@ can mark the failing form while the user is still typing.")
           (Result.Error d)
             (respond-ok-json id
                              (JSON.obj [(JSON.entry @"definitions" (JSON.Arr (the (Array (Box JSON)) [])))
-                                        (JSON.entry @"environment" (JSON.Arr (the (Array (Box JSON)) [])))
+                                        (JSON.entry @"environment" (JSON.Arr (environment-json idx)))
                                         (JSON.entry @"locals" (JSON.Arr (the (Array (Box JSON)) [])))
                                         (JSON.entry @"diagnostics"
                                                     (JSON.Arr [(Box.init (diagnostic-json &d))]))]))
