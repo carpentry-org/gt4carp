@@ -113,3 +113,47 @@ CarpStylerUtilities class >> utf8SizeOf: aCharacter [
 	codePoint < 65536 ifTrue: [ ^ 3 ].
 	^ 4
 ]
+
+{ #category : #accessing }
+CarpStylerUtilities class >> paragraph: aText width: aNumber [
+	"A wrapping, read-only line of text. BrLabel is single-line — it does not
+	even break on newlines — so anything longer than a few words needs an
+	editor to wrap instead."
+
+	^ BrEditor new
+		aptitude: BrGlamorousRegularEditorAptitude new;
+		beReadOnlyWithSelection;
+		text: aText;
+		constraintsDo: [ :c |
+			c horizontal exact: aNumber.
+			c vertical fitContent ]
+]
+
+{ #category : #accessing }
+CarpStylerUtilities class >> tooltipShowing: anElementBlock [
+	"A text tooltip whose body is an element, built the way
+	BrTextTooltipAttribute>>#stencil: builds its own aptitude. Its own
+	#stencil:/#text: put the content in a single clipped line, which loses
+	the end of any real message."
+
+	^ BrTextTooltipAttribute new
+		tooltipStencil: [ BrGlamorousWithExplicitTooltipAptitude new
+				mouseEventHandler: BrTextTooltipMouseHoverEventHandler new;
+				content: anElementBlock ];
+		yourself
+]
+
+{ #category : #accessing }
+CarpStylerUtilities class >> tooltipPaneWith: someElements [
+	"The tooltip body: stacked paragraphs, sized to their content."
+
+	| pane |
+	pane := BlElement new
+			layout: BlLinearLayout vertical;
+			padding: (BlInsets all: 4);
+			constraintsDo: [ :c |
+				c horizontal fitContent.
+				c vertical fitContent ].
+	someElements do: [ :each | pane addChild: each ].
+	^ pane
+]

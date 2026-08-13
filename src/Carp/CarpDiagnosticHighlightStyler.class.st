@@ -73,5 +73,12 @@ CarpDiagnosticHighlightStyler >> characterAt: aByteOffset in: aByteToCharMap [
 
 { #category : #accessing }
 CarpDiagnosticHighlightStyler >> tooltipAttributeFor: aDiagnostic [
-	^ BrTextTooltipAttribute new text: (self messageOf: aDiagnostic)
+	"Compiler messages run long — they name the function, the call and both
+	types — so the tooltip wraps them instead of clipping the end."
+
+	^ CarpStylerUtilities
+		tooltipShowing: [ CarpStylerUtilities
+				tooltipPaneWith: {CarpStylerUtilities
+						paragraph: (self messageOf: aDiagnostic) asRopedText glamorousRegularFont
+						width: 420} ]
 ]
