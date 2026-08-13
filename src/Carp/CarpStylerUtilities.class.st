@@ -86,3 +86,30 @@ CarpStylerUtilities class >> parenthesesColors [
 		collect: [ :each | each twiceDarker ].
 	^ colors
 ]
+
+{ #category : #accessing }
+CarpStylerUtilities class >> charPositionsByByteOffsetIn: aString [
+	"UTF-8 byte offset at each character boundary -> 1-based character
+	position. The compiler reports half-open BYTE spans; the editor indexes
+	characters, so every span has to come through here."
+
+	| map bytes |
+	map := Dictionary new: aString size * 2.
+	bytes := 0.
+	aString
+		doWithIndex: [ :ch :i |
+			map at: bytes put: i.
+			bytes := bytes + (self utf8SizeOf: ch) ].
+	map at: bytes put: aString size + 1.
+	^ map
+]
+
+{ #category : #accessing }
+CarpStylerUtilities class >> utf8SizeOf: aCharacter [
+	| codePoint |
+	codePoint := aCharacter asInteger.
+	codePoint < 128 ifTrue: [ ^ 1 ].
+	codePoint < 2048 ifTrue: [ ^ 2 ].
+	codePoint < 65536 ifTrue: [ ^ 3 ].
+	^ 4
+]

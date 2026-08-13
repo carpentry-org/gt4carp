@@ -16,12 +16,27 @@ Class {
 		'definitions',
 		'environment',
 		'locals',
+		'diagnostics',
 		'definitionObjects',
 		'environmentObjects',
 		'prettifyMappings'
 	],
 	#category : #'Carp-Execution'
 }
+
+{ #category : #accessing }
+CarpAnnotations >> diagnostics [
+	"The compiler's complaints about this cell: phase, message and the byte
+	span of the offending form (start/end may be nil when the failing phase
+	has no source provenance). Empty when the cell checks."
+
+	^ diagnostics ifNil: [ #() ]
+]
+
+{ #category : #accessing }
+CarpAnnotations >> diagnostics: aCollection [
+	diagnostics := aCollection
+]
 
 { #category : #accessing }
 CarpAnnotations >> definitionRows [

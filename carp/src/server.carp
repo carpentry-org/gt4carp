@@ -90,12 +90,14 @@ raw byte read), so every extraction must be byte-accurate too.")
   (defn delimiter? [c]
     (or (ws? c) (or (open? c) (or (close? c) (or (= c \") (= c \;))))))
 
-  (doc top-level-spans "returns the (start, end-exclusive) byte spans of the
-top-level forms in ‘src’, skipping comments, strings and character literals.")
-  (defn top-level-spans [src]
+  (doc spans-between "the (start, end-exclusive) byte spans of the forms
+between two byte offsets, at that range's own top level — the same scan
+top-level-spans does, over a slice of the source. Descending into a
+defmodule's body is exactly this over the body's range.")
+  (defn spans-between [src from to]
     (let-do [spans (the (Array (Pair Int Int)) [])
-             n (String.length src)
-             i 0
+             n to
+             i from
              depth 0
              start -1]
       (while (< i n)
@@ -146,6 +148,10 @@ top-level forms in ‘src’, skipping comments, strings and character literals.
                 (set! start -1))
             (set! i (+ i 1)))))
       spans))
+
+  (doc top-level-spans "the byte spans of the source's own top-level forms.")
+  (defn top-level-spans [src]
+    (spans-between src 0 (String.length src)))
 
   (defn span-text [src span]
     (byte-slice src @(Pair.a span) @(Pair.b span)))
@@ -253,6 +259,326 @@ expression, i.e. whether it produces a result value.")
                   text (Cell.span-text cell span)]
               (upsert! &entries (SessionEntry.init key text))))))
       (store! sid entries))))
+
+; --- projects ------------------------------------------------------------
+; A project is a git repo: an entry file that loads the rest, one file per
+; module, plus docs and CI around them. The IDE owns the load graph — the
+; session never resolves a load — so this walks the graph from the entry,
+; splits the repo's own files from its dependencies (which belong in the
+; warm base), and reports every definition with its span in FILE
+; coordinates, which is what editing a definition in place needs.
+
+(deftype ProjectFile [path String
+                      kind String      ; "entry" | "project" | "dep"
+                      source String])
+
+(deftype ProjectDef [name String
+                     head String
+                     start Int
+                     end Int
+                     documentation String])
+
+(defmodule Project
+  (def load-heads [@"load" @"load-once" @"load-and-use"])
+
+  ; forms that configure the build rather than define anything; the IDE
+  ; hands the session definitions only, so these get blanked out
+  (def config-heads [@"Project.config" @"Project.no-echo" @"add-cflag"
+                     @"add-lib" @"add-pkg" @"relative-include" @"add-c"])
+
+  (def binding-heads [@"defn" @"defn-" @"def" @"def-" @"deftype" @"defmacro"
+                      @"defndynamic" @"defdynamic" @"definterface" @"defalias"
+                      @"register" @"register-type" @"deftemplate" @"defview"])
+
+  (private in?)
+  (hidden in?)
+  (defn in? [heads head]
+    (let-do [found false]
+      (for [i 0 (Array.length heads)]
+        (when (String.= (Array.unsafe-nth heads i) head) (set! found true)))
+      found))
+
+  (defn load-head? [head] (in? &load-heads head))
+  (defn config-head? [head] (in? &config-heads head))
+  (defn binding-head? [head] (in? &binding-heads head))
+
+  (doc string-argument "the first string literal of a form, unescaped enough
+for a path: load targets are plain literals.")
+  (defn string-argument [src span]
+    (let-do [i @(Pair.a span)
+             to @(Pair.b span)
+             out @""
+             found false]
+      (while (and (< i to) (not found))
+        (if (= (String.char-at src i) \")
+          (let-do [begin (+ i 1)]
+            (set! i (+ i 1))
+            (while (and (< i to) (/= (String.char-at src i) \"))
+              (set! i (+ i 1)))
+            (set! out (Cell.byte-slice src begin i))
+            (set! found true))
+          (set! i (+ i 1))))
+      out))
+
+  (doc blank-span! "overwrites a byte range with spaces. Blanking instead of
+deleting is the point: every later span keeps its offset, so definition
+spans stay valid file coordinates.")
+  (defn blank-span! [src span]
+    (let-do [out (the (Array Byte) [])
+             n (String.length src)
+             from @(Pair.a span)
+             to @(Pair.b span)]
+      (for [i 0 n]
+        (let [b (Byte.from-int (Char.to-int (String.char-at src i)))]
+          (Array.push-back! &out
+                            (if (and (>= i from) (< i to))
+                              (if (= b (Byte.from-int 10)) b (Byte.from-int 32))
+                              b))))
+      (String.from-bytes &out)))
+
+  (doc definition-source "the file with its loads and build configuration
+blanked out — what the session gets fed.")
+  (defn definition-source [src]
+    (let-do [out @src
+             spans (Cell.top-level-spans src)]
+      (for [i 0 (Array.length &spans)]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol src span)]
+          (when (or (load-head? &head) (config-head? &head))
+            (set! out (blank-span! &out span)))))
+      out))
+
+  (private body-start)
+  (hidden body-start)
+  (doc body-start "the offset just past a defmodule's name, where its body
+begins.")
+  (defn body-start [src span]
+    (let-do [i @(Pair.a span)
+             to @(Pair.b span)]
+      ; the opening paren and the head symbol
+      (while (and (< i to) (or (Cell.open? (String.char-at src i))
+                               (Cell.ws? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (while (and (< i to) (not (Cell.delimiter? (String.char-at src i))))
+        (set! i (+ i 1)))
+      ; the module name
+      (while (and (< i to) (Cell.ws? (String.char-at src i)))
+        (set! i (+ i 1)))
+      (while (and (< i to) (not (Cell.delimiter? (String.char-at src i))))
+        (set! i (+ i 1)))
+      i))
+
+  (private qualify)
+  (hidden qualify)
+  (defn qualify [prefix name]
+    (if (String.empty? prefix)
+      @name
+      (String.concat &[@prefix @"." @name])))
+
+  (doc collect-definitions! "every definition in a byte range, descending
+into defmodule so nested names come out qualified. Documentation forms are
+paired with their target by name.")
+  (defn collect-definitions! [src from to prefix out]
+    (let-do [spans (Cell.spans-between src from to)
+             n (Array.length &spans)]
+      (for [i 0 n]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol src span)]
+          (cond
+            (String.= &head "defmodule")
+              (let [name (Cell.second-symbol src span)]
+                (collect-definitions! src
+                                      (body-start src span)
+                                      (- @(Pair.b span) 1)
+                                      &(qualify prefix &name)
+                                      out))
+            (binding-head? &head)
+              (Array.push-back! out
+                                (ProjectDef.init (qualify prefix &(Cell.second-symbol src span))
+                                                 @&head
+                                                 @(Pair.a span)
+                                                 @(Pair.b span)
+                                                 @""))
+            ())))))
+
+  (doc attach-documentation! "fills in each definition's doc string from the
+(doc name \"…\") forms in the same range.")
+  (defn attach-documentation! [src from to prefix defs]
+    (let-do [spans (Cell.spans-between src from to)
+             n (Array.length &spans)]
+      (for [i 0 n]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol src span)]
+          (cond
+            (String.= &head "defmodule")
+              (let [name (Cell.second-symbol src span)]
+                (attach-documentation! src
+                                       (body-start src span)
+                                       (- @(Pair.b span) 1)
+                                       &(qualify prefix &name)
+                                       defs))
+            (String.= &head "doc")
+              (let [target (qualify prefix &(Cell.second-symbol src span))
+                    text (string-argument src span)
+                    m (Array.length defs)]
+                (for [j 0 m]
+                  (when (String.= (ProjectDef.name (Array.unsafe-nth defs j)) &target)
+                    (Array.aset! defs j (ProjectDef.set-documentation @(Array.unsafe-nth defs j) @&text)))))
+            ())))))
+
+  (doc definitions "the file's definitions, qualified and documented, with
+their spans in file coordinates.")
+  (defn definitions [src]
+    (let-do [defs (the (Array ProjectDef) [])
+             n (String.length src)]
+      (collect-definitions! src 0 n "" &defs)
+      (attach-documentation! src 0 n "" &defs)
+      defs))
+
+  (doc loads "the load targets of a file, in the order they are loaded.")
+  (defn loads [src]
+    (let-do [out (the (Array String) [])
+             spans (Cell.top-level-spans src)
+             n (Array.length &spans)]
+      (for [i 0 n]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol src span)]
+          (when (load-head? &head)
+            (let [target (string-argument src span)]
+              (unless (String.empty? &target)
+                (Array.push-back! &out target))))))
+      out))
+
+  (private directory-of)
+  (hidden directory-of)
+  (defn directory-of [path]
+    (let-do [cut -1
+             n (String.length path)]
+      (for [i 0 n]
+        (when (= (String.char-at path i) \/) (set! cut i)))
+      (if (< cut 0) @"." (Cell.byte-slice path 0 cut))))
+
+  (doc normalize "collapses . and .. segments so the same file reached by
+different load paths is the same file. Without this a module loaded from two
+places looks like two files, and the browser shows it twice.")
+  (defn normalize [path]
+    (let-do [segments (String.split-by path &[\/])
+             kept (the (Array String) [])
+             n (Array.length &segments)
+             absolute (String.starts-with? path "/")]
+      (for [i 0 n]
+        (let [segment (Array.unsafe-nth &segments i)]
+          (cond
+            (String.empty? segment) ()
+            (String.= segment ".") ()
+            (String.= segment "..")
+              (let [k (Array.length &kept)]
+                (if (> k 0)
+                  (ignore (Array.pop-back! &kept))
+                  (Array.push-back! &kept @segment)))
+            (Array.push-back! &kept @segment))))
+      (let [joined (String.join "/" &kept)]
+        (if absolute (String.append "/" &joined) joined))))
+
+  (private git-target?)
+  (hidden git-target?)
+  (defn git-target? [target]
+    (or (String.starts-with? target "git@")
+        (String.starts-with? target "https://")))
+
+  (doc cache-path "where carp keeps a git dependency: the host and owner
+become one directory, then the repo, then the version, and the entry file
+is named after the repo.")
+  (defn cache-path [target]
+    (let [home (Maybe.from (IO.getenv "HOME") @"")
+          body (if (String.starts-with? target "git@")
+                 (Cell.byte-slice target 4 (String.length target))
+                 (Cell.byte-slice target 8 (String.length target)))
+          at (String.index-of-from &body \@ -1)
+          version (if (< at 0) @"" (Cell.byte-slice &body (+ at 1) (String.length &body)))
+          without (if (< at 0) @&body (Cell.byte-slice &body 0 at))
+          colon (String.index-of-from &without \: -1)
+          host (if (< colon 0) @"" (Cell.byte-slice &without 0 colon))
+          rest (if (< colon 0) @&without (Cell.byte-slice &without (+ colon 1) (String.length &without)))
+          slash (String.index-of-from &rest \/ -1)
+          owner (if (< slash 0) @"" (Cell.byte-slice &rest 0 slash))
+          repo (if (< slash 0) @&rest (Cell.byte-slice &rest (+ slash 1) (String.length &rest)))]
+      (String.concat &[home @"/.cache/carp/libs/" host @"_COLON_" owner
+                       @"/" @&repo @"/" version @"/" repo @".carp"])))
+
+  (doc resolve-target "a load target as a path: git targets resolve into the
+library cache, everything else is relative to the loading file.")
+  (defn resolve-target [target dir]
+    (normalize &(if (git-target? target)
+                  (cache-path target)
+                  (String.concat &[@dir @"/" @target]))))
+
+  (private known?)
+  (hidden known?)
+  (defn known? [files path]
+    (let-do [found false
+             n (Array.length files)]
+      (for [i 0 n]
+        (when (String.= (ProjectFile.path (Array.unsafe-nth files i)) path)
+          (set! found true)))
+      found))
+
+  (private seen?)
+  (hidden seen?)
+  (defn seen? [paths path]
+    (let-do [found false
+             n (Array.length paths)]
+      (for [i 0 n]
+        (when (String.= (Array.unsafe-nth paths i) path) (set! found true)))
+      found))
+
+  (doc walk! "depth-first over the load graph from a file, appending each
+file AFTER the files it loads, so the result is in load order. Visited paths
+are tracked separately from the output, so a cycle terminates without
+putting a file ahead of its own dependencies. Files under the repo root are
+the project; everything else is a dependency.")
+  (defn walk! [path root seen files]
+    (unless (seen? seen path)
+      (do
+        (Array.push-back! seen @path)
+        (match (IO.read-file path)
+          (Result.Error _) ()
+          (Result.Success source)
+            (let-do [dir (directory-of path)
+                     targets (loads &source)
+                     n (Array.length &targets)]
+              (for [i 0 n]
+                (walk! &(resolve-target (Array.unsafe-nth &targets i) &dir) root seen files))
+              (Array.push-back! files
+                                (ProjectFile.init @path
+                                                  (if (String.starts-with? path root) @"project" @"dep")
+                                                  source)))))))
+
+  (private directory-name)
+  (hidden directory-name)
+  (defn directory-name [path]
+    (let-do [cut -1
+             n (String.length path)]
+      (for [i 0 n]
+        (when (= (String.char-at path i) \/) (set! cut i)))
+      (if (< cut 0) @path (Cell.byte-slice path (+ cut 1) n))))
+
+  (doc entry-path "the project's entry file: main.carp when there is one,
+otherwise a file named after the repo.")
+  (defn entry-path [root]
+    (let [main (String.concat &[@root @"/main.carp"])]
+      (if (Result.success? &(IO.read-file &main))
+        main
+        (let [named (String.concat &[@root @"/" (directory-name root) @".carp"])]
+          named))))
+
+  (doc load-order "every file the project loads, dependencies first, in the
+order the compiler would see them.")
+  (defn load-order [root entry]
+    (let-do [files (the (Array ProjectFile) [])
+             seen (the (Array String) [])]
+      (walk! entry root &seen &files)
+      files)))
 
 ; --- warm compiler sessions ---------------------------------------------
 ; One carp-session per notebook session: Session.create loads and infers
@@ -1142,19 +1468,46 @@ program's own definitions.")
                                                   (JSON.entry @"environment"
                                                               (JSON.Arr environment))
                                                   (JSON.entry @"locals"
-                                                              (JSON.Arr kept-locals))])))))
+                                                              (JSON.Arr kept-locals))
+                                                  (JSON.entry @"diagnostics"
+                                                              (JSON.Arr (the (Array (Box JSON)) [])))])))))
               _ (respond-err id "malformed annotate output"))))))
+
+  (private diagnostic-json)
+  (hidden diagnostic-json)
+  (doc diagnostic-json "one compiler diagnostic as the editor wants it: the
+failing phase, the message, and the byte span of the offending form when the
+phase has source provenance (null otherwise).")
+  (defn diagnostic-json [d]
+    (JSON.obj [(JSON.entry @"phase" (JSON.Str @(Diagnostic.phase d)))
+               (JSON.entry @"message" (JSON.Str @(Diagnostic.message d)))
+               (JSON.entry @"start"
+                           (match-ref (Diagnostic.span d)
+                             (Maybe.Just span) (JSON.Num (Double.from-int @(SourceSpan.start span)))
+                             (Maybe.Nothing) (JSON.Null)))
+               (JSON.entry @"end"
+                           (match-ref (Diagnostic.span d)
+                             (Maybe.Just span) (JSON.Num (Double.from-int @(SourceSpan.end span)))
+                             (Maybe.Nothing) (JSON.Null)))]))
 
   (doc annotate-cell "answers the inferred types of a cell against the
 session's warm compiler state, falling back to the CLI's annotate mode when
-no warm state can be created.")
+no warm state can be created. A cell that does not check is NOT an error
+here: it answers the same shape with its diagnostics filled in, so an editor
+can mark the failing form while the user is still typing.")
   (defn annotate-cell [id sid src]
     (let [idx (Warm.ensure! sid)]
       (if (< idx 0)
         (annotate-cell-cli id sid src)
         (match (Session.infer-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
                                    &(SourceInput.init @"cell" @src))
-          (Result.Error d) (respond-err id (Diagnostic.message &d))
+          (Result.Error d)
+            (respond-ok-json id
+                             (JSON.obj [(JSON.entry @"definitions" (JSON.Arr (the (Array (Box JSON)) [])))
+                                        (JSON.entry @"environment" (JSON.Arr (the (Array (Box JSON)) [])))
+                                        (JSON.entry @"locals" (JSON.Arr (the (Array (Box JSON)) [])))
+                                        (JSON.entry @"diagnostics"
+                                                    (JSON.Arr [(Box.init (diagnostic-json &d))]))]))
           (Result.Success cell) (respond-ok-json id (annotate-json idx &cell src))))))
 
   (private kind-string)
@@ -1188,6 +1541,44 @@ name, kind, scheme and documentation, capped at 200.")
                                                                   (Maybe.Just d) (JSON.Str @d)
                                                                   (Maybe.Nothing) (JSON.Null)))])))))
           (respond-ok-json id (JSON.obj [(JSON.entry @"candidates" (JSON.Arr out))]))))))
+
+  (doc project-json "the project as the browser wants it: the load order,
+each file's kind, and its definitions with file-coordinate spans.")
+  (defn project-json [root entry]
+    (let-do [files (Project.load-order root entry)
+             out (the (Array (Box JSON)) [])
+             n (Array.length &files)]
+      (for [i 0 n]
+        (let-do [file (Array.unsafe-nth &files i)
+                 defs (Project.definitions (ProjectFile.source file))
+                 rows (the (Array (Box JSON)) [])
+                 m (Array.length &defs)]
+          (for [j 0 m]
+            (let [d (Array.unsafe-nth &defs j)]
+              (Array.push-back! &rows
+                                (Box.init
+                                  (JSON.obj [(JSON.entry @"name" (JSON.Str @(ProjectDef.name d)))
+                                             (JSON.entry @"head" (JSON.Str @(ProjectDef.head d)))
+                                             (JSON.entry @"start" (JSON.Num (Double.from-int @(ProjectDef.start d))))
+                                             (JSON.entry @"end" (JSON.Num (Double.from-int @(ProjectDef.end d))))
+                                             (JSON.entry @"doc" (JSON.Str @(ProjectDef.documentation d)))])))))
+          (Array.push-back! &out
+                            (Box.init
+                              (JSON.obj [(JSON.entry @"path" (JSON.Str @(ProjectFile.path file)))
+                                         (JSON.entry @"kind" (JSON.Str @(ProjectFile.kind file)))
+                                         (JSON.entry @"definitions" (JSON.Arr rows))])))))
+      (JSON.obj [(JSON.entry @"root" (JSON.Str @root))
+                 (JSON.entry @"entry" (JSON.Str @entry))
+                 (JSON.entry @"files" (JSON.Arr out))])))
+
+  (doc open-project "answers the project tree rooted at a repo: its load
+order, files and definitions. Reading only — the warm session is not
+touched.")
+  (defn open-project [id root entry]
+    (let [start (Project.normalize &(if (String.empty? entry) (Project.entry-path root) @entry))]
+      (if (Result.error? &(IO.read-file &start))
+        (respond-err id &(String.concat &[@"no entry file at " @&start]))
+        (respond-ok-json id (project-json root &start)))))
 
   (doc doc-lookup "answers the warm documentation entry for a name.")
   (defn doc-lookup [id sid name]
@@ -1297,6 +1688,12 @@ program's own definitions.")
                   (match (get-str &j "source")
                     (Result.Error e) (respond-err id &e)
                     (Result.Success src) (annotate-cell id &sid &src)))
+            (= &cmd "project")
+              (match (get-str &j "root")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success root)
+                  (open-project id &root
+                                &(Result.from-success (get-str &j "entry") @"")))
             (= &cmd "eval")
               (match (get-str &j "session")
                 (Result.Error e) (respond-err id &e)

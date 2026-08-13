@@ -322,7 +322,8 @@ CarpServerClient >> annotateSource: aSourceString session: aSessionString [
 		source: aSourceString;
 		definitions: (ok at: 'definitions' ifAbsent: [ #() ]);
 		environment: (ok at: 'environment' ifAbsent: [ #() ]);
-		locals: (ok at: 'locals' ifAbsent: [ #() ])
+		locals: (ok at: 'locals' ifAbsent: [ #() ]);
+		diagnostics: (ok at: 'diagnostics' ifAbsent: [ #() ])
 ]
 
 { #category : #'api - commands' }

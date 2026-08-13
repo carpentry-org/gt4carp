@@ -43,6 +43,7 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 		addStyler: (GtCoderAstSmaCCParserStyler new smaccStyler: CarpParser gtStyler);
 		addStyler: CarpTypeAdornmentStyler new;
 		addStyler: CarpLifetimeHighlightStyler new;
+		addStyler: CarpDiagnosticHighlightStyler new;
 		addStyler: CarpLintHighlightStyler new.
 
 	addOns

@@ -65,7 +65,7 @@ CarpTypeAdornmentStyler >> style: aText ast: theAst [
 							(localRows notEmpty
 								and: [ localRows first includesKey: 'end' ])
 								ifTrue: [ byteMap
-										ifNil: [ byteMap := self byteToCharMapFor: aText asString ].
+										ifNil: [ byteMap := CarpStylerUtilities charPositionsByByteOffsetIn: aText asString ].
 									self
 										adornLocalsFrom: localRows
 										text: aText
@@ -80,31 +80,6 @@ CarpTypeAdornmentStyler >> style: aText ast: theAst [
 										owner: ownerName ] ] ] ]
 				on: Error
 				do: [ :e |  ] ]
-]
-
-{ #category : #accessing }
-CarpTypeAdornmentStyler >> byteToCharMapFor: aString [
-	"UTF-8 byte offset at each character boundary -> 1-based character
-	position; the compiler's spans are byte offsets into the cell source."
-
-	| map bytes |
-	map := Dictionary new: aString size * 2.
-	bytes := 0.
-	aString doWithIndex: [ :ch :i |
-		map at: bytes put: i.
-		bytes := bytes + (self utf8SizeOf: ch) ].
-	map at: bytes put: aString size + 1.
-	^ map
-]
-
-{ #category : #accessing }
-CarpTypeAdornmentStyler >> utf8SizeOf: aCharacter [
-	| cp |
-	cp := aCharacter asInteger.
-	cp < 128 ifTrue: [ ^ 1 ].
-	cp < 2048 ifTrue: [ ^ 2 ].
-	cp < 65536 ifTrue: [ ^ 3 ].
-	^ 4
 ]
 
 { #category : #accessing }
