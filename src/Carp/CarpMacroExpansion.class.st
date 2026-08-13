@@ -94,6 +94,23 @@ CarpMacroExpansion >> expandFully [
 ]
 
 { #category : #actions }
+CarpMacroExpansion >> doubleChevron: aStencil [
+	"The icon set has no « or »: two chevrons overlapped, so the pair reads
+	as one glyph and stays close to a single icon's width. leftSide and
+	rightSide are panel-toggle squares and mean nothing here."
+
+	| pane |
+	pane := BlElement new
+			layout: BlLinearLayout horizontal alignCenter;
+			constraintsDo: [ :c |
+				c horizontal fitContent.
+				c vertical fitContent ].
+	pane addChild: aStencil asElement.
+	pane addChild: (aStencil asElement margin: (BlInsets left: -6)).
+	^ pane
+]
+
+{ #category : #actions }
 CarpMacroExpansion >> gtActionBackFor: anAction [
 	"Navigation belongs to the whole inspector: stepping while reading the
 	diff is the point, and every view follows the model."
@@ -121,7 +138,7 @@ CarpMacroExpansion >> gtActionFixpointFor: anAction [
 	<gtAction>
 	^ anAction button
 		priority: 4;
-		icon: BrGlamorousVectorIcons rightSide;
+		icon: [ self doubleChevron: BrGlamorousVectorIcons right ];
 		tooltip: 'Expand to the fixpoint';
 		action: [ :aButton | self stepToFixpoint ]
 ]
@@ -131,7 +148,7 @@ CarpMacroExpansion >> gtActionResetFor: anAction [
 	<gtAction>
 	^ anAction button
 		priority: 1;
-		icon: BrGlamorousVectorIcons leftSide;
+		icon: [ self doubleChevron: BrGlamorousVectorIcons left ];
 		tooltip: 'Back to the form as written';
 		action: [ :aButton | self reset ]
 ]
