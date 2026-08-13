@@ -8,11 +8,12 @@ actually goes on to compile.
 Nothing here commits to the session — expansion runs against a private copy
 of the compile-time environment.
 
-Note on stepping: the session's single-step expansion only fires when the
-OUTERMOST form is itself a macro call, so a definition whose body contains
-macros reports no change even though expanding fully rewrites it. Until
-that is a full one-reduction-anywhere step, `isAtFixpoint` can be true
-while `expandFully` still differs — hence both are shown.
+A step is one reduction ANYWHERE in the form. The session's single-step
+expansion only fires when the outermost head is a macro, so stepping walks
+the tree here — outermost first, then each subform in source order — and
+splices the one expansion it finds back into the surrounding text. Each
+step therefore costs a few round trips; a native one-reduction-anywhere
+step in the session would replace this walk entirely.
 "
 Class {
 	#name : #CarpMacroExpansion,
@@ -106,22 +107,71 @@ CarpMacroExpansion >> source: aString [
 ]
 
 { #category : #stepping }
-CarpMacroExpansion >> step [
-	"Take one expansion step from the current form. Answers whether it
-	changed anything; at the fixpoint nothing is appended."
+CarpMacroExpansion >> expandOnce: aFormString [
+	"One expansion of a form, or nil when it expands to itself."
 
 	| answer |
 	answer := [ CarpServerClient default
-			expandSource: self current
+			expandSource: aFormString
 			session: session
 			once: true ]
 			on: Error
 			do: [ :e | nil ].
-	answer ifNil: [ ^ false ].
-	(answer at: 'changed' ifAbsent: [ false ])
-		ifFalse: [ ^ false ].
-	steps add: (answer at: 'expansion').
-	^ true
+	answer ifNil: [ ^ nil ].
+	^ (answer at: 'changed' ifAbsent: [ false ])
+		ifTrue: [ answer at: 'expansion' ]
+		ifFalse: [ nil ]
+]
+
+{ #category : #stepping }
+CarpMacroExpansion >> reduceOnce: aFormString [
+	"One reduction anywhere in the form: the session only expands a form
+	whose OUTERMOST head is a macro, so a definition whose body contains
+	macros reports no change. Walking the tree here — outermost first, then
+	each subform in order — makes a step mean what a stepper needs it to
+	mean. Answers the whole form with that one reduction spliced in, or nil
+	at the real fixpoint."
+
+	| ast |
+	(self expandOnce: aFormString) ifNotNil: [ :expanded | ^ expanded ].
+	ast := [ CarpParser parseWithErrors: aFormString ] on: Error do: [ :e | ^ nil ].
+	^ self reduceWithin: ast of: aFormString
+]
+
+{ #category : #stepping }
+CarpMacroExpansion >> reduceWithin: aNode of: aFormString [
+	"Depth-first, in source order: the first subform that expands wins, and
+	its expansion is spliced back into the text so everything around it is
+	preserved exactly."
+
+	aNode children
+		do: [ :child |
+			| subform expanded |
+			(child isKindOf: CarpListNode)
+				ifTrue: [ subform := [ aFormString copyFrom: child startPosition to: child stopPosition ]
+							on: Error
+							do: [ :e | nil ].
+					subform
+						ifNotNil: [ expanded := self expandOnce: subform.
+							expanded
+								ifNotNil: [ ^ aFormString
+										copyReplaceFrom: child startPosition
+										to: child stopPosition
+										with: expanded ] ] ].
+			(self reduceWithin: child of: aFormString) ifNotNil: [ :reduced | ^ reduced ] ].
+	^ nil
+]
+
+{ #category : #stepping }
+CarpMacroExpansion >> step [
+	"Take one expansion step from the current form. Answers whether it
+	changed anything; at the fixpoint nothing is appended."
+
+	(self reduceOnce: self current)
+		ifNil: [ ^ false ]
+		ifNotNil: [ :reduced |
+			steps add: reduced.
+			^ true ]
 ]
 
 { #category : #stepping }
