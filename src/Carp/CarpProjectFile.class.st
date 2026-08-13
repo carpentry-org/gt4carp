@@ -109,10 +109,12 @@ CarpProjectFile >> addDefinition: aSourceString toModule: aModuleDefinition [
 
 	| insertAt shift |
 	insertAt := aModuleDefinition stop - 1.
+	"lf, not cr: Pharo's String cr is a carriage return, and these are Unix
+	source files"
 	shift := self
 			replaceBytesFrom: insertAt
 			to: insertAt
-			with: String cr , '  ' , aSourceString , String cr.
+			with: String lf , '  ' , aSourceString , String lf.
 	self shiftDefinitionsAfter: insertAt by: shift.
 	aModuleDefinition stop: aModuleDefinition stop + shift.
 	self reloadDefinitions.
@@ -125,7 +127,7 @@ CarpProjectFile >> addDefinition: aSourceString [
 
 	| size shift |
 	size := self contentsBytes size.
-	shift := self replaceBytesFrom: size to: size with: String cr , aSourceString , String cr.
+	shift := self replaceBytesFrom: size to: size with: String lf , aSourceString , String lf.
 	self reloadDefinitions.
 	^ self commit
 ]
@@ -147,6 +149,26 @@ CarpProjectFile >> reloadDefinitions [
 							each ]) ] ]
 		on: Error
 		do: [ :e |  ]
+]
+
+{ #category : #saving }
+CarpProjectFile >> lineSpanAround: aStart to: aStop [
+	"Widen a span to the whole line it sits on: the indentation before it and
+	the newline after it. Cutting only the text would leave a blank line and
+	a stray indent where the definition used to be."
+
+	| bytes from to space tab newline |
+	bytes := self contentsBytes.
+	space := 32.
+	tab := 9.
+	newline := 10.
+	from := aStart.
+	[ from > 0 and: [ | b | b := bytes at: from. b = space or: [ b = tab ] ] ]
+		whileTrue: [ from := from - 1 ].
+	(from > 0 and: [ (bytes at: from) = newline ]) ifTrue: [ from := from - 1 ].
+	to := aStop.
+	(to < bytes size and: [ (bytes at: to + 1) = newline ]) ifTrue: [ to := to + 1 ].
+	^ from -> to
 ]
 
 { #category : #saving }
@@ -177,8 +199,12 @@ CarpProjectFile >> replaceBytesFrom: aStart to: aStop with: aString [
 	replacement := aString utf8Encoded.
 	updated := (bytes first: aStart) , replacement
 			, (bytes allButFirst: (aStop min: bytes size)).
+	"truncate: writing over an existing file leaves whatever was longer than
+	the new content behind, which turns a deletion into corruption"
 	self path asFileReference
-		binaryWriteStreamDo: [ :stream | stream nextPutAll: updated ].
+		binaryWriteStreamDo: [ :stream |
+			stream truncate.
+			stream nextPutAll: updated ].
 	contents := nil.
 	^ replacement size - (aStop - aStart)
 ]

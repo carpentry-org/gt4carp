@@ -98,9 +98,10 @@ CarpSourceDefinition >> delete [
 	"Cut the definition out of its file, leaving one blank line where it
 	was, and commit the file so the session drops it too."
 
-	| shift boundary |
+	| shift boundary span |
+	span := self file lineSpanAround: start to: stop.
 	boundary := stop.
-	shift := self file replaceBytesFrom: start to: stop with: ''.
+	shift := self file replaceBytesFrom: span key to: span value with: ''.
 	self file shiftDefinitionsAfter: boundary by: shift.
 	self file removeDefinition: self.
 	self file commit.
