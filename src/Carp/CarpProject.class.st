@@ -166,6 +166,45 @@ CarpProject >> files: aCollection [
 	files := aCollection
 ]
 
+{ #category : #inspecting }
+CarpProject >> gtBrowseFor: aView [
+	"Everything the project is, in one place: its modules to drill through,
+	its load order, its dependencies. Drilling right through the inspector
+	is the browser — a module lists its definitions, a definition opens in
+	its coder."
+
+	<return: #GtPhlowLabelledView>
+	^ GtPhlowLabelledViewBuilder new
+		object: self;
+		view: aView;
+		context: GtPhlowContext new;
+		viewsSelector: #gtBrowserViewsFor:;
+		titleComputation: [ self rootName ];
+		build
+]
+
+{ #category : #inspecting }
+CarpProject >> gtBrowserViewsFor: aContext [
+	| views |
+	views := (self gtViewsFor: GtPhlowEmptyView new inContext: aContext) asOrderedCollection.
+	GtPhlowUtility sortByPriority: views.
+	^ views
+]
+
+{ #category : #inspecting }
+CarpProject >> gtDefaultInspectorTool [
+	"A project opens as an IDE surface rather than a bare object: the
+	browser, with a playground on the project's own session beside it."
+
+	^ GtPhlowCompositeTool new
+		addTool: ((GtInspectorTool forObject: self viewSelector: #gtBrowseFor:)
+				name: 'Browse';
+				withLabelAndIconAptitude);
+		addTool: ((GtInspectorTool forObject: self viewSelector: #gtViewsFor:inContext:)
+				name: 'Raw';
+				withLabelAndIconAptitude)
+]
+
 { #category : #accessing }
 CarpProject >> gtDependenciesFor: aView [
 	<gtView>
@@ -205,11 +244,19 @@ CarpProject >> gtModulesFor: aView [
 		title: 'Modules';
 		priority: 1;
 		items: [ self modules ];
-		children: [ :each | each isString ifTrue: [ self definitionsOfModule: each ] ifFalse: [ #() ] ];
+		children: [ :each |
+			(each isKindOf: CarpModule)
+				ifTrue: [ each definitions ]
+				ifFalse: [ #() ] ];
 		column: 'Name'
-			text: [ :each | each isString ifTrue: [ each ifEmpty: [ '(top level)' ] ] ifFalse: [ each shortName ] ];
-		column: 'Kind' text: [ :each | each isString ifTrue: [ '' ] ifFalse: [ each head ] ] width: 110;
-		send: [ :each | each isString ifTrue: [ self definitionsOfModule: each ] ifFalse: [ each ] ];
+			text: [ :each |
+				(each isKindOf: CarpModule)
+					ifTrue: [ each displayName ]
+					ifFalse: [ each shortName ] ];
+		column: 'Kind'
+			text: [ :each | (each isKindOf: CarpModule) ifTrue: [ '' ] ifFalse: [ each head ] ]
+			width: 110;
+		send: [ :each | each ];
 		updateWhen: CarpProjectChanged in: [ self announcer ]
 ]
 
@@ -219,7 +266,7 @@ CarpProject >> definitionsOfModule: aModuleName [
 ]
 
 { #category : #accessing }
-CarpProject >> modules [
+CarpProject >> moduleNames [
 	"The module names of the repository's own definitions, in load order of
 	first appearance."
 
@@ -228,6 +275,23 @@ CarpProject >> modules [
 	self definitions
 		do: [ :each | (seen includes: each moduleName) ifFalse: [ seen add: each moduleName ] ].
 	^ seen
+]
+
+{ #category : #accessing }
+CarpProject >> modules [
+	"The project's modules, in load order of first appearance."
+
+	^ self moduleNames collect: [ :each | CarpModule named: each in: self ]
+]
+
+{ #category : #accessing }
+CarpProject >> moduleNamed: aString [
+	^ CarpModule named: aString in: self
+]
+
+{ #category : #accessing }
+CarpProject >> definitionNamed: aString [
+	^ self definitions detect: [ :each | each name = aString ] ifNone: [ nil ]
 ]
 
 { #category : #printing }

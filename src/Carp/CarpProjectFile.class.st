@@ -102,6 +102,59 @@ CarpProjectFile >> commit [
 ]
 
 { #category : #saving }
+CarpProjectFile >> addDefinition: aSourceString toModule: aModuleDefinition [
+	"Insert a definition at the end of a module's body, just before its
+	closing paren, and commit the file. A module definition is the module
+	form itself, so its span ends at that paren."
+
+	| insertAt shift |
+	insertAt := aModuleDefinition stop - 1.
+	shift := self
+			replaceBytesFrom: insertAt
+			to: insertAt
+			with: String cr , '  ' , aSourceString , String cr.
+	self shiftDefinitionsAfter: insertAt by: shift.
+	aModuleDefinition stop: aModuleDefinition stop + shift.
+	self reloadDefinitions.
+	^ self commit
+]
+
+{ #category : #saving }
+CarpProjectFile >> addDefinition: aSourceString [
+	"Append a definition at the top level of the file."
+
+	| size shift |
+	size := self contentsBytes size.
+	shift := self replaceBytesFrom: size to: size with: String cr , aSourceString , String cr.
+	self reloadDefinitions.
+	^ self commit
+]
+
+{ #category : #saving }
+CarpProjectFile >> reloadDefinitions [
+	"Re-read this file's definitions from the server, so spans and names
+	match the bytes on disk after an edit that added or removed one."
+
+	self project ifNil: [ ^ self ].
+	[ | fresh |
+	fresh := CarpServerClient default projectAt: self project root.
+	(fresh files detect: [ :each | each path = self path ] ifNone: [ nil ])
+		ifNotNil: [ :aFile |
+			self
+				definitions: (aFile definitions
+						collect: [ :each |
+							each file: self.
+							each ]) ] ]
+		on: Error
+		do: [ :e |  ]
+]
+
+{ #category : #saving }
+CarpProjectFile >> removeDefinition: aDefinition [
+	definitions := self definitions copyWithout: aDefinition
+]
+
+{ #category : #saving }
 CarpProjectFile >> shiftDefinitionsAfter: aByteOffset by: aNumber [
 	"Editing one definition moves every definition below it in the file."
 

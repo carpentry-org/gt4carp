@@ -381,8 +381,10 @@ begins.")
       (String.concat &[@prefix @"." @name])))
 
   (doc collect-definitions! "every definition in a byte range, descending
-into defmodule so nested names come out qualified. Documentation forms are
-paired with their target by name.")
+into defmodule so nested names come out qualified. The module forms
+themselves are recorded too: an editor adding a definition to a module has
+to know where that module's body ends. Documentation forms are paired with
+their target by name.")
   (defn collect-definitions! [src from to prefix out]
     (let-do [spans (Cell.spans-between src from to)
              n (Array.length &spans)]
@@ -391,12 +393,20 @@ paired with their target by name.")
               head (Cell.head-symbol src span)]
           (cond
             (String.= &head "defmodule")
-              (let [name (Cell.second-symbol src span)]
-                (collect-definitions! src
-                                      (body-start src span)
-                                      (- @(Pair.b span) 1)
-                                      &(qualify prefix &name)
-                                      out))
+              (let [name (Cell.second-symbol src span)
+                    qualified (qualify prefix &name)]
+                (do
+                  (Array.push-back! out
+                                    (ProjectDef.init @&qualified
+                                                     @"defmodule"
+                                                     @(Pair.a span)
+                                                     @(Pair.b span)
+                                                     @""))
+                  (collect-definitions! src
+                                        (body-start src span)
+                                        (- @(Pair.b span) 1)
+                                        &qualified
+                                        out)))
             (binding-head? &head)
               (Array.push-back! out
                                 (ProjectDef.init (qualify prefix &(Cell.second-symbol src span))

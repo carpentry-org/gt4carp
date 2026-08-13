@@ -50,6 +50,17 @@ CarpSourceDefinition >> file: aCarpProjectFile [
 	file := aCarpProjectFile
 ]
 
+{ #category : #actions }
+CarpSourceDefinition >> gtActionDeleteFor: anAction [
+	<gtAction>
+	self isModule ifTrue: [ ^ anAction noAction ].
+	^ anAction button
+		priority: 10;
+		icon: BrGlamorousVectorIcons trash;
+		tooltip: 'Delete this definition from its file';
+		action: [ :aButton | self delete ]
+]
+
 { #category : #accessing }
 CarpSourceDefinition >> gtDocumentationFor: aView [
 	<gtView>
@@ -80,6 +91,25 @@ CarpSourceDefinition >> gtSourceFor: aView [
 		title: 'Source';
 		priority: 1;
 		stencil: [ self newCoder asCoderViewModel asElement ]
+]
+
+{ #category : #saving }
+CarpSourceDefinition >> delete [
+	"Cut the definition out of its file, leaving one blank line where it
+	was, and commit the file so the session drops it too."
+
+	| shift boundary |
+	boundary := stop.
+	shift := self file replaceBytesFrom: start to: stop with: ''.
+	self file shiftDefinitionsAfter: boundary by: shift.
+	self file removeDefinition: self.
+	self file commit.
+	self project ifNotNil: [ :aProject | aProject changed ]
+]
+
+{ #category : #testing }
+CarpSourceDefinition >> isModule [
+	^ self head = 'defmodule'
 ]
 
 { #category : #saving }
