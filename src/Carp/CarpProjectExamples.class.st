@@ -39,9 +39,18 @@ CarpProjectExamples >> directory [
 				lf;
 				nextPutAll: '  (doc area "the area of a circle.")';
 				lf;
+				nextPutAll: '  (private area)';
+				lf;
 				nextPutAll: '  (defn area [c]';
 				lf;
 				nextPutAll: '    (* 3.14159 (* @(Circle.radius c) @(Circle.radius c))))';
+				lf;
+				lf;
+				nextPutAll: '  (meta-set! a-unit-circle "example" true)';
+				lf;
+				nextPutAll: '  (defn a-unit-circle []';
+				lf;
+				nextPutAll: '    (Circle.init 1.0))';
 				lf;
 				nextPutAll: ')';
 				lf ].
@@ -73,6 +82,57 @@ CarpProjectExamples >> definitionsCarryTheirSpans [
 	project := self project.
 	project definitions
 		do: [ :each | self assert: (each source beginsWith: '(' , each head) ].
+	^ project
+]
+
+{ #category : #examples }
+CarpProjectExamples >> definitionsOwnTheirAnnotations [
+	"What is said about a definition belongs to it: its documentation, its
+	visibility, and whether it is an example are read from the forms that
+	name it, and those forms are not definitions of their own."
+
+	<gtExample>
+	<return: #CarpProject>
+	| project area example |
+	project := self project.
+	area := project definitionNamed: 'Shapes.area'.
+	self assert: area documentation equals: 'the area of a circle.'.
+	self assert: area isPrivate.
+	self assert: area isExample not.
+	example := project definitionNamed: 'Shapes.a-unit-circle'.
+	self assert: example isExample.
+	self assert: example kind equals: #example.
+	self assert: (project definitionNamed: 'Shapes.Circle') kind equals: #type.
+	self assert: (project definitions noneSatisfy: [ :each | each head = 'doc' ]).
+	^ project
+]
+
+{ #category : #examples }
+CarpProjectExamples >> documentationIsWrittenBackAndTakenAway [
+	"Editing documentation writes the (doc …) form into the file — creating
+	one where there was none — and emptying it takes the form away without
+	disturbing anything around it."
+
+	<gtExample>
+	<return: #CarpProject>
+	| project before |
+	project := self project.
+	before := (project definitionNamed: 'Shapes.area') file contents.
+	(project definitionNamed: 'Shapes.diameter')
+		ifNil: [ (project moduleNamed: 'Shapes')
+				addDefinition: '(defn diameter [c]
+    (* 2.0 @(Circle.radius c)))'.
+			project reload.
+			before := (project definitionNamed: 'Shapes.area') file contents ].
+	(project definitionNamed: 'Shapes.diameter') saveDocumentation: 'twice the radius.'.
+	project reload.
+	self
+		assert: (project definitionNamed: 'Shapes.diameter') documentation
+		equals: 'twice the radius.'.
+	(project definitionNamed: 'Shapes.diameter') saveDocumentation: ''.
+	project reload.
+	self assert: (project definitionNamed: 'Shapes.diameter') documentation equals: ''.
+	self assert: (project definitionNamed: 'Shapes.area') file contents equals: before.
 	^ project
 ]
 

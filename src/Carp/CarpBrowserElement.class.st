@@ -93,6 +93,11 @@ CarpBrowserElement >> initialize [
 				browserModel selectedModule: (moduleList viewModel itemAt: anInterval first) ] ].
 	definitionList := self newListLabelled: [ :each | each shortName ].
 	definitionList
+		itemDataBinder: [ :aLabel :each |
+			aLabel
+				text: (each shortName asRopedText
+						foreground: (self colorForKind: each kind)) ].
+	definitionList
 		when: BrSelectionChanged
 		do: [ :anEvent |
 			anEvent selectedDo: [ :anInterval |
@@ -599,7 +604,7 @@ CarpBrowserElement >> onDefinitionSelected [
 	self
 		select: browserModel selectedDefinition
 		in: definitionList
-		among: browserModel definitions.
+		among: browserModel sortedDefinitions.
 	self updateCoderPane
 ]
 
@@ -618,13 +623,13 @@ CarpBrowserElement >> onFilterChanged [
 	(definitions includes: browserModel selectedDefinition)
 		ifFalse: [ browserModel selectedDefinition: nil ].
 	self select: browserModel selectedModule in: moduleList among: modules.
-	self select: browserModel selectedDefinition in: definitionList among: definitions.
+	self select: browserModel selectedDefinition in: definitionList among: browserModel sortedDefinitions.
 	self updateCoderPane
 ]
 
 { #category : #updating }
 CarpBrowserElement >> onModuleSelected [
-	definitionList items: browserModel definitions.
+	definitionList items: browserModel sortedDefinitions.
 	self select: browserModel selectedModule in: moduleList among: browserModel modules.
 	self updateCoderPane
 ]
@@ -648,12 +653,12 @@ CarpBrowserElement >> select: anObject in: aList among: aCollection [
 { #category : #updating }
 CarpBrowserElement >> onProjectChanged [
 	moduleList items: browserModel modules.
-	definitionList items: browserModel definitions.
+	definitionList items: browserModel sortedDefinitions.
 	self select: browserModel selectedModule in: moduleList among: browserModel modules.
 	self
 		select: browserModel selectedDefinition
 		in: definitionList
-		among: browserModel definitions.
+		among: browserModel sortedDefinitions.
 	self updateStatus.
 	self updateCoderPane
 ]
@@ -777,19 +782,316 @@ CarpBrowserElement >> newRowFor: aDefinition [
 	isOpen ifFalse: [ row addChild: self newHorizontalSeparator ].
 	isOpen
 		ifTrue: [ openRow := row.
-			row
-				addChild: ((browserModel project isSessionLoaded
-						ifTrue: [ (aDefinition newCoder asCoderViewModel expanded: true) asExpandedOnlyElement ]
-						ifFalse: [ BrEditor new
-								aptitude: BrGlamorousCodeEditorAptitude new;
-								styler: CarpParser gtStyler;
-								beReadOnlyWithSelection;
-								text: aDefinition source ])
-						padding: (BlInsets top: 0 left: 6 bottom: 8 right: 8);
-						constraintsDo: [ :c |
-							c horizontal matchParent.
-							c vertical fitContent ]) ].
+			row addChild: (self newFacetsFor: aDefinition) ].
 	^ row
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newFacetsFor: aDefinition [
+	| holder strip facets |
+	facets := OrderedCollection new.
+	facets
+		add: 'Definition' -> [ self newDefinitionPaneFor: aDefinition ];
+		add: 'Documentation' -> [ self newDocumentationPaneFor: aDefinition ];
+		add: 'Examples' -> [ self newExamplesPaneFor: aDefinition ].
+	aDefinition isType
+		ifTrue: [ facets add: 'Members' -> [ self newMembersPaneFor: aDefinition ] ].
+	holder := BlElement new
+			layout: BlLinearLayout vertical;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical exact: (self facetHeightFor: aDefinition) ];
+			yourself.
+	strip := BrHorizontalPane new
+			hMatchParent;
+			vFitContent;
+			alignCenterLeft;
+			padding: (BlInsets top: 2 left: 8 bottom: 0 right: 8);
+			cellSpacing: 4;
+			yourself.
+	facets
+		doWithIndex: [ :each :index |
+			strip
+				addChild: (BrButton new
+						aptitude: BrGlamorousButtonWithLabelAptitude new;
+						label: (self facetLabel: each key selected: index = 1);
+						action: [ :aButton |
+							"which facet you are reading is said in the labels — a
+							button carries an aptitude that owns its background and
+							border, and setting those directly fights it"
+							strip children
+								doWithIndex: [ :sibling :position |
+									sibling
+										label: (self
+												facetLabel: (facets at: position) key
+												selected: sibling == aButton) ].
+							holder removeChildren.
+							holder addChild: each value value ];
+						yourself) ].
+	holder addChild: facets first value value.
+	^ BlElement new
+		layout: BlLinearLayout vertical;
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical fitContent ];
+		addChild: strip;
+		addChild: holder;
+		yourself
+]
+
+{ #category : #style }
+CarpBrowserElement >> facetLabel: aString selected: aBoolean [
+	^ aBoolean
+		ifTrue: [ '· ' , aString ]
+		ifFalse: [ aString ]
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newMembersPaneFor: aDefinition [
+	"What a type brings with it: the functions the compiler derived from its
+	fields, which are ordinary definitions in the session rather than
+	anything the file spells out."
+
+	| content members |
+	members := browserModel project membersOf: aDefinition.
+	content := BlElement new
+			layout: BlLinearLayout vertical;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical fitContent ];
+			yourself.
+	members
+		ifEmpty: [ content
+				addChild: (BrLabel new
+						aptitude: (BrGlamorousLabelAptitude new
+								foreground: self mutedColor;
+								fontSize: 12);
+						padding: (BlInsets all: 12);
+						text: (browserModel project isSessionLoaded
+								ifTrue: [ 'No members' ]
+								ifFalse: [ 'Load the project into a session to see what it derives' ])) ]
+		ifNotEmpty: [ members
+				do: [ :each |
+					content
+						addChild: (BrHorizontalPane new
+								hMatchParent;
+								vFitContent;
+								alignCenterLeft;
+								padding: (BlInsets top: 5 left: 10 bottom: 5 right: 8);
+								cellSpacing: 10;
+								addChild: (BrLabel new
+										aptitude: (BrGlamorousLabelAptitude new
+												glamorousCodeFont;
+												fontSize: 12);
+										text: (each at: 'name'));
+								addChild: (BrLabel new
+										aptitude: (BrGlamorousLabelAptitude new
+												glamorousCodeFont;
+												foreground: self mutedColor;
+												fontSize: 11);
+										text: (each at: 'type' ifAbsent: [ '' ]));
+								yourself);
+						addChild: self newHorizontalSeparator ] ].
+	^ BlScrollableElement new
+		addChild: content;
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical matchParent ];
+		yourself
+]
+
+{ #category : #style }
+CarpBrowserElement >> facetHeightFor: aDefinition [
+	"Enough for the definition to be read without a scrollbar, and no more."
+
+	| lines |
+	lines := aDefinition source lines size.
+	^ (((lines + 3) * 18 + 46) min: 420) max: 150
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newExamplesPaneFor: aDefinition [
+	| content examples |
+	examples := browserModel project examplesFor: aDefinition.
+	content := BlElement new
+			layout: BlLinearLayout vertical;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical fitContent ];
+			yourself.
+	examples
+		ifEmpty: [ content
+				addChild: (BrLabel new
+						aptitude: (BrGlamorousLabelAptitude new
+								foreground: self mutedColor;
+								fontSize: 12);
+						padding: (BlInsets all: 12);
+						text: 'Nothing exemplifies this yet.') ]
+		ifNotEmpty: [ examples
+				do: [ :anExample |
+					content
+						addChild: (self newExampleRowFor: anExample);
+						addChild: self newHorizontalSeparator ] ].
+	^ BlScrollableElement new
+		addChild: content;
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical matchParent ];
+		yourself
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newExampleRowFor: anExample [
+	| result |
+	result := BrLabel new
+			aptitude: (BrGlamorousLabelAptitude new
+					glamorousCodeFont;
+					foreground: self secondaryColor;
+					fontSize: 11);
+			text: '';
+			yourself.
+	^ BrHorizontalPane new
+		hMatchParent;
+		vFitContent;
+		alignCenterLeft;
+		padding: (BlInsets top: 6 left: 10 bottom: 6 right: 8);
+		cellSpacing: 8;
+		addChild: (BrLabel new
+				aptitude: (BrGlamorousLabelAptitude new
+						glamorousCodeFont;
+						fontSize: 12);
+				text: anExample shortName);
+		addChild: result;
+		addChild: (BrFrame new hMatchParent vFitContent);
+		addChild: (BrButton new
+				aptitude: BrGlamorousButtonWithIconAptitude;
+				icon: BrGlamorousVectorIcons playinspect;
+				label: 'Run this example';
+				action: [ self run: anExample into: result ]);
+		addChild: (BrButton new
+				aptitude: BrGlamorousButtonWithIconAptitude;
+				icon: BrGlamorousVectorIcons edit;
+				label: 'Go to this example';
+				action: [ browserModel showDefinition: anExample ]);
+		yourself
+]
+
+{ #category : #actions }
+CarpBrowserElement >> run: anExample into: aLabel [
+	"Run an example in the project's own session, in the background: it is a
+	compile and a run, which is fast now but not instant."
+
+	| project |
+	project := browserModel project.
+	aLabel text: 'running…'.
+	[ | answer |
+	answer := [ (project newPlaygroundCoder
+			primitiveEvaluate: '(' , anExample name , ')'
+			inContext: GtSourceCoderEvaluationContext new
+			onFailDo: [ :e | e messageText ]) printString ]
+			on: Error
+			do: [ :e | e messageText ].
+	aLabel enqueueTask: (BlTaskAction new action: [ aLabel text: answer ]) ]
+		forkNamed: 'carp-run-example'
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newDefinitionPaneFor: aDefinition [
+	^ (browserModel project isSessionLoaded
+		ifTrue: [ (aDefinition newCoder asCoderViewModel expanded: true) asExpandedOnlyElement ]
+		ifFalse: [ BrEditor new
+				aptitude: BrGlamorousCodeEditorAptitude new;
+				styler: CarpParser gtStyler;
+				beReadOnlyWithSelection;
+				text: aDefinition source ])
+		padding: (BlInsets top: 4 left: 6 bottom: 8 right: 8);
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical matchParent ]
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newDocumentationPaneFor: aDefinition [
+	"Documentation is a (doc …) form in the file, so editing it here writes
+	that form — creating it when there was none, removing it when you empty
+	it. Saving is asked for rather than continuous: prose is not code, and
+	rewriting the file on every keystroke would churn the session."
+
+	| editor |
+	editor := BrEditor new
+			aptitude: BrGlamorousRegularEditorAptitude new;
+			padding: (BlInsets top: 6 left: 8 bottom: 6 right: 8);
+			text: aDefinition documentation;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical matchParent ];
+			yourself.
+	^ BlElement new
+		layout: BlLinearLayout vertical;
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical matchParent ];
+		addChild: editor;
+		addChild: (BrHorizontalPane new
+				hMatchParent;
+				vFitContent;
+				alignCenterRight;
+				padding: (BlInsets top: 2 left: 8 bottom: 6 right: 8);
+				addChild: (BrButton new
+						aptitude: BrGlamorousButtonWithLabelAptitude new;
+						label: 'Save documentation';
+						action: [ aDefinition saveDocumentation: editor text asString.
+							browserModel reload ];
+						yourself);
+				yourself);
+		yourself
+]
+
+{ #category : #style }
+CarpBrowserElement >> colorForKind: aSymbol [
+	aSymbol = #type ifTrue: [ ^ BrGlamorousColors linkColor ].
+	aSymbol = #interface ifTrue: [ ^ Color r: 0.45 g: 0.2 b: 0.6 ].
+	aSymbol = #example ifTrue: [ ^ Color r: 0.15 g: 0.5 b: 0.2 ].
+	aSymbol = #module ifTrue: [ ^ self secondaryColor ].
+	^ BrGlamorousColors defaultHeaderTextColor
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newTagLabelled: aString [
+	^ BrLabel new
+		aptitude: (BrGlamorousLabelAptitude new
+				foreground: self mutedColor;
+				fontSize: 9);
+		border: (BlBorder paint: self hairline width: 1);
+		geometry: (BlRoundedRectangleGeometry cornerRadius: 3);
+		padding: (BlInsets top: 1 left: 5 bottom: 1 right: 5);
+		text: aString;
+		yourself
+]
+
+{ #category : #accessing }
+CarpBrowserElement >> typeTextFor: aDefinition [
+	| text |
+	text := aDefinition signature
+			ifNotEmpty: [ :aSignature | aSignature ]
+			ifEmpty: [ (browserModel project inferredTypeOf: aDefinition name) ifNil: [ '' ] ].
+	^ text size > 60
+		ifTrue: [ (text first: 57) , '…' ]
+		ifFalse: [ text ]
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newKindChipFor: aDefinition [
+	^ BrLabel new
+		aptitude: (BrGlamorousLabelAptitude new
+				glamorousCodeFont;
+				foreground: (self colorForKind: aDefinition kind);
+				fontSize: 9);
+		background: ((self colorForKind: aDefinition kind) alpha: 0.09);
+		geometry: (BlRoundedRectangleGeometry cornerRadius: 3);
+		padding: (BlInsets top: 1 left: 5 bottom: 1 right: 5);
+		text: (aDefinition isExample ifTrue: [ 'example' ] ifFalse: [ aDefinition head ]);
+		yourself
 ]
 
 { #category : #'initialization - parts' }
@@ -808,6 +1110,7 @@ CarpBrowserElement >> newHeaderFor: aDefinition [
 			when: BlClickEvent do: [ :anEvent | browserModel selectedDefinition: aDefinition ];
 			yourself.
 	header
+		addChild: (self newKindChipFor: aDefinition);
 		addChild: (BrLabel new
 				aptitude: (isOpen
 						ifTrue: [ BrGlamorousLabelAptitude new
@@ -817,12 +1120,26 @@ CarpBrowserElement >> newHeaderFor: aDefinition [
 						ifFalse: [ BrGlamorousLabelAptitude new
 								glamorousCodeFont;
 								fontSize: 13 ]);
-				text: aDefinition shortName);
-		addChild: (BrLabel new
-				aptitude: (BrGlamorousLabelAptitude new
-						foreground: self mutedColor;
-						fontSize: 10);
-				text: aDefinition head).
+				text: aDefinition shortName).
+	(self typeTextFor: aDefinition)
+		ifNotEmpty: [ :aType |
+			header
+				addChild: (BrLabel new
+						aptitude: (BrGlamorousLabelAptitude new
+								glamorousCodeFont;
+								foreground: self mutedColor;
+								fontSize: 11);
+						text: aType) ].
+	aDefinition isPrivate ifTrue: [ header addChild: (self newTagLabelled: 'private') ].
+	aDefinition isHidden ifTrue: [ header addChild: (self newTagLabelled: 'hidden') ].
+	aDefinition implementedInterfaces
+		do: [ :each | header addChild: (self newTagLabelled: 'implements ' , each) ].
+	(browserModel project examplesFor: aDefinition)
+		ifNotEmpty: [ :them |
+			header
+				addChild: (self
+						newTagLabelled: them size printString
+								, (them size = 1 ifTrue: [ ' example' ] ifFalse: [ ' examples' ])) ].
 	aDefinition documentation
 		ifNotEmpty: [ :aDoc |
 			header

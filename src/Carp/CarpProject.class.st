@@ -18,7 +18,10 @@ Class {
 		'sessionState',
 		'sessionMillis',
 		'announcer',
-		'modules'
+		'modules',
+		'annotations',
+		'definitionIndex',
+		'exampleIndex'
 	],
 	#category : #'Carp-Project'
 }
@@ -95,6 +98,8 @@ CarpProject >> loadSession [
 				^ e return: nil ].
 	sessionMillis := answer at: 'millis' ifAbsent: [ 0 ].
 	sessionState := #loaded.
+	annotations := nil.
+	exampleIndex := nil.
 	self changed.
 	"Checking works the moment the session is loaded; running a cell needs one
 	more piece of session-wide work, and it is worth doing now rather than
@@ -136,7 +141,95 @@ CarpProject >> reload [
 	fresh := CarpServerClient default projectAt: self root.
 	self files: fresh files.
 	self entry: fresh entry.
+	self forgetIndexes.
 	self changed
+]
+
+{ #category : #private }
+CarpProject >> forgetIndexes [
+	"Everything derived from the files: which definition has which name,
+	which examples exemplify what, and what the session says their types
+	are."
+
+	definitionIndex := nil.
+	exampleIndex := nil.
+	annotations := nil
+]
+
+{ #category : #accessing }
+CarpProject >> annotations [
+	"What the session knows about every name in the project: the types it
+	inferred, and the environment the browser resolves names against. Asked
+	once and kept — it is a few thousand rows — and dropped whenever the
+	project is re-read."
+
+	self isSessionLoaded ifFalse: [ ^ nil ].
+	^ annotations
+		ifNil: [ annotations := [ CarpServerClient default
+					annotateSource: ''
+					session: self sessionId ]
+					on: Error
+					do: [ :e | nil ] ]
+]
+
+{ #category : #accessing }
+CarpProject >> environmentRowNamed: aName [
+	^ self annotations
+		ifNil: [ nil ]
+		ifNotNil: [ :them | them environmentRowNamed: aName ]
+]
+
+{ #category : #accessing }
+CarpProject >> inferredTypeOf: aName [
+	^ (self environmentRowNamed: aName)
+		ifNil: [ nil ]
+		ifNotNil: [ :row | row at: 'type' ifAbsent: [ nil ] ]
+]
+
+{ #category : #accessing }
+CarpProject >> membersOf: aDefinition [
+	"Everything the session knows whose name lives under this type: the
+	fields' accessors, the copy, delete and str the compiler derived, and
+	whatever the project itself defines in that module. The file does not
+	spell these out — only the session knows them."
+
+	| prefix |
+	self annotations ifNil: [ ^ #() ].
+	prefix := aDefinition name , '.'.
+	^ (self annotations environment
+		select: [ :each | (each at: 'name' ifAbsent: [ '' ]) beginsWith: prefix ])
+		asSortedCollection: [ :a :b | (a at: 'name') <= (b at: 'name') ]
+]
+
+{ #category : #accessing }
+CarpProject >> definitionsByName [
+	^ definitionIndex
+		ifNil: [ definitionIndex := Dictionary new.
+			self definitions
+				do: [ :each | definitionIndex at: each name ifAbsentPut: [ each ] ].
+			definitionIndex ]
+]
+
+{ #category : #accessing }
+CarpProject >> examples [
+	^ self definitions select: [ :each | each isExample ]
+]
+
+{ #category : #accessing }
+CarpProject >> examplesFor: aDefinition [
+	"The examples that exemplify a definition — by returning it, or by
+	calling it. Built once for the whole project, because asking each
+	example what it exemplifies means parsing it."
+
+	exampleIndex
+		ifNil: [ exampleIndex := Dictionary new.
+			self examples
+				do: [ :anExample |
+					anExample exemplifiedNames
+						do: [ :aName |
+							(exampleIndex at: aName ifAbsentPut: [ OrderedCollection new ])
+								add: anExample ] ] ].
+	^ (exampleIndex at: aDefinition name ifAbsent: [ #() ]) asArray
 ]
 
 { #category : #accessing }
@@ -169,7 +262,9 @@ CarpProject >> files [
 { #category : #accessing }
 CarpProject >> files: aCollection [
 	files := aCollection.
-	modules := nil
+	modules := nil.
+	definitionIndex := nil.
+	exampleIndex := nil
 ]
 
 { #category : #accessing }

@@ -152,6 +152,26 @@ CarpProjectFile >> reloadDefinitions [
 ]
 
 { #category : #saving }
+CarpProjectFile >> lineOnly: aStart to: aStop [
+	"The span of the line a form sits on, from its indentation through its
+	own newline. Unlike lineSpanAround:to: this keeps the blank line above
+	it: an annotation sits directly on top of what it talks about, and
+	taking its line should not also close the gap to whatever came before."
+
+	| bytes from to space tab newline |
+	bytes := self contentsBytes.
+	space := 32.
+	tab := 9.
+	newline := 10.
+	from := aStart.
+	[ from > 0 and: [ | b | b := bytes at: from. b = space or: [ b = tab ] ] ]
+		whileTrue: [ from := from - 1 ].
+	to := aStop.
+	(to < bytes size and: [ (bytes at: to + 1) = newline ]) ifTrue: [ to := to + 1 ].
+	^ from -> to
+]
+
+{ #category : #editing }
 CarpProjectFile >> lineSpanAround: aStart to: aStop [
 	"Widen a span to the whole line it sits on: the indentation before it and
 	the newline after it. Cutting only the text would leave a blank line and

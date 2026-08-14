@@ -193,6 +193,43 @@ defines.")
         (set! i (+ i 1)))
       (symbol-at src i to)))
 
+  (doc third-symbol "the symbol after the name — the target of a form like
+(implements str Shapes.area), where the name comes second.")
+  (defn third-symbol [src span]
+    (let-do [i @(Pair.a span)
+             to @(Pair.b span)]
+      ; the opening paren and the head symbol
+      (while (and (< i to)
+                  (or (open? (String.char-at src i)) (ws? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (while (and (< i to) (not (delimiter? (String.char-at src i))))
+        (set! i (+ i 1)))
+      ; the name
+      (while (and (< i to) (ws? (String.char-at src i)))
+        (set! i (+ i 1)))
+      (while (and (< i to) (not (delimiter? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (symbol-at src i to)))
+
+  (doc argument-text "everything after a form's head and name, verbatim and
+trimmed: the signature in (sig f (Fn [Int] Int)), the value in a meta-set!.
+Read as text because that is what an editor shows and writes back.")
+  (defn argument-text [src span]
+    (let-do [i @(Pair.a span)
+             to (- @(Pair.b span) 1)]
+      (while (and (< i to)
+                  (or (open? (String.char-at src i)) (ws? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (while (and (< i to) (not (delimiter? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (while (and (< i to) (ws? (String.char-at src i)))
+        (set! i (+ i 1)))
+      (while (and (< i to) (not (delimiter? (String.char-at src i))))
+        (set! i (+ i 1)))
+      (while (and (< i to) (ws? (String.char-at src i)))
+        (set! i (+ i 1)))
+      (String.trim &(byte-slice src i to))))
+
   (def def-heads
     [@"defn" @"defn-" @"def" @"defmodule" @"deftype" @"defmacro" @"defview"
      @"defndynamic" @"defdynamic" @"definterface" @"defalias" @"sig" @"doc"
@@ -277,11 +314,23 @@ expression, i.e. whether it produces a result value.")
                       kind String      ; "entry" | "project" | "dep"
                       source String])
 
+(doc Annotation "one form that says something about a definition rather than
+defining anything: (doc f \"…\"), (sig f …), (private f), (implements str f),
+(meta-set! f \"example\" true). It carries its own span, because a definition
+owns the annotations that name it — deleting or moving one has to take them
+along.")
+(deftype Annotation [head String
+                     key String
+                     value String
+                     start Int
+                     end Int])
+
 (deftype ProjectDef [name String
                      head String
                      start Int
                      end Int
-                     documentation String])
+                     documentation String
+                     annotations (Array Annotation)])
 
 (defmodule Project
   (def load-heads [@"load" @"load-once" @"load-and-use"])
@@ -401,7 +450,8 @@ their target by name.")
                                                      @"defmodule"
                                                      @(Pair.a span)
                                                      @(Pair.b span)
-                                                     @""))
+                                                     @""
+                                                     []))
                   (collect-definitions! src
                                         (body-start src span)
                                         (- @(Pair.b span) 1)
@@ -413,12 +463,54 @@ their target by name.")
                                                  @&head
                                                  @(Pair.a span)
                                                  @(Pair.b span)
-                                                 @""))
+                                                 @""
+                                                 []))
             ())))))
 
-  (doc attach-documentation! "fills in each definition's doc string from the
-(doc name \"…\") forms in the same range.")
-  (defn attach-documentation! [src from to prefix defs]
+  (def annotation-heads [@"doc" @"sig" @"private" @"hidden" @"implements"
+                         @"meta-set!" @"example" @"c-name" @"derive"])
+
+  (defn annotation-head? [head] (in? &annotation-heads head))
+
+  (private annotation-target)
+  (hidden annotation-target)
+  (doc annotation-target "the name an annotation talks about. Every one of
+them names its subject second, except implements, which names the interface
+there and the function after it.")
+  (defn annotation-target [src span head]
+    (if (String.= head "implements")
+      (Cell.third-symbol src span)
+      (Cell.second-symbol src span)))
+
+  (private annotation-of)
+  (hidden annotation-of)
+  (doc annotation-of "an annotation form read as key and value: the key is
+what it sets — doc, sig, private, implements, example — and the value is the
+text it sets it to, empty for the ones that are true by being there.")
+  (defn annotation-of [src span head]
+    (cond
+      (String.= head "doc")
+        (Annotation.init @head @"doc" (string-argument src span)
+                         @(Pair.a span) @(Pair.b span))
+      (String.= head "sig")
+        (Annotation.init @head @"sig" (Cell.argument-text src span)
+                         @(Pair.a span) @(Pair.b span))
+      (String.= head "implements")
+        (Annotation.init @head @"implements" (Cell.second-symbol src span)
+                         @(Pair.a span) @(Pair.b span))
+      (String.= head "meta-set!")
+        ; (meta-set! f "example" true) — the key is a string literal
+        (Annotation.init @head (string-argument src span) @"true"
+                         @(Pair.a span) @(Pair.b span))
+      (String.= head "example")
+        (Annotation.init @head @"example" @"true" @(Pair.a span) @(Pair.b span))
+      (Annotation.init @head @head @"true" @(Pair.a span) @(Pair.b span))))
+
+  (doc attach-annotations! "gives every definition the forms that talk about
+it: its documentation, its declared signature, its visibility, the interfaces
+it implements, whether it is an example. They stay in the file where they
+were written — this only records who they belong to.")
+  (defn attach-annotations! [src from to prefix defs]
     (let-do [spans (Cell.spans-between src from to)
              n (Array.length &spans)]
       (for [i 0 n]
@@ -427,18 +519,25 @@ their target by name.")
           (cond
             (String.= &head "defmodule")
               (let [name (Cell.second-symbol src span)]
-                (attach-documentation! src
-                                       (body-start src span)
-                                       (- @(Pair.b span) 1)
-                                       &(qualify prefix &name)
-                                       defs))
-            (String.= &head "doc")
-              (let [target (qualify prefix &(Cell.second-symbol src span))
-                    text (string-argument src span)
+                (attach-annotations! src
+                                     (body-start src span)
+                                     (- @(Pair.b span) 1)
+                                     &(qualify prefix &name)
+                                     defs))
+            (annotation-head? &head)
+              (let [target (qualify prefix &(annotation-target src span &head))
+                    annotation (annotation-of src span &head)
                     m (Array.length defs)]
                 (for [j 0 m]
                   (when (String.= (ProjectDef.name (Array.unsafe-nth defs j)) &target)
-                    (Array.aset! defs j (ProjectDef.set-documentation @(Array.unsafe-nth defs j) @&text)))))
+                    (let-do [current @(Array.unsafe-nth defs j)
+                             kept (Array.push-back @(ProjectDef.annotations &current)
+                                                   @&annotation)]
+                      (when (String.= (Annotation.key &annotation) "doc")
+                        (set! current
+                              (ProjectDef.set-documentation current
+                                                            @(Annotation.value &annotation))))
+                      (Array.aset! defs j (ProjectDef.set-annotations current kept))))))
             ())))))
 
   (doc definitions "the file's definitions, qualified and documented, with
@@ -447,7 +546,7 @@ their spans in file coordinates.")
     (let-do [defs (the (Array ProjectDef) [])
              n (String.length src)]
       (collect-definitions! src 0 n "" &defs)
-      (attach-documentation! src 0 n "" &defs)
+      (attach-annotations! src 0 n "" &defs)
       defs))
 
   (doc loads "the load targets of a file, in the order they are loaded.")
@@ -1820,6 +1919,25 @@ name, kind, scheme and documentation, capped at 200.")
                                                                   (Maybe.Nothing) (JSON.Null)))])))))
           (respond-ok-json id (JSON.obj [(JSON.entry @"candidates" (JSON.Arr out))]))))))
 
+  (private annotations-json)
+  (hidden annotations-json)
+  (doc annotations-json "a definition's annotations, each with the span it
+occupies, so the editor can show them, rewrite them, and take them along when
+the definition moves or goes.")
+  (defn annotations-json [annotations]
+    (let-do [out (the (Array (Box JSON)) [])
+             n (Array.length annotations)]
+      (for [i 0 n]
+        (let [a (Array.unsafe-nth annotations i)]
+          (Array.push-back! &out
+                            (Box.init
+                              (JSON.obj [(JSON.entry @"head" (JSON.Str @(Annotation.head a)))
+                                         (JSON.entry @"key" (JSON.Str @(Annotation.key a)))
+                                         (JSON.entry @"value" (JSON.Str @(Annotation.value a)))
+                                         (JSON.entry @"start" (JSON.Num (Double.from-int @(Annotation.start a))))
+                                         (JSON.entry @"end" (JSON.Num (Double.from-int @(Annotation.end a))))])))))
+      out))
+
   (doc project-json "the project as the browser wants it: the load order,
 each file's kind, and its definitions with file-coordinate spans.")
   (defn project-json [root entry]
@@ -1839,7 +1957,9 @@ each file's kind, and its definitions with file-coordinate spans.")
                                              (JSON.entry @"head" (JSON.Str @(ProjectDef.head d)))
                                              (JSON.entry @"start" (JSON.Num (Double.from-int @(ProjectDef.start d))))
                                              (JSON.entry @"end" (JSON.Num (Double.from-int @(ProjectDef.end d))))
-                                             (JSON.entry @"doc" (JSON.Str @(ProjectDef.documentation d)))])))))
+                                             (JSON.entry @"doc" (JSON.Str @(ProjectDef.documentation d)))
+                                             (JSON.entry @"annotations"
+                                                         (JSON.Arr (annotations-json (ProjectDef.annotations d))))])))))
           (Array.push-back! &out
                             (Box.init
                               (JSON.obj [(JSON.entry @"path" (JSON.Str @(ProjectFile.path file)))

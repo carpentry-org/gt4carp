@@ -43,6 +43,24 @@ CarpBrowserModel >> definitions [
 ]
 
 { #category : #accessing }
+CarpBrowserModel >> sortedDefinitions [
+	"The module's definitions with the types first, then the functions over
+	them, then the examples that show them in use. Reading a module, that is
+	the order the questions come in; file order answers a different question,
+	which the coder pane is there to answer."
+
+	| order |
+	order := #(#type #interface #value #function #example).
+	^ (self definitions asSortedCollection: [ :a :b |
+		| left right |
+		left := order indexOf: a kind.
+		right := order indexOf: b kind.
+		left = right
+			ifTrue: [ a shortName <= b shortName ]
+			ifFalse: [ left <= right ] ]) asArray
+]
+
+{ #category : #accessing }
 CarpBrowserModel >> filter [
 	^ filter ifNil: [ filter := '' ]
 ]
