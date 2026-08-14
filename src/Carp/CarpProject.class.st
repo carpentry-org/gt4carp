@@ -185,6 +185,28 @@ CarpProject >> gtDefinitionsFor: aView [
 ]
 
 { #category : #actions }
+CarpProject >> gtActionBrowseFor: anAction [
+	"Open the browser: modules, definitions and the coder side by side, in a
+	tab of its own."
+
+	<gtAction>
+	^ anAction button
+		priority: 0;
+		icon: BrGlamorousVectorIcons hierarchy;
+		tooltip: 'Browse this project';
+		action: [ :aButton | aButton phlow spawnTool: self asBrowserTool ]
+]
+
+{ #category : #inspecting }
+CarpProject >> asBrowserTool [
+	^ GtPhlowExplicitTool new
+		name: self rootName;
+		icon: BrGlamorousVectorIcons hierarchy;
+		stencil: [ CarpBrowserElement onProject: self ];
+		withLabelAndIconAptitude
+]
+
+{ #category : #actions }
 CarpProject >> gtActionReloadFor: anAction [
 	"Re-read the tree from disk: the repository is the truth, and it changes
 	under us whenever git does."
