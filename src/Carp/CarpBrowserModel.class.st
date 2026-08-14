@@ -12,7 +12,8 @@ Class {
 		'project',
 		'selectedModule',
 		'selectedDefinition',
-		'announcer'
+		'announcer',
+		'filter'
 	],
 	#category : #'Carp-Browser'
 }
@@ -29,14 +30,50 @@ CarpBrowserModel >> announcer [
 
 { #category : #accessing }
 CarpBrowserModel >> definitions [
+	"The selected module's definitions, narrowed to the ones the filter
+	matches — unless the module itself is what matched, in which case you
+	asked for the module and get all of it."
+
 	^ selectedModule
 		ifNil: [ #() ]
-		ifNotNil: [ :aModule | aModule definitions ]
+		ifNotNil: [ :aModule |
+			(self filter isEmpty or: [ self matches: aModule displayName ])
+				ifTrue: [ aModule definitions ]
+				ifFalse: [ aModule definitions select: [ :each | self matches: each shortName ] ] ]
+]
+
+{ #category : #accessing }
+CarpBrowserModel >> filter [
+	^ filter ifNil: [ filter := '' ]
+]
+
+{ #category : #accessing }
+CarpBrowserModel >> filter: aString [
+	"Narrow what the browser shows to what the text matches, by module name
+	or by definition name."
+
+	self filter = aString ifTrue: [ ^ self ].
+	filter := aString.
+	self announce: CarpBrowserFilterChanged new
+]
+
+{ #category : #private }
+CarpBrowserModel >> matches: aString [
+	^ aString asLowercase includesSubstring: self filter asLowercase
 ]
 
 { #category : #accessing }
 CarpBrowserModel >> modules [
-	^ project ifNil: [ #() ] ifNotNil: [ :aProject | aProject modules ]
+	"Every module, or — when there is a filter — the ones it names and the
+	ones holding a definition it names."
+
+	| modules |
+	modules := project ifNil: [ #() ] ifNotNil: [ :aProject | aProject modules ].
+	self filter isEmpty ifTrue: [ ^ modules ].
+	^ modules
+		select: [ :aModule |
+			(self matches: aModule displayName)
+				or: [ aModule definitions anySatisfy: [ :each | self matches: each shortName ] ] ]
 ]
 
 { #category : #accessing }

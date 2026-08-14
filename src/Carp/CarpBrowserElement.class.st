@@ -24,6 +24,7 @@ Class {
 		'nameLabel',
 		'sessionButton',
 		'coderHeader',
+		'searchField',
 		'openRow'
 	],
 	#category : #'Carp-Browser'
@@ -53,6 +54,10 @@ CarpBrowserElement >> browserModel: aBrowserModel [
 	browserModel announcer
 		when: CarpBrowserDefinitionSelected
 		do: [ :announcement | self onDefinitionSelected ]
+		for: self.
+	browserModel announcer
+		when: CarpBrowserFilterChanged
+		do: [ :announcement | self onFilterChanged ]
 		for: self.
 	browserModel project
 		ifNotNil: [ :aProject |
@@ -176,6 +181,7 @@ CarpBrowserElement >> newToolbar [
 		addChild: nameLabel;
 		addChild: statusLabel;
 		addChild: (BrFrame new hMatchParent vFitContent);
+		addChild: self newSearchField;
 		addChild: (sessionButton := self
 				newToolbarButton: 'Load session'
 				icon: BrGlamorousVectorIcons load
@@ -197,6 +203,38 @@ CarpBrowserElement >> newToolbar [
 				icon: BrGlamorousVectorIcons playinspect
 				action: [ :aButton | aButton phlow spawnObject: browserModel project newPlaygroundCoder ]).
 	^ toolbar
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newSearchField [
+	"Type a name: the modules narrow to the ones that hold it, and their
+	definitions to the ones that are it."
+
+	| field |
+	searchField := BrEditor new
+			aptitude: BrGlamorousRegularEditorAptitude new;
+			hMatchParent;
+			vFitContent;
+			text: '';
+			yourself.
+	searchField editor
+		when: BrTextEditorModifiedEvent
+		do: [ :anEvent | browserModel filter: anEvent currentTarget text asString ].
+	field := BrHorizontalPane new
+			vFitContent;
+			alignCenterLeft;
+			background: Color white;
+			border: (BlBorder paint: BrGlamorousColors lightBorderColor width: 1);
+			padding: (BlInsets top: 3 left: 6 bottom: 3 right: 6);
+			cellSpacing: 6;
+			constraintsDo: [ :c | c horizontal exact: 220 ];
+			yourself.
+	field
+		addChild: (BrGlamorousVectorIcons search asElement
+				size: 14 @ 14;
+				yourself);
+		addChild: searchField.
+	^ field
 ]
 
 { #category : #'initialization - parts' }
@@ -240,6 +278,25 @@ CarpBrowserElement >> onDefinitionSelected [
 		select: browserModel selectedDefinition
 		in: definitionList
 		among: browserModel definitions.
+	self updateCoderPane
+]
+
+{ #category : #updating }
+CarpBrowserElement >> onFilterChanged [
+	"Keep looking at the same definition if the filter still shows it, and
+	otherwise let the selection go rather than jump somewhere arbitrary."
+
+	| modules definitions |
+	modules := browserModel modules.
+	definitions := browserModel definitions.
+	moduleList items: modules.
+	definitionList items: definitions.
+	(modules includes: browserModel selectedModule)
+		ifFalse: [ browserModel selectedModule: nil ].
+	(definitions includes: browserModel selectedDefinition)
+		ifFalse: [ browserModel selectedDefinition: nil ].
+	self select: browserModel selectedModule in: moduleList among: modules.
+	self select: browserModel selectedDefinition in: definitionList among: definitions.
 	self updateCoderPane
 ]
 
