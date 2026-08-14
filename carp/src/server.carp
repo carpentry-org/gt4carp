@@ -5,6 +5,12 @@
 ; carp-compiler and runs the result; definition forms in a successful cell
 ; are absorbed into the session (re-definitions replace in place).
 ;
+; A session loaded from a project runs its cells through the session itself:
+; the project is already expanded, resolved and inferred, so only the cell
+; goes through the front end, and the emitted C is handed to clang. The
+; project's own main is not part of such a session, and a cell brings its
+; own. Notebook sessions take the cold path below.
+;
 ; When the cell ends in an expression (and a notebook runtime library is
 ; configured), the last expression is wrapped in (NB.capture-and-serve …):
 ; the compiled program stays alive after running as the session's VALUE
@@ -27,6 +33,7 @@
 ;   {"id": n, "cmd": "expand-1",  "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "project",      "root": "<repo>" [, "entry": "<file>"]}
 ;   {"id": n, "cmd": "load-project", "session": "<name>", "root": "<repo>"}
+;   {"id": n, "cmd": "prepare",      "session": "<name>"}
 ;   {"id": n, "cmd": "upsert-file",   "session": "<name>", "path": "<file>"}
 ;
 ; Responses:
