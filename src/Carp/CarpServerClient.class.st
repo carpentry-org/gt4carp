@@ -35,6 +35,13 @@ Class {
 }
 
 { #category : #accessing }
+CarpServerClient class >> requestTimeout [
+	"Seconds a single request may take before the connection gives up."
+
+	^ 180
+]
+
+{ #category : #accessing }
 CarpServerClient class >> compilerBinary [
 	^ CompilerBinary
 		ifNil: [ Smalltalk os environment
@@ -174,6 +181,12 @@ CarpServerClient >> openConnection [
 	| aStream |
 	aStream := SocketStream openConnectionToHostNamed: host port: port.
 	aStream binary.
+	"A read that never returns takes the whole image with it: a request made
+	from the UI process blocks every other one behind it, with nothing to
+	recover it. The bound is generous — loading a large project into a
+	session is minutes of real work — but it is a bound."
+	aStream timeout: self class requestTimeout.
+	aStream shouldSignal: true.
 	^ aStream
 ]
 

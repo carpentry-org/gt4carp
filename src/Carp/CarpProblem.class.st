@@ -29,12 +29,22 @@ CarpProblem class >> onDiagnostic: aDictionary in: aFile [
 
 { #category : #accessing }
 CarpProblem >> definition [
-	"The definition the diagnostic falls inside, when it has a span."
+	"The definition the diagnostic falls inside, when it has a span. A module
+	spans everything its definitions do, so the smallest span wins: you want
+	the function that does not compile, not the module around it."
 
+	| offset candidates |
 	start ifNil: [ ^ nil ].
-	^ self file definitions
-		detect: [ :each | each start <= start asInteger and: [ start asInteger < each stop ] ]
-		ifNone: [ nil ]
+	offset := start asInteger.
+	candidates := self file definitions
+			select: [ :each | each start <= offset and: [ offset < each stop ] ].
+	candidates ifEmpty: [ ^ nil ].
+	^ candidates
+		inject: candidates first
+		into: [ :narrowest :each |
+			each stop - each start < (narrowest stop - narrowest start)
+				ifTrue: [ each ]
+				ifFalse: [ narrowest ] ]
 ]
 
 { #category : #accessing }

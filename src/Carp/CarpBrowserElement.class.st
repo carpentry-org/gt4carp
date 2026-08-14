@@ -25,6 +25,7 @@ Class {
 		'sessionButton',
 		'coderHeader',
 		'searchField',
+		'problemsPane',
 		'openRow'
 	],
 	#category : #'Carp-Browser'
@@ -197,7 +198,7 @@ CarpBrowserElement >> newToolbar [
 		addChild: (self
 				newToolbarButton: 'Problems'
 				icon: BrGlamorousVectorIcons repair
-				action: [ :aButton | aButton phlow spawnObject: browserModel project problems ]);
+				action: [ self toggleProblems ]);
 		addChild: (self
 				newToolbarButton: 'Playground'
 				icon: BrGlamorousVectorIcons playinspect
@@ -245,6 +246,103 @@ CarpBrowserElement >> newToolbarButton: aLabel icon: anIcon action: aBlock [
 		label: aLabel;
 		action: [ :aButton | aBlock cull: aButton ];
 		yourself
+]
+
+{ #category : #actions }
+CarpBrowserElement >> toggleProblems [
+	"Problems live in the browser rather than in a window of their own: you
+	check, you click one, you are in the definition that caused it."
+
+	problemsPane
+		ifNil: [ problemsPane := self newProblemsPane.
+			self addChild: problemsPane ]
+		ifNotNil: [ self removeChild: problemsPane.
+			problemsPane := nil ]
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newProblemsPane [
+	"Checking a project means annotating every file against the session,
+	which is real compiler work: it happens in the background and the pane
+	says so until the answers arrive."
+
+	| pane header |
+	pane := BlElement new
+			layout: BlLinearLayout vertical;
+			background: Color white;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical exact: 170 ];
+			yourself.
+	header := self
+			newColumnHeader: (browserModel project isSessionLoaded
+					ifTrue: [ 'checking…' ]
+					ifFalse: [ 'problems · load the project into a session to check it' ]).
+	pane
+		addChild: header;
+		addChild: (self newProblemListOn: #()).
+	browserModel project isSessionLoaded
+		ifTrue: [ self checkInto: pane header: header ].
+	^ pane
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newProblemListOn: aCollection [
+	"A scrolled column of rows rather than a list: a list built into a pane
+	that is already on screen never materialises its items, and there are
+	rarely enough problems for virtualisation to matter."
+
+	| content |
+	content := BlElement new
+			layout: BlLinearLayout vertical;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical fitContent ];
+			yourself.
+	aCollection
+		do: [ :aProblem |
+			| row |
+			row := self newProblemRow.
+			self fill: row with: aProblem.
+			content addChild: row ].
+	^ BlScrollableElement new
+		addChild: content;
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical matchParent ];
+		yourself
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newProblemRow [
+	^ BrHorizontalPane new
+		hMatchParent;
+		vFitContent;
+		alignCenterLeft;
+		padding: (BlInsets top: 4 left: 12 bottom: 4 right: 12);
+		cellSpacing: 10;
+		yourself
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> fill: aRow with: aProblem [
+	aRow removeChildren.
+	aRow
+		when: BlClickEvent
+		do: [ :anEvent | browserModel showDefinition: aProblem definition ].
+	aRow
+		addChild: (BrLabel new
+				aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors errorBackgroundColor);
+				text: aProblem phase);
+		addChild: (BrLabel new
+				aptitude: BrGlamorousLabelAptitude;
+				text: aProblem message);
+		addChild: (BrFrame new hMatchParent vFitContent);
+		addChild: (BrLabel new
+				aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+				text: (aProblem definition
+						ifNil: [ browserModel project relativePathOf: aProblem file ]
+						ifNotNil: [ :aDefinition | aDefinition name ]) asRopedText glamorousCodeFont)
 ]
 
 { #category : #actions }

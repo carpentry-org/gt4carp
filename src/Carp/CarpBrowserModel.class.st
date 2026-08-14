@@ -107,6 +107,22 @@ CarpBrowserModel >> selectedDefinition: aDefinition [
 ]
 
 { #category : #accessing }
+CarpBrowserModel >> showDefinition: aDefinition [
+	"Land on a definition wherever it lives, for when something outside the
+	columns — a problem, a reference, another tool — hands us one. A filter
+	that would hide it is dropped rather than silently swallowing the jump."
+
+	| module definition |
+	aDefinition ifNil: [ ^ self ].
+	project ifNil: [ ^ self ].
+	module := project moduleNamed: aDefinition moduleName.
+	definition := project definitionNamed: aDefinition name.
+	(self modules includes: module) ifFalse: [ self filter: '' ].
+	self selectedModule: module.
+	self selectedDefinition: definition
+]
+
+{ #category : #accessing }
 CarpBrowserModel >> selectedModule [
 	^ selectedModule
 ]
