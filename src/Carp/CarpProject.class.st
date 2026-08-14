@@ -17,7 +17,8 @@ Class {
 		'files',
 		'sessionState',
 		'sessionMillis',
-		'announcer'
+		'announcer',
+		'modules'
 	],
 	#category : #'Carp-Project'
 }
@@ -163,7 +164,8 @@ CarpProject >> files [
 
 { #category : #accessing }
 CarpProject >> files: aCollection [
-	files := aCollection
+	files := aCollection.
+	modules := nil
 ]
 
 { #category : #accessing }
@@ -204,6 +206,57 @@ CarpProject >> asBrowserTool [
 		icon: BrGlamorousVectorIcons hierarchy;
 		stencil: [ CarpBrowserElement onProject: self ];
 		withLabelAndIconAptitude
+]
+
+{ #category : #accessing }
+CarpProject >> newPlaygroundCoder [
+	"A scratch coder on the project's own session: everything the project
+	defines is in scope, so you can try a definition out where you wrote
+	it."
+
+	| coder |
+	coder := GtCarpCoderModel code: ''.
+	coder sessionId: self sessionId.
+	^ coder
+]
+
+{ #category : #checking }
+CarpProject >> problems [
+	"Check every file against the session and answer the diagnostics, each
+	tagged with the file it came from. This is the project-wide view of what
+	does not compile; a definition shows its own inline."
+
+	| found |
+	self isSessionLoaded ifFalse: [ ^ #() ].
+	found := OrderedCollection new.
+	self projectFiles
+		do: [ :aFile |
+			[ | annotations |
+			annotations := CarpServerClient default
+					annotateSource: aFile contents
+					session: self sessionId.
+			annotations diagnostics
+				do: [ :each | found add: (CarpProblem onDiagnostic: each in: aFile) ] ]
+				on: Error
+				do: [ :e |  ] ].
+	^ found
+]
+
+{ #category : #accessing }
+CarpProject >> gtProblemsFor: aView [
+	"What does not compile, across the whole project."
+
+	<gtView>
+	self isSessionLoaded ifFalse: [ ^ aView empty ].
+	^ aView columnedList
+		title: 'Problems';
+		priority: 5;
+		items: [ self problems ];
+		column: 'Where' text: [ :each | each file basename ] width: 180;
+		column: 'Phase' text: [ :each | each phase ] width: 90;
+		column: 'Message' text: [ :each | each message ];
+		send: [ :each | each ];
+		actionUpdateButton
 ]
 
 { #category : #actions }
@@ -293,14 +346,19 @@ CarpProject >> moduleNames [
 
 { #category : #accessing }
 CarpProject >> modules [
-	"The project's modules, in load order of first appearance."
+	"The project's modules, in load order of first appearance. Cached: they
+	are identity to everything that selects one, so rebuilding them on every
+	call would lose the selection."
 
-	^ self moduleNames collect: [ :each | CarpModule named: each in: self ]
+	^ modules
+		ifNil: [ modules := self moduleNames collect: [ :each | CarpModule named: each in: self ] ]
 ]
 
 { #category : #accessing }
 CarpProject >> moduleNamed: aString [
-	^ CarpModule named: aString in: self
+	^ self modules
+		detect: [ :each | each name = aString ]
+		ifNone: [ CarpModule named: aString in: self ]
 ]
 
 { #category : #accessing }
