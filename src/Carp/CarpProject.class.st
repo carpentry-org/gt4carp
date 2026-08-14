@@ -166,45 +166,6 @@ CarpProject >> files: aCollection [
 	files := aCollection
 ]
 
-{ #category : #inspecting }
-CarpProject >> gtBrowseFor: aView [
-	"Everything the project is, in one place: its modules to drill through,
-	its load order, its dependencies. Drilling right through the inspector
-	is the browser — a module lists its definitions, a definition opens in
-	its coder."
-
-	<return: #GtPhlowLabelledView>
-	^ GtPhlowLabelledViewBuilder new
-		object: self;
-		view: aView;
-		context: GtPhlowContext new;
-		viewsSelector: #gtBrowserViewsFor:;
-		titleComputation: [ self rootName ];
-		build
-]
-
-{ #category : #inspecting }
-CarpProject >> gtBrowserViewsFor: aContext [
-	| views |
-	views := (self gtViewsFor: GtPhlowEmptyView new inContext: aContext) asOrderedCollection.
-	GtPhlowUtility sortByPriority: views.
-	^ views
-]
-
-{ #category : #inspecting }
-CarpProject >> gtDefaultInspectorTool [
-	"A project opens as an IDE surface rather than a bare object: the
-	browser, with a playground on the project's own session beside it."
-
-	^ GtPhlowCompositeTool new
-		addTool: ((GtInspectorTool forObject: self viewSelector: #gtBrowseFor:)
-				name: 'Browse';
-				withLabelAndIconAptitude);
-		addTool: ((GtInspectorTool forObject: self viewSelector: #gtViewsFor:inContext:)
-				name: 'Raw';
-				withLabelAndIconAptitude)
-]
-
 { #category : #accessing }
 CarpProject >> gtDefinitionsFor: aView [
 	"Every definition of the repository, searchable by name — the way you
