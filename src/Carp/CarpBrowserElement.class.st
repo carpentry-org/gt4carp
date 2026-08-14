@@ -22,7 +22,9 @@ Class {
 		'coderPane',
 		'statusLabel',
 		'nameLabel',
-		'sessionButton'
+		'sessionButton',
+		'coderHeader',
+		'openRow'
 	],
 	#category : #'Carp-Browser'
 }
@@ -100,7 +102,8 @@ CarpBrowserElement >> newBody [
 				constraintsDo: [ :c | c linear weight: 0.9 ]);
 		addChild: ((self newColumn: 'Definitions' containing: definitionList)
 				constraintsDo: [ :c | c linear weight: 1 ]);
-		addChild: (coderPane constraintsDo: [ :c | c linear weight: 2.6 ]).
+		addChild: ((self newColumn: '' containing: coderPane)
+				constraintsDo: [ :c | c linear weight: 2.6 ]).
 	^ body
 ]
 
@@ -115,7 +118,9 @@ CarpBrowserElement >> newColumn: aTitle containing: aList [
 		constraintsDo: [ :c |
 			c horizontal matchParent.
 			c vertical matchParent ];
-		addChild: (self newColumnHeader: aTitle);
+		addChild: (aTitle isEmpty
+				ifTrue: [ coderHeader := self newColumnHeader: '' ]
+				ifFalse: [ self newColumnHeader: aTitle ]);
 		addChild: aList;
 		yourself
 ]
@@ -179,6 +184,10 @@ CarpBrowserElement >> newToolbar [
 				newToolbarButton: 'Reload'
 				icon: BrGlamorousVectorIcons refresh
 				action: [ browserModel reload ]);
+		addChild: (self
+				newToolbarButton: 'Changes'
+				icon: BrGlamorousVectorIcons changes
+				action: [ :aButton | aButton phlow spawnObject: browserModel project ]);
 		addChild: (self
 				newToolbarButton: 'Problems'
 				icon: BrGlamorousVectorIcons repair
@@ -244,14 +253,17 @@ CarpBrowserElement >> onModuleSelected [
 { #category : #updating }
 CarpBrowserElement >> select: anObject in: aList among: aCollection [
 	"Keep a list's own selection in step with the model, so selecting from
-	anywhere — a click, a reload, a spawned action — looks the same."
+	anywhere — a click, a reload, a spawned action — looks the same, and
+	bring it into view: in a project this size the selection is usually
+	below the fold."
 
 	| index |
 	anObject ifNil: [ ^ aList deselectAll ].
 	index := aCollection indexOf: anObject ifAbsent: [ 0 ].
 	index = 0
 		ifTrue: [ aList deselectAll ]
-		ifFalse: [ aList selectOne: index ]
+		ifFalse: [ aList selectOne: index.
+			aList scrollToSelection ]
 ]
 
 { #category : #updating }
@@ -296,7 +308,13 @@ CarpBrowserElement >> updateStatus [
 								ifTrue: [ 'session loaded' ]
 								ifFalse: [ project sessionState = #loading
 										ifTrue: [ 'loading session…' ]
-										ifFalse: [ 'no session' ] ]) ])
+										ifFalse: [ 'no session' ] ]).
+					project changes
+						ifNotEmpty: [ :them |
+							aStream
+								nextPutAll: ' · ';
+								print: them size;
+								nextPutAll: ' changed' ] ])
 ]
 
 { #category : #updating }
@@ -305,8 +323,10 @@ CarpBrowserElement >> updateCoderPane [
 	coder — a module reads as a whole the way a class does, and you can move
 	through it without going back to the list."
 
-	| content |
+	| content scrollable |
 	coderPane removeChildren.
+	openRow := nil.
+	self updateCoderHeader.
 	browserModel selectedModule
 		ifNil: [ ^ coderPane addChild: self newPlaceholder ].
 	content := BlElement new
@@ -316,13 +336,44 @@ CarpBrowserElement >> updateCoderPane [
 				c vertical fitContent ].
 	browserModel definitions
 		do: [ :each | content addChild: (self newRowFor: each) ].
-	coderPane
-		addChild: (BlScrollableElement new
-				addChild: content;
-				constraintsDo: [ :c |
-					c horizontal matchParent.
-					c vertical matchParent ];
-				yourself)
+	scrollable := BlScrollableElement new
+			addChild: content;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical matchParent ];
+			yourself.
+	coderPane addChild: scrollable.
+	openRow
+		ifNotNil: [ :aRow |
+			aRow
+				when: BlElementLayoutComputedEvent
+				doOnce: [ :anEvent | self scroll: scrollable to: aRow ] ]
+]
+
+{ #category : #updating }
+CarpBrowserElement >> updateCoderHeader [
+	"The third column says which module you are inside."
+
+	coderHeader ifNil: [ ^ self ].
+	coderHeader
+		text: (browserModel selectedModule
+				ifNil: [ 'no module selected' ]
+				ifNotNil: [ :aModule |
+					aModule displayName , ' · ' , browserModel definitions size printString
+						, ' definitions' ]) asUppercase
+]
+
+{ #category : #updating }
+CarpBrowserElement >> scroll: aScrollable to: anElement [
+	"Put the open definition at the top of the pane. Scrolling down moves the
+	content up, hence the negated offset; the row only knows where it is once
+	it has been laid out, which is what waits for us."
+
+	| offset |
+	anElement parent ifNil: [ ^ self ].
+	offset := anElement position y + aScrollable scrollPosition y.
+	offset = 0 ifTrue: [ ^ self ].
+	aScrollable scrollVerticallyBy: offset negated
 ]
 
 { #category : #'initialization - parts' }
@@ -342,7 +393,8 @@ CarpBrowserElement >> newRowFor: aDefinition [
 				c vertical fitContent ].
 	row addChild: (self newHeaderFor: aDefinition).
 	aDefinition == browserModel selectedDefinition
-		ifTrue: [ row
+		ifTrue: [ openRow := row.
+			row
 				addChild: ((browserModel project isSessionLoaded
 						ifTrue: [ (aDefinition newCoder asCoderViewModel expanded: true) asExpandedOnlyElement ]
 						ifFalse: [ BrEditor new

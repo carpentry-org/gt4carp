@@ -220,6 +220,40 @@ CarpProject >> newPlaygroundCoder [
 	^ coder
 ]
 
+{ #category : #git }
+CarpProject >> changes [
+	"What git sees: the repository is the project, so its working tree is
+	part of the project's state. Answers path -> status letters."
+
+	| output |
+	output := [ (GtExternalProcessBuilder new
+			command: '/usr/bin/git';
+			args: {'-C'. self root. 'status'. '--porcelain'};
+			output) stdoutString ]
+			on: Error
+			do: [ :e | '' ].
+	^ (output lines
+		collect: [ :each |
+			(each size > 3
+				ifTrue: [ (each allButFirst: 3) -> (each first: 2) trimBoth ]
+				ifFalse: [ nil ]) ])
+		reject: [ :each | each isNil ]
+]
+
+{ #category : #accessing }
+CarpProject >> gtChangesFor: aView [
+	"The working tree against HEAD — what you would be committing."
+
+	<gtView>
+	^ aView columnedList
+		title: 'Changes';
+		priority: 6;
+		items: [ self changes ];
+		column: 'Status' text: [ :each | each value ] width: 70;
+		column: 'File' text: [ :each | each key ];
+		actionUpdateButton
+]
+
 { #category : #checking }
 CarpProject >> problems [
 	"Check every file against the session and answer the diagnostics, each
