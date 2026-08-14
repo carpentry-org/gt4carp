@@ -74,7 +74,7 @@ CarpBrowserElement >> initialize [
 	super initialize.
 	self layout: BlLinearLayout vertical.
 	self matchParent.
-	self background: BrGlamorousColors neutralBackgroundColor.
+	self background: Color white.
 	moduleList := self newListLabelled: [ :each | each displayName ].
 	moduleList
 		when: BrSelectionChanged
@@ -94,7 +94,68 @@ CarpBrowserElement >> initialize [
 				c horizontal matchParent.
 				c vertical matchParent ].
 	self addChild: self newToolbar.
+	self addChild: self newHorizontalSeparator.
 	self addChild: self newBody
+]
+
+{ #category : #style }
+CarpBrowserElement >> hairline [
+	"Separators are a whisper: GT's own tools draw structure with whitespace
+	and let a hairline mark where two things meet, rather than boxing every
+	pane in a border."
+
+	^ Color black alpha: 0.08
+]
+
+{ #category : #style }
+CarpBrowserElement >> mutedColor [
+	^ BrGlamorousColors disabledButtonTextColor
+]
+
+{ #category : #style }
+CarpBrowserElement >> secondaryColor [
+	^ Color gray
+]
+
+{ #category : #style }
+CarpBrowserElement >> openRowColor [
+	^ Color black alpha: 0.035
+]
+
+{ #category : #style }
+CarpBrowserElement >> newHorizontalSeparator [
+	"Structure comes from whitespace and hairlines. A border would draw on
+	all four sides and box the pane back up, so a separator is its own
+	one-pixel element."
+
+	^ BlElement new
+		background: self hairline;
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical exact: 1 ];
+		yourself
+]
+
+{ #category : #style }
+CarpBrowserElement >> newVerticalSeparator [
+	^ BlElement new
+		background: self hairline;
+		constraintsDo: [ :c |
+			c horizontal exact: 1.
+			c vertical matchParent ];
+		yourself
+]
+
+{ #category : #style }
+CarpBrowserElement >> newEyebrow: aString [
+	"The small muted line that says what kind of thing is named below it."
+
+	^ BrLabel new
+		aptitude: (BrGlamorousLabelAptitude new
+				foreground: self mutedColor;
+				fontSize: 10);
+		text: aString;
+		yourself
 ]
 
 { #category : #'initialization - parts' }
@@ -106,8 +167,10 @@ CarpBrowserElement >> newBody [
 	body
 		addChild: ((self newColumn: 'Modules' containing: moduleList)
 				constraintsDo: [ :c | c linear weight: 0.9 ]);
+		addChild: self newVerticalSeparator;
 		addChild: ((self newColumn: 'Definitions' containing: definitionList)
 				constraintsDo: [ :c | c linear weight: 1 ]);
+		addChild: self newVerticalSeparator;
 		addChild: ((self newColumn: '' containing: coderPane)
 				constraintsDo: [ :c | c linear weight: 2.6 ]).
 	^ body
@@ -119,8 +182,7 @@ CarpBrowserElement >> newColumn: aTitle containing: aList [
 
 	^ BlElement new
 		layout: BlLinearLayout vertical;
-		background: BrGlamorousColors neutralBackgroundColor;
-		border: (BlBorder paint: BrGlamorousColors lightBorderColor width: 1);
+		background: Color white;
 		constraintsDo: [ :c |
 			c horizontal matchParent.
 			c vertical matchParent ];
@@ -133,12 +195,13 @@ CarpBrowserElement >> newColumn: aTitle containing: aList [
 
 { #category : #'initialization - parts' }
 CarpBrowserElement >> newColumnHeader: aTitle [
+	"A column says what it holds in the quietest voice that still reads."
+
 	^ BrLabel new
 		aptitude: (BrGlamorousLabelAptitude new
-				foreground: BrGlamorousColors disabledHeaderTextColor;
-				bold);
-		background: BrGlamorousColors secondaryHeaderBackgroundColor;
-		padding: (BlInsets top: 5 left: 10 bottom: 5 right: 10);
+				foreground: self mutedColor;
+				fontSize: 10);
+		padding: (BlInsets top: 12 left: 16 bottom: 6 right: 12);
 		hMatchParent;
 		text: aTitle asUppercase;
 		yourself
@@ -146,12 +209,18 @@ CarpBrowserElement >> newColumnHeader: aTitle [
 
 { #category : #'initialization - parts' }
 CarpBrowserElement >> newListLabelled: aBlock [
+	"Rows sit inside the column rather than spanning it edge to edge, so the
+	selection reads as a highlight on a name and not as a bar across a pane."
+
 	^ BrSimpleList new
 		matchParent;
 		background: Color white;
 		itemStencil: [ BrLabel new
-				aptitude: BrGlamorousLabelAptitude + BrGlamorousListItemAptitude;
-				padding: (BlInsets top: 4 left: 10 bottom: 4 right: 10);
+				aptitude: (BrGlamorousLabelAptitude new fontSize: 12)
+						+ BrGlamorousListItemAptitude;
+				geometry: (BlRoundedRectangleGeometry cornerRadius: 4);
+				margin: (BlInsets top: 0 left: 8 bottom: 1 right: 8);
+				padding: (BlInsets top: 5 left: 8 bottom: 5 right: 8);
 				hMatchParent ];
 		itemDataBinder: [ :aLabel :each | aLabel text: (aBlock value: each) ];
 		items: #();
@@ -160,27 +229,39 @@ CarpBrowserElement >> newListLabelled: aBlock [
 
 { #category : #'initialization - parts' }
 CarpBrowserElement >> newToolbar [
-	"The project's lifecycle: what it is, whether the compiler knows about
-	it, and the things you do to the whole of it."
+	"The project names itself the way GT's own tools do: what kind of thing
+	this is, then its name, then the state you would want to know about it —
+	with the things you do to the whole project along the same line."
 
-	| toolbar |
-	statusLabel := BrLabel new
-			aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+	| header identity |
+	nameLabel := BrLabel new
+			aptitude: (BrGlamorousLabelAptitude new
+					glamorousCodeFont;
+					bold;
+					fontSize: 16);
 			text: ''.
-	toolbar := BrHorizontalPane new
+	statusLabel := BrLabel new
+			aptitude: (BrGlamorousLabelAptitude new
+					foreground: self secondaryColor;
+					fontSize: 11);
+			text: ''.
+	identity := BrVerticalPane new
+			vFitContent;
+			hFitContent;
+			cellSpacing: 2;
+			addChild: (self newEyebrow: 'carp project');
+			addChild: nameLabel;
+			addChild: statusLabel;
+			yourself.
+	header := BrHorizontalPane new
 			hMatchParent;
 			vFitContent;
 			alignCenterLeft;
-			background: BrGlamorousColors defaultHeaderBackgroundColor;
-			border: (BlBorder paint: BrGlamorousColors lightBorderColor width: 1);
-			padding: (BlInsets top: 6 left: 10 bottom: 6 right: 10);
-			cellSpacing: 10.
-	nameLabel := BrLabel new
-			aptitude: (BrGlamorousLabelAptitude new bold);
-			text: ''.
-	toolbar
-		addChild: nameLabel;
-		addChild: statusLabel;
+			background: Color white;
+			padding: (BlInsets top: 14 left: 16 bottom: 14 right: 16);
+			cellSpacing: 8.
+	header
+		addChild: identity;
 		addChild: (BrFrame new hMatchParent vFitContent);
 		addChild: self newSearchField;
 		addChild: (sessionButton := self
@@ -203,7 +284,7 @@ CarpBrowserElement >> newToolbar [
 				newToolbarButton: 'Playground'
 				icon: BrGlamorousVectorIcons playinspect
 				action: [ :aButton | aButton phlow spawnObject: browserModel project newPlaygroundCoder ]).
-	^ toolbar
+	^ header
 ]
 
 { #category : #'initialization - parts' }
@@ -213,7 +294,7 @@ CarpBrowserElement >> newSearchField [
 
 	| field |
 	searchField := BrEditor new
-			aptitude: BrGlamorousRegularEditorAptitude new;
+			aptitude: (BrGlamorousRegularEditorAptitude new fontSize: 12);
 			hMatchParent;
 			vFitContent;
 			text: '';
@@ -224,9 +305,9 @@ CarpBrowserElement >> newSearchField [
 	field := BrHorizontalPane new
 			vFitContent;
 			alignCenterLeft;
-			background: Color white;
-			border: (BlBorder paint: BrGlamorousColors lightBorderColor width: 1);
-			padding: (BlInsets top: 3 left: 6 bottom: 3 right: 6);
+			background: (Color black alpha: 0.04);
+			geometry: (BlRoundedRectangleGeometry cornerRadius: 5);
+			padding: (BlInsets top: 4 left: 8 bottom: 4 right: 8);
 			cellSpacing: 6;
 			constraintsDo: [ :c | c horizontal exact: 220 ];
 			yourself.
@@ -279,6 +360,7 @@ CarpBrowserElement >> newProblemsPane [
 					ifTrue: [ 'checking…' ]
 					ifFalse: [ 'problems · load the project into a session to check it' ]).
 	pane
+		addChild: self newHorizontalSeparator;
 		addChild: header;
 		addChild: (self newProblemListOn: #()).
 	browserModel project isSessionLoaded
@@ -304,7 +386,9 @@ CarpBrowserElement >> newProblemListOn: aCollection [
 			| row |
 			row := self newProblemRow.
 			self fill: row with: aProblem.
-			content addChild: row ].
+			content
+				addChild: row;
+				addChild: self newHorizontalSeparator ].
 	^ BlScrollableElement new
 		addChild: content;
 		constraintsDo: [ :c |
@@ -319,8 +403,9 @@ CarpBrowserElement >> newProblemRow [
 		hMatchParent;
 		vFitContent;
 		alignCenterLeft;
-		padding: (BlInsets top: 4 left: 12 bottom: 4 right: 12);
-		cellSpacing: 10;
+		margin: (BlInsets top: 0 left: 8 bottom: 0 right: 8);
+		padding: (BlInsets top: 6 left: 8 bottom: 6 right: 8);
+		cellSpacing: 8;
 		yourself
 ]
 
@@ -332,17 +417,22 @@ CarpBrowserElement >> fill: aRow with: aProblem [
 		do: [ :anEvent | browserModel showDefinition: aProblem definition ].
 	aRow
 		addChild: (BrLabel new
-				aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors errorBackgroundColor);
-				text: aProblem phase);
+				aptitude: (BrGlamorousLabelAptitude new
+						foreground: BrGlamorousColors errorBackgroundColor;
+						fontSize: 10);
+				text: aProblem phase asUppercase);
 		addChild: (BrLabel new
-				aptitude: BrGlamorousLabelAptitude;
+				aptitude: (BrGlamorousLabelAptitude new fontSize: 12);
 				text: aProblem message);
 		addChild: (BrFrame new hMatchParent vFitContent);
 		addChild: (BrLabel new
-				aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+				aptitude: (BrGlamorousLabelAptitude new
+						glamorousCodeFont;
+						foreground: self secondaryColor;
+						fontSize: 11);
 				text: (aProblem definition
 						ifNil: [ browserModel project relativePathOf: aProblem file ]
-						ifNotNil: [ :aDefinition | aDefinition name ]) asRopedText glamorousCodeFont)
+						ifNotNil: [ :aDefinition | aDefinition name ]))
 ]
 
 { #category : #actions }
@@ -537,17 +627,21 @@ CarpBrowserElement >> newRowFor: aDefinition [
 	one. Building every coder up front would mean compiling a hundred
 	editors to look at one."
 
-	| row |
+	| row isOpen |
+	isOpen := aDefinition == browserModel selectedDefinition.
 	row := BlElement new
 			layout: BlLinearLayout vertical;
-			background: Color white;
-			border: (BlBorder paint: BrGlamorousColors lightBorderColor width: 1);
-			margin: (BlInsets top: 0 left: 0 bottom: 6 right: 0);
+			background: (isOpen ifTrue: [ self openRowColor ] ifFalse: [ Color white ]);
+			geometry: (BlRoundedRectangleGeometry cornerRadius: (isOpen ifTrue: [ 6 ] ifFalse: [ 0 ]));
+			margin: (isOpen
+					ifTrue: [ BlInsets top: 6 left: 8 bottom: 6 right: 8 ]
+					ifFalse: [ BlInsets top: 0 left: 8 bottom: 0 right: 8 ]);
 			constraintsDo: [ :c |
 				c horizontal matchParent.
 				c vertical fitContent ].
 	row addChild: (self newHeaderFor: aDefinition).
-	aDefinition == browserModel selectedDefinition
+	isOpen ifFalse: [ row addChild: self newHorizontalSeparator ].
+	isOpen
 		ifTrue: [ openRow := row.
 			row
 				addChild: ((browserModel project isSessionLoaded
@@ -556,8 +650,8 @@ CarpBrowserElement >> newRowFor: aDefinition [
 								aptitude: BrGlamorousCodeEditorAptitude new;
 								styler: CarpParser gtStyler;
 								beReadOnlyWithSelection;
-								padding: (BlInsets all: 10);
 								text: aDefinition source ])
+						padding: (BlInsets top: 0 left: 6 bottom: 8 right: 8);
 						constraintsDo: [ :c |
 							c horizontal matchParent.
 							c vertical fitContent ]) ].
@@ -569,30 +663,39 @@ CarpBrowserElement >> newHeaderFor: aDefinition [
 	"The definition's line: its name, what defines it, and — when it is
 	open — what you can do to it."
 
-	| header |
+	| header isOpen |
+	isOpen := aDefinition == browserModel selectedDefinition.
 	header := BrHorizontalPane new
 			hMatchParent;
 			vFitContent;
 			alignCenterLeft;
-			background: (aDefinition == browserModel selectedDefinition
-					ifTrue: [ BrGlamorousColors secondaryHeaderBackgroundColor ]
-					ifFalse: [ Color white ]);
-			padding: (BlInsets top: 5 left: 12 bottom: 5 right: 8);
-			cellSpacing: 10;
+			padding: (BlInsets top: 7 left: 10 bottom: 7 right: 6);
+			cellSpacing: 8;
 			when: BlClickEvent do: [ :anEvent | browserModel selectedDefinition: aDefinition ];
 			yourself.
 	header
 		addChild: (BrLabel new
-				aptitude: BrGlamorousLabelAptitude;
-				text: aDefinition shortName asRopedText glamorousCodeFont);
+				aptitude: (isOpen
+						ifTrue: [ BrGlamorousLabelAptitude new
+								glamorousCodeFont;
+								fontSize: 13;
+								bold ]
+						ifFalse: [ BrGlamorousLabelAptitude new
+								glamorousCodeFont;
+								fontSize: 13 ]);
+				text: aDefinition shortName);
 		addChild: (BrLabel new
-				aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+				aptitude: (BrGlamorousLabelAptitude new
+						foreground: self mutedColor;
+						fontSize: 10);
 				text: aDefinition head).
 	aDefinition documentation
 		ifNotEmpty: [ :aDoc |
 			header
 				addChild: (BrLabel new
-						aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+						aptitude: (BrGlamorousLabelAptitude new
+								foreground: self secondaryColor;
+								fontSize: 11);
 						text: (aDoc lines ifEmpty: [ '' ] ifNotEmpty: [ :them | them first ])) ].
 	aDefinition == browserModel selectedDefinition
 		ifTrue: [ header
@@ -618,7 +721,9 @@ CarpBrowserElement >> newPlaceholder [
 			c horizontal matchParent.
 			c vertical matchParent ];
 		addChild: (BrLabel new
-				aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+				aptitude: (BrGlamorousLabelAptitude new
+						foreground: self mutedColor;
+						fontSize: 12);
 				padding: (BlInsets all: 12);
 				text: (browserModel project isSessionLoaded
 						ifTrue: [ 'Select a definition' ]
