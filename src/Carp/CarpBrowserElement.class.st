@@ -9,6 +9,12 @@ inline, diagnostics underlined, documentation on hover, completion against
 the whole project, and saving writes the definition back to its file. Until
 the project's session is loaded there is nothing to check against, so the
 toolbar says so and offers to load it.
+
+A drawer along the bottom holds the things you do to the project as a whole
+rather than to one definition: a playground on the project's own session,
+and the problems the compiler sees. It stays alive while it is closed, so
+what you were trying out in the playground is still there when you open it
+again.
 "
 Class {
 	#name : #CarpBrowserElement,
@@ -26,6 +32,10 @@ Class {
 		'coderHeader',
 		'searchField',
 		'problemsPane',
+		'problemsHeader',
+		'drawer',
+		'drawerTabs',
+		'drawerTab',
 		'openRow'
 	],
 	#category : #'Carp-Browser'
@@ -279,11 +289,11 @@ CarpBrowserElement >> newToolbar [
 		addChild: (self
 				newToolbarButton: 'Problems'
 				icon: BrGlamorousVectorIcons repair
-				action: [ self toggleProblems ]);
+				action: [ self toggleDrawerOn: self problemsTabLabel ]);
 		addChild: (self
 				newToolbarButton: 'Playground'
 				icon: BrGlamorousVectorIcons playinspect
-				action: [ :aButton | aButton phlow spawnObject: browserModel project newPlaygroundCoder ]).
+				action: [ self toggleDrawerOn: self playgroundTabLabel ]).
 	^ header
 ]
 
@@ -329,16 +339,110 @@ CarpBrowserElement >> newToolbarButton: aLabel icon: anIcon action: aBlock [
 		yourself
 ]
 
-{ #category : #actions }
-CarpBrowserElement >> toggleProblems [
-	"Problems live in the browser rather than in a window of their own: you
-	check, you click one, you are in the definition that caused it."
+{ #category : #accessing }
+CarpBrowserElement >> playgroundTabLabel [
+	^ 'Playground'
+]
 
-	problemsPane
-		ifNil: [ problemsPane := self newProblemsPane.
-			self addChild: problemsPane ]
-		ifNotNil: [ self removeChild: problemsPane.
-			problemsPane := nil ]
+{ #category : #accessing }
+CarpBrowserElement >> problemsTabLabel [
+	^ 'Problems'
+]
+
+{ #category : #actions }
+CarpBrowserElement >> toggleDrawerOn: aLabel [
+	"The button you pressed either opens the drawer on its tab, moves the
+	drawer to it, or — if you are already looking at it — puts it away."
+
+	self drawer.
+	(self children includes: drawer)
+		ifFalse: [ self addChild: drawer.
+			^ self showDrawerTab: aLabel ].
+	drawerTab = aLabel
+		ifTrue: [ self removeChild: drawer ]
+		ifFalse: [ self showDrawerTab: aLabel ]
+]
+
+{ #category : #actions }
+CarpBrowserElement >> showDrawerTab: aLabel [
+	drawerTab := aLabel.
+	drawerTabs selectTabWithLabelString: aLabel.
+	aLabel = self problemsTabLabel ifTrue: [ self refreshProblems ]
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> drawer [
+	"Built once and kept: closing the drawer only detaches it, so the
+	playground keeps whatever you were writing in it."
+
+	^ drawer ifNil: [ drawer := self newDrawer ]
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newDrawer [
+	| pane resizer |
+	drawerTabs := BrTabGroup new
+			aptitude: BrGlamorousTabGroupAptitude new;
+			matchParent;
+			yourself.
+	drawerTabs
+		addTab: (BrTab new
+				aptitude: BrGlamorousTabAptitude new;
+				label: self playgroundTabLabel;
+				stencil: [ self newPlaygroundPane ]);
+		addTab: (BrTab new
+				aptitude: BrGlamorousTabAptitude new;
+				label: self problemsTabLabel;
+				stencil: [ self newProblemsPane ]).
+	pane := BlElement new
+			layout: BlLinearLayout vertical;
+			background: Color white;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical exact: 280 ];
+			yourself.
+	resizer := BrResizer new
+			aptitude: BrGlamorousResizerAptitude;
+			target: pane;
+			beTop;
+			constraintsDo: [ :c | c ignoreByLayout ];
+			when: BlResizerResizedEvent
+				do: [ :anEvent |
+					pane constraintsDo: [ :c | c vertical exact: (anEvent extent y max: 120) ].
+					pane requestLayout ];
+			yourself.
+	pane
+		addChild: self newHorizontalSeparator;
+		addChild: drawerTabs;
+		addChild: resizer.
+	^ pane
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newPlaygroundPane [
+	"A scratch coder on the project's session, in the project: everything it
+	defines is in scope, so you can try a definition out beside it."
+
+	| coder |
+	coder := (browserModel project newPlaygroundCoder asCoderViewModel expanded: true)
+			asExpandedOnlyElement.
+	^ BlElement new
+		layout: BlLinearLayout vertical;
+		background: Color white;
+		constraintsDo: [ :c |
+			c horizontal matchParent.
+			c vertical matchParent ];
+		addChild: (self
+				newColumnHeader: (browserModel project rootName , ' · '
+						, (browserModel project isSessionLoaded
+								ifTrue: [ 'everything the project defines is in scope' ]
+								ifFalse: [ 'load the project into a session to evaluate here' ])));
+		addChild: (coder
+				padding: (BlInsets top: 0 left: 6 bottom: 8 right: 12);
+				constraintsDo: [ :c |
+					c horizontal matchParent.
+					c vertical matchParent ]);
+		yourself
 ]
 
 { #category : #'initialization - parts' }
@@ -347,25 +451,32 @@ CarpBrowserElement >> newProblemsPane [
 	which is real compiler work: it happens in the background and the pane
 	says so until the answers arrive."
 
-	| pane header |
-	pane := BlElement new
+	problemsPane := BlElement new
 			layout: BlLinearLayout vertical;
 			background: Color white;
 			constraintsDo: [ :c |
 				c horizontal matchParent.
-				c vertical exact: 170 ];
+				c vertical matchParent ];
 			yourself.
-	header := self
-			newColumnHeader: (browserModel project isSessionLoaded
-					ifTrue: [ 'checking…' ]
-					ifFalse: [ 'problems · load the project into a session to check it' ]).
-	pane
-		addChild: self newHorizontalSeparator;
-		addChild: header;
+	problemsHeader := self newColumnHeader: ''.
+	problemsPane
+		addChild: problemsHeader;
 		addChild: (self newProblemListOn: #()).
+	self refreshProblems.
+	^ problemsPane
+]
+
+{ #category : #actions }
+CarpBrowserElement >> refreshProblems [
+	"Opening the tab asks the question again: the project has usually moved
+	on since the last time you looked."
+
+	problemsPane ifNil: [ ^ self ].
 	browserModel project isSessionLoaded
-		ifTrue: [ self checkInto: pane header: header ].
-	^ pane
+		ifFalse: [ ^ problemsHeader
+				text: 'problems · load the project into a session to check it' asUppercase ].
+	problemsHeader text: 'checking…' asUppercase.
+	self checkInto: problemsPane header: problemsHeader
 ]
 
 { #category : #'initialization - parts' }
@@ -395,6 +506,29 @@ CarpBrowserElement >> newProblemListOn: aCollection [
 			c horizontal matchParent.
 			c vertical matchParent ];
 		yourself
+]
+
+{ #category : #actions }
+CarpBrowserElement >> checkInto: aPane header: aHeader [
+	"Checking a project means annotating every file against the session,
+	which is real compiler work — it happens in the background, and answers
+	into the pane it was asked from, and only while that pane is still the
+	one on screen."
+
+	| project |
+	project := browserModel project.
+	[ | problems |
+	problems := [ project problems ] on: Error do: [ :e | #() ].
+	aPane
+		enqueueTask: (BlTaskAction new
+				action: [ problemsPane == aPane
+						ifTrue: [ aHeader
+								text: (problems size = 1
+										ifTrue: [ '1 problem' ]
+										ifFalse: [ problems size printString , ' problems' ]) asUppercase.
+							aPane removeChild: aPane children last.
+							aPane addChild: (self newProblemListOn: problems) ] ]) ]
+		forkNamed: 'carp-project-problems'
 ]
 
 { #category : #'initialization - parts' }

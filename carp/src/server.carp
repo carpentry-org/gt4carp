@@ -600,6 +600,49 @@ order the compiler would see them.")
 ; core once; definitions are mirrored into it on absorb and cells are
 ; checked warm. The CLI paths remain the fallback when warm creation fails.
 
+; --- project sessions ----------------------------------------------------
+; A session loaded from a project remembers which project it came from, so
+; a cell evaluated in it compiles against that project rather than against
+; bare core: the playground in the IDE is a playground ON the project.
+
+(deftype ProjectSession [sid String entry String])
+(def *project-sessions* (the (Array ProjectSession) []))
+
+(defmodule Projects
+  (private index-of)
+  (hidden index-of)
+  (defn index-of [sid]
+    (let-do [found -1]
+      (for [i 0 (Array.length &*project-sessions*)]
+        (when (String.= (ProjectSession.sid (Array.unsafe-nth &*project-sessions* i)) sid)
+          (set! found i)))
+      found))
+
+  (doc entry-of "the entry file of the project a session was loaded from, or
+the empty string when it is not a project session.")
+  (defn entry-of [sid]
+    (let [idx (index-of sid)]
+      (if (< idx 0)
+        @""
+        @(ProjectSession.entry (Array.unsafe-nth &*project-sessions* idx)))))
+
+  (doc remember! "records which project a session was loaded from.")
+  (defn-do remember! [sid entry]
+    (let [idx (index-of sid)]
+      (if (< idx 0)
+        (Array.push-back! &*project-sessions* (ProjectSession.init @sid @entry))
+        (Array.aset! &*project-sessions* idx (ProjectSession.init @sid @entry)))))
+
+  (doc prelude "the load that puts a project session's own project in scope
+for a cell, empty for a session that has no project. The project's own main
+is shadowed: running a cell must not launch the program the project builds,
+and a cell that wants it can still call what main calls.")
+  (defn prelude [sid]
+    (let [entry (entry-of sid)]
+      (if (String.empty? &entry)
+        @""
+        (fmt "(load \"%s\")\n(defn main [] ())\n" &entry)))))
+
 (deftype WarmEntry [sid String state CompilerSession tainted Bool])
 (def *warm-sessions* (the (Array WarmEntry) []))
 
@@ -1133,6 +1176,7 @@ use NB (defview and friends).")
                        @""
                        @"(load \"notebook.carp\")\n")
              program (String.concat &[prelude
+                                      (Projects.prelude sid)
                                       (Session.defs-text &(Session.entries sid))
                                       @src
                                       @"\n"])]
@@ -1325,6 +1369,7 @@ it as the session's value host, retrying on other ports when one is taken.")
              overrides (String.concat &[(view-source-overrides &nb-src)
                                         (view-source-overrides &(String.concat &[@&defs @src]))])
              program (String.concat &[@"(load \"notebook.carp\")\n"
+                                      (Projects.prelude sid)
                                       defs
                                       overrides
                                       (wrap-cell src)])]
@@ -1735,6 +1780,10 @@ Answers how long it took and how many files went in.")
           (do
             (Warm.install! sid state)
             (Session.reset! sid)
+            (Projects.remember! sid
+                                &(if (String.empty? entry)
+                                   (Project.entry-path root)
+                                   @entry))
             (respond-ok-json id
                              (JSON.obj [(JSON.entry @"files" (JSON.Num (Double.from-int n)))
                                         (JSON.entry @"millis"
