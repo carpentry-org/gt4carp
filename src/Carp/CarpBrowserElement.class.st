@@ -301,56 +301,106 @@ CarpBrowserElement >> updateStatus [
 
 { #category : #updating }
 CarpBrowserElement >> updateCoderPane [
+	"The module's definitions, one row each, the selected one opened in its
+	coder — a module reads as a whole the way a class does, and you can move
+	through it without going back to the list."
+
+	| content |
 	coderPane removeChildren.
-	browserModel selectedDefinition
+	browserModel selectedModule
 		ifNil: [ ^ coderPane addChild: self newPlaceholder ].
-	coderPane addChild: self newDefinitionHeader.
+	content := BlElement new
+			layout: BlLinearLayout vertical;
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical fitContent ].
+	browserModel definitions
+		do: [ :each | content addChild: (self newRowFor: each) ].
 	coderPane
-		addChild: ((browserModel project isSessionLoaded
-				ifTrue: [ browserModel selectedDefinition newCoder asCoderViewModel asElement ]
-				ifFalse: [ BrEditor new
-						aptitude: BrGlamorousCodeEditorAptitude new;
-						styler: CarpParser gtStyler;
-						beReadOnlyWithSelection;
-						padding: (BlInsets all: 10);
-						text: browserModel selectedDefinition source ])
+		addChild: (BlScrollableElement new
+				addChild: content;
 				constraintsDo: [ :c |
 					c horizontal matchParent.
-					c vertical matchParent ])
+					c vertical matchParent ];
+				yourself)
 ]
 
 { #category : #'initialization - parts' }
-CarpBrowserElement >> newDefinitionHeader [
-	"What you are looking at and where it lives."
+CarpBrowserElement >> newRowFor: aDefinition [
+	"One definition: its header always, its coder when it is the selected
+	one. Building every coder up front would mean compiling a hundred
+	editors to look at one."
 
-	| definition |
-	definition := browserModel selectedDefinition.
-	^ BrHorizontalPane new
-		hMatchParent;
-		vFitContent;
-		alignCenterLeft;
-		background: BrGlamorousColors secondaryHeaderBackgroundColor;
-		border: (BlBorder paint: BrGlamorousColors lightBorderColor width: 1);
-		padding: (BlInsets top: 6 left: 12 bottom: 6 right: 8);
-		cellSpacing: 10;
+	| row |
+	row := BlElement new
+			layout: BlLinearLayout vertical;
+			background: Color white;
+			border: (BlBorder paint: BrGlamorousColors lightBorderColor width: 1);
+			margin: (BlInsets top: 0 left: 0 bottom: 6 right: 0);
+			constraintsDo: [ :c |
+				c horizontal matchParent.
+				c vertical fitContent ].
+	row addChild: (self newHeaderFor: aDefinition).
+	aDefinition == browserModel selectedDefinition
+		ifTrue: [ row
+				addChild: ((browserModel project isSessionLoaded
+						ifTrue: [ (aDefinition newCoder asCoderViewModel expanded: true) asExpandedOnlyElement ]
+						ifFalse: [ BrEditor new
+								aptitude: BrGlamorousCodeEditorAptitude new;
+								styler: CarpParser gtStyler;
+								beReadOnlyWithSelection;
+								padding: (BlInsets all: 10);
+								text: aDefinition source ])
+						constraintsDo: [ :c |
+							c horizontal matchParent.
+							c vertical fitContent ]) ].
+	^ row
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> newHeaderFor: aDefinition [
+	"The definition's line: its name, what defines it, and — when it is
+	open — what you can do to it."
+
+	| header |
+	header := BrHorizontalPane new
+			hMatchParent;
+			vFitContent;
+			alignCenterLeft;
+			background: (aDefinition == browserModel selectedDefinition
+					ifTrue: [ BrGlamorousColors secondaryHeaderBackgroundColor ]
+					ifFalse: [ Color white ]);
+			padding: (BlInsets top: 5 left: 12 bottom: 5 right: 8);
+			cellSpacing: 10;
+			when: BlClickEvent do: [ :anEvent | browserModel selectedDefinition: aDefinition ];
+			yourself.
+	header
 		addChild: (BrLabel new
 				aptitude: BrGlamorousLabelAptitude;
-				text: definition name asRopedText glamorousCodeFont);
+				text: aDefinition shortName asRopedText glamorousCodeFont);
 		addChild: (BrLabel new
 				aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
-				text: definition head , ' · ' , definition file basename);
-		addChild: (BrFrame new hMatchParent vFitContent);
-		addChild: (BrButton new
-				aptitude: BrGlamorousButtonWithIconAptitude;
-				icon: BrGlamorousVectorIcons add;
-				label: 'Add a definition to this module';
-				action: [ self addDefinitionToSelectedModule ]);
-		addChild: (BrButton new
-				aptitude: BrGlamorousButtonWithIconAptitude;
-				icon: BrGlamorousVectorIcons trash;
-				label: 'Delete this definition';
-				action: [ self deleteSelectedDefinition ]);
-		yourself
+				text: aDefinition head).
+	aDefinition documentation
+		ifNotEmpty: [ :aDoc |
+			header
+				addChild: (BrLabel new
+						aptitude: (BrGlamorousLabelAptitude new foreground: BrGlamorousColors disabledButtonTextColor);
+						text: (aDoc lines ifEmpty: [ '' ] ifNotEmpty: [ :them | them first ])) ].
+	aDefinition == browserModel selectedDefinition
+		ifTrue: [ header
+				addChild: (BrFrame new hMatchParent vFitContent);
+				addChild: (BrButton new
+						aptitude: BrGlamorousButtonWithIconAptitude;
+						icon: BrGlamorousVectorIcons add;
+						label: 'Add a definition to this module';
+						action: [ self addDefinitionToSelectedModule ]);
+				addChild: (BrButton new
+						aptitude: BrGlamorousButtonWithIconAptitude;
+						icon: BrGlamorousVectorIcons trash;
+						label: 'Delete this definition';
+						action: [ self deleteSelectedDefinition ]) ].
+	^ header
 ]
 
 { #category : #'initialization - parts' }
