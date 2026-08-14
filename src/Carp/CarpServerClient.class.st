@@ -361,6 +361,22 @@ CarpServerClient >> upsertFile: aPathString session: aSessionString [
 ]
 
 { #category : #'api - commands' }
+CarpServerClient >> prepareSession: aSessionString [
+	"Do the session-wide work that running a cell needs, so the first cell in
+	the playground does not pay for it. Nothing depends on it having
+	happened, so a failure here is not worth reporting."
+
+	^ [ self
+		rpc: (Dictionary new
+				at: 'id' put: self nextRequestId;
+				at: 'cmd' put: 'prepare';
+				at: 'session' put: aSessionString;
+				yourself) ]
+		on: Error
+		do: [ :e | nil ]
+]
+
+{ #category : #'api - commands' }
 CarpServerClient >> loadProjectAt: aRootPathString session: aSessionString [
 	"Warm a session whose base is the whole project, so annotate, complete
 	and doc in it see every project definition. Answers {files, millis}.

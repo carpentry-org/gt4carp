@@ -608,42 +608,6 @@ order the compiler would see them.")
 (deftype ProjectSession [sid String entry String])
 (def *project-sessions* (the (Array ProjectSession) []))
 
-; A session records what its own warm path costs. emit-cell rebuilds and
-; re-specializes the whole program for every cell, so on a project the size of
-; a compiler it can cost more than a cold compile of the same program: the
-; first cell measures it, and a session that answers slowly warm goes cold for
-; the rest of its life rather than paying twice.
-
-(deftype WarmVerdict [sid String warm Bool])
-(def *warm-verdicts* (the (Array WarmVerdict) []))
-
-(defmodule WarmCost
-  (private index-of)
-  (hidden index-of)
-  (defn index-of [sid]
-    (let-do [found -1]
-      (for [i 0 (Array.length &*warm-verdicts*)]
-        (when (String.= (WarmVerdict.sid (Array.unsafe-nth &*warm-verdicts* i)) sid)
-          (set! found i)))
-      found))
-
-  (doc budget-millis "how long a warm emission may take before the cold path
-is the better bet for this session.")
-  (defn budget-millis [] 8000.0)
-
-  (doc worth-it? "whether the warm path is still worth trying in a session.")
-  (defn worth-it? [sid]
-    (let [idx (index-of sid)]
-      (if (< idx 0) true @(WarmVerdict.warm (Array.unsafe-nth &*warm-verdicts* idx)))))
-
-  (doc record! "remembers what a warm emission cost.")
-  (defn-do record! [sid millis]
-    (let [idx (index-of sid)
-          verdict (< millis (budget-millis))]
-      (if (< idx 0)
-        (Array.push-back! &*warm-verdicts* (WarmVerdict.init @sid verdict))
-        (Array.aset! &*warm-verdicts* idx (WarmVerdict.init @sid verdict))))))
-
 (defmodule Projects
   (private index-of)
   (hidden index-of)
@@ -1311,6 +1275,19 @@ print its value from, which is what answers the request.")
                          @"\n"]))
       (String.concat &[@src @"\n(defn main [] ())\n"])))
 
+  (private cell-fault?)
+  (hidden cell-fault?)
+  (doc cell-fault? "whether a diagnostic is about the cell rather than about
+the warm path's ability to emit it. The front end is the authority on whether
+what you wrote is valid code: when it says no, recompiling the whole project
+cold only reproduces the same answer half a minute later. Anything from a
+later phase is our problem, not the cell's, and earns a cold retry.")
+  (defn cell-fault? [phase]
+    (or (String.= phase "parse")
+        (or (String.= phase "expand")
+            (or (String.= phase "resolve")
+                (or (String.= phase "infer") (String.= phase "validate"))))))
+
   (private decline-warm)
   (hidden decline-warm)
   (doc decline-warm "falls back to the cold path, leaving the reason in the
@@ -1328,18 +1305,22 @@ only the cell's own code goes through the front end — the phases that dominate
 a cold compile of a large project. Specialization and code generation still see
 the whole program, and clang still runs. Falls back to the cold path whenever
 the session cannot answer: a warm gap must never reject a valid cell.")
-  (defn-do eval-warm [id sid src]
-    (let [idx (Warm.usable sid)
-          started (System.nanotime)]
+  (defn eval-warm [id sid src]
+    (let [idx (Warm.usable sid)]
       (if (< idx 0)
         (decline-warm id sid src "no usable warm session")
-        (match (let-do [emitted (Session.emit-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
-                                                   &(SourceInput.init (fmt "cell:%d" id) (warm-cell src)))
-                        _ignored (WarmCost.record! sid
-                                                   (Double./ (Double.from-long (Uint64.to-long (Uint64.- (System.nanotime) started)))
-                                                             1000000.0))]
-                 emitted)
-          (Result.Error d) (decline-warm id sid src (Diagnostic.message &d))
+        (match (Session.emit-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                  &(SourceInput.init (fmt "cell:%d" id) (warm-cell src)))
+          (Result.Error d)
+            (if (cell-fault? (Diagnostic.phase &d))
+              (respond-eval id
+                            1
+                            ""
+                            ""
+                            false
+                            0
+                            &(fmt "%s: %s" (Diagnostic.phase &d) (Diagnostic.message &d)))
+              (decline-warm id sid src (Diagnostic.message &d)))
           (Result.Success c)
             (match (IO.write-file &c &(session-file sid "cell-warm.c"))
               (Result.Error e) (decline-warm id sid src &e)
@@ -1929,6 +1910,20 @@ Answers how long it took and how many files went in.")
                                                     (JSON.Num (Double./ (Double.from-long (Uint64.to-long (Uint64.- (System.nanotime) start)))
                                                                         1000000.0)))]))))))
 
+  (doc prepare-session "does the session-wide work that running a cell needs,
+so the first cell does not pay for it. The client fires this after a session
+is loaded; nothing depends on it having happened.")
+  (defn prepare-session [id sid]
+    (let [idx (Warm.ensure-any! sid)]
+      (if (< idx 0)
+        (respond-err id "no warm session")
+        (let-do [start (System.nanotime)]
+          (Session.prepare-emit (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx)))
+          (respond-ok-json id
+                           (JSON.obj [(JSON.entry @"millis"
+                                                  (JSON.Num (Double./ (Double.from-long (Uint64.to-long (Uint64.- (System.nanotime) start)))
+                                                                      1000000.0)))]))))))
+
   (doc upsert-file "commits a project file into a session: every definition
 it holds, reconciled by path, so a renamed or deleted definition leaves
 nothing behind. The file is read from disk — it is the truth — and its
@@ -2017,9 +2012,7 @@ program's own definitions.")
       ; up the value host (an inspectable object) for the speed
       (not (String.empty? &(Projects.entry-of sid)))
         (if (Cell.last-form-expression? src)
-          (if (WarmCost.worth-it? sid)
-            (eval-warm id sid src)
-            (eval-plain id sid src))
+          (eval-warm id sid src)
           (eval-def-warm id sid src))
       (and (not (String.empty? &*nb-lib*)) (Cell.last-form-expression? src))
         (eval-with-host id sid src)
@@ -2101,6 +2094,10 @@ program's own definitions.")
                                                         (Project.entry-path &root)
                                                         (Result.from-success (get-str &j "entry") @"")))]
                         (load-project id &sid &root &start))))
+            (= &cmd "prepare")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid) (prepare-session id &sid))
             (= &cmd "project")
               (match (get-str &j "root")
                 (Result.Error e) (respond-err id &e)

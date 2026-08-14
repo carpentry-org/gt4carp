@@ -96,6 +96,10 @@ CarpProject >> loadSession [
 	sessionMillis := answer at: 'millis' ifAbsent: [ 0 ].
 	sessionState := #loaded.
 	self changed.
+	"Checking works the moment the session is loaded; running a cell needs one
+	more piece of session-wide work, and it is worth doing now rather than
+	inside the first thing the playground is asked to evaluate."
+	CarpServerClient default prepareSession: self sessionId.
 	^ sessionMillis
 ]
 
