@@ -608,6 +608,42 @@ order the compiler would see them.")
 (deftype ProjectSession [sid String entry String])
 (def *project-sessions* (the (Array ProjectSession) []))
 
+; A session records what its own warm path costs. emit-cell rebuilds and
+; re-specializes the whole program for every cell, so on a project the size of
+; a compiler it can cost more than a cold compile of the same program: the
+; first cell measures it, and a session that answers slowly warm goes cold for
+; the rest of its life rather than paying twice.
+
+(deftype WarmVerdict [sid String warm Bool])
+(def *warm-verdicts* (the (Array WarmVerdict) []))
+
+(defmodule WarmCost
+  (private index-of)
+  (hidden index-of)
+  (defn index-of [sid]
+    (let-do [found -1]
+      (for [i 0 (Array.length &*warm-verdicts*)]
+        (when (String.= (WarmVerdict.sid (Array.unsafe-nth &*warm-verdicts* i)) sid)
+          (set! found i)))
+      found))
+
+  (doc budget-millis "how long a warm emission may take before the cold path
+is the better bet for this session.")
+  (defn budget-millis [] 8000.0)
+
+  (doc worth-it? "whether the warm path is still worth trying in a session.")
+  (defn worth-it? [sid]
+    (let [idx (index-of sid)]
+      (if (< idx 0) true @(WarmVerdict.warm (Array.unsafe-nth &*warm-verdicts* idx)))))
+
+  (doc record! "remembers what a warm emission cost.")
+  (defn-do record! [sid millis]
+    (let [idx (index-of sid)
+          verdict (< millis (budget-millis))]
+      (if (< idx 0)
+        (Array.push-back! &*warm-verdicts* (WarmVerdict.init @sid verdict))
+        (Array.aset! &*warm-verdicts* idx (WarmVerdict.init @sid verdict))))))
+
 (defmodule Projects
   (private index-of)
   (hidden index-of)
@@ -833,6 +869,26 @@ in the order the compiler would see them.")
                           (fmt "(load \"%s\")\n" (ProjectFile.path (Array.unsafe-nth files i)))))
       (String.concat &out)))
 
+  (private session-source)
+  (hidden session-source)
+  (doc session-source "a project file as the session gets it: loads and build
+configuration blanked as always, and a top-level main blanked too. A session
+exists to answer questions about the project and to run cells against it, and
+the program the project builds has exactly one entry point — leaving the
+project's main in would mean every cell emitted from the session defines main
+twice, since a cell brings its own.")
+  (defn session-source [src]
+    (let-do [out (Project.definition-source src)
+             spans (Cell.top-level-spans &out)]
+      (for [i 0 (Array.length &spans)]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol &out span)
+              name (Cell.second-symbol &out span)]
+          (when (and (or (String.= &head "defn") (String.= &head "defn-do"))
+                     (String.= &name "main"))
+            (set! out (Project.blank-span! &out span)))))
+      out))
+
   (doc load-base "the project as one loaded module, or the reason it cannot
 be built.")
   (defn load-base [root entry]
@@ -855,7 +911,7 @@ be built.")
           (Array.push-back! &sources
                             (ModuleSource.init @path
                                                @path
-                                               (Project.definition-source (ProjectFile.source file))))))
+                                               (session-source (ProjectFile.source file))))))
       (Array.push-back! &sources
                         (ModuleSource.init @"__project-root__.carp"
                                            @"__project-root__.carp"
@@ -1168,6 +1224,34 @@ NB.capture-and-serve so the compiled program becomes the value host.")
         (when (= (String.char-at s i) \newline) (set! result i)))
       result))
 
+  (doc respond-run "answers a finished run: absorbs the cell when it
+succeeded, and splits the last line of its output off as the value of an
+expression cell. Shared by every path that compiles and runs a cell.")
+  (defn-do respond-run [id sid src exit]
+    (let-do [out (file-or sid "stdout.log" "")
+             err (file-or sid "stderr.log" "")]
+      (when (= exit 0)
+        (do
+          (Session.absorb! sid src)
+          (Warm.absorb! sid src)))
+      (if (and (= exit 0) (Cell.last-form-expression? src))
+        (let [n (String.length &out)
+              trimmed (if (and (> n 0)
+                               (= (String.char-at &out (- n 1)) \newline))
+                        (Cell.byte-slice &out 0 (- n 1))
+                        @&out)
+              idx (last-newline-index &trimmed)]
+          (if (< idx 0)
+            (respond-eval id exit "" &trimmed false 0 &err)
+            (respond-eval id
+                          exit
+                          &(Cell.byte-slice &trimmed 0 (+ idx 1))
+                          &(Cell.byte-slice &trimmed (+ idx 1) (String.length &trimmed))
+                          false
+                          0
+                          &err)))
+        (respond-eval id exit &out "" false 0 &err))))
+
   (doc eval-plain "the value-host-free path: compile and run to completion.
 The notebook runtime is loaded when configured, so definition-only cells can
 use NB (defview and friends).")
@@ -1185,30 +1269,85 @@ use NB (defview and friends).")
                                      &*nb-lib*
                                      &(session-dir sid)))))
       (ignore (IO.write-file &program &(session-file sid "cell.carp")))
-      (let-do [exit (run-compile sid "-x" "stdout.log")
-               out (file-or sid "stdout.log" "")
-               err (file-or sid "stderr.log" "")]
-        (when (= exit 0)
-          (do
-            (Session.absorb! sid src)
-            (Warm.absorb! sid src)))
-        (if (and (= exit 0) (Cell.last-form-expression? src))
-          (let [n (String.length &out)
-                trimmed (if (and (> n 0)
-                                 (= (String.char-at &out (- n 1)) \newline))
-                          (Cell.byte-slice &out 0 (- n 1))
-                          @&out)
-                idx (last-newline-index &trimmed)]
-            (if (< idx 0)
-              (respond-eval id exit "" &trimmed false 0 &err)
-              (respond-eval id
-                            exit
-                            &(Cell.byte-slice &trimmed 0 (+ idx 1))
-                            &(Cell.byte-slice &trimmed (+ idx 1) (String.length &trimmed))
-                            false
-                            0
-                            &err)))
-          (respond-eval id exit &out "" false 0 &err)))))
+      (let [exit (run-compile sid "-x" "stdout.log")]
+        (respond-run id sid src exit))))
+
+  (doc clang-run "compiles a translation unit the session emitted and runs it,
+answering the exit code. The compiler binary is not involved: the C is already
+there, so this is the last two hundred milliseconds of a build rather than a
+whole one."
+)
+  (defn clang-run [sid]
+    (let [dir (session-dir sid)
+          build (System.system &(fmt "cd '%s' && clang -O0 -I . -I '%s' -lm -o cell-warm cell-warm.c > warm-compile.log 2>&1"
+                                     &dir
+                                     &*core-dir*))]
+      (if (/= build 0)
+        -1
+        (do
+          (ignore (System.system &(fmt "cd '%s' && ./cell-warm > stdout.log 2> stderr.log; echo $? > exit.code"
+                                       &dir)))
+          (Maybe.from (Int.from-string &(String.trim &(file-or sid "exit.code" "-1")))
+                      -1)))))
+
+  (private warm-cell)
+  (hidden warm-cell)
+  (doc warm-cell "the cell as the warm path emits it. A session already holds
+the project's own main, and the emitted program calls it, so the cell defines
+its own: that shadows the project's — running a cell must not launch the
+program the project builds — and gives a trailing expression somewhere to
+print its value from, which is what answers the request.")
+  (defn warm-cell [src]
+    (if (Cell.last-form-expression? src)
+      (let [spans (Cell.top-level-spans src)
+            last-span (Array.unsafe-nth &spans (- (Array.length &spans) 1))
+            s @(Pair.a last-span)
+            e @(Pair.b last-span)]
+        (String.concat &[(Cell.byte-slice src 0 s)
+                         @"(defn main [] (IO.println &(str "
+                         (Cell.byte-slice src s e)
+                         @")))"
+                         (Cell.byte-slice src e (String.length src))
+                         @"\n"]))
+      (String.concat &[@src @"\n(defn main [] ())\n"])))
+
+  (private decline-warm)
+  (hidden decline-warm)
+  (doc decline-warm "falls back to the cold path, leaving the reason in the
+session's warm.log. A warm gap must never reject a valid cell, but it should
+never be invisible either: without this the only symptom is that a cell takes
+half a minute again.")
+  (defn decline-warm [id sid src reason]
+    (do
+      (ignore (IO.write-file reason &(session-file sid "warm.log")))
+      (eval-plain id sid src)))
+
+  (doc eval-warm "runs a cell against the warm session. The project and every
+definition committed before it are already expanded, resolved and inferred, so
+only the cell's own code goes through the front end — the phases that dominate
+a cold compile of a large project. Specialization and code generation still see
+the whole program, and clang still runs. Falls back to the cold path whenever
+the session cannot answer: a warm gap must never reject a valid cell.")
+  (defn-do eval-warm [id sid src]
+    (let [idx (Warm.usable sid)
+          started (System.nanotime)]
+      (if (< idx 0)
+        (decline-warm id sid src "no usable warm session")
+        (match (let-do [emitted (Session.emit-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                                   &(SourceInput.init (fmt "cell:%d" id) (warm-cell src)))
+                        _ignored (WarmCost.record! sid
+                                                   (Double./ (Double.from-long (Uint64.to-long (Uint64.- (System.nanotime) started)))
+                                                             1000000.0))]
+                 emitted)
+          (Result.Error d) (decline-warm id sid src (Diagnostic.message &d))
+          (Result.Success c)
+            (match (IO.write-file &c &(session-file sid "cell-warm.c"))
+              (Result.Error e) (decline-warm id sid src &e)
+              (Result.Success _)
+                (let [exit (clang-run sid)]
+                  (if (< exit 0)
+                    (decline-warm id sid src &(file-or sid "warm-compile.log" "clang failed"))
+                    (respond-run id sid src exit))))))))
 
   (private host-token)
   (hidden host-token)
@@ -1872,9 +2011,18 @@ program's own definitions.")
   (defn-do eval-cell [id sid src]
     (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
     (kill-host! sid)
-    (if (and (not (String.empty? &*nb-lib*))
-             (Cell.last-form-expression? src))
-      (eval-with-host id sid src)
+    (cond
+      ; a project session is a whole compiler's worth of code: cold-compiling
+      ; it for every cell costs half a minute, so its cells run warm and give
+      ; up the value host (an inspectable object) for the speed
+      (not (String.empty? &(Projects.entry-of sid)))
+        (if (Cell.last-form-expression? src)
+          (if (WarmCost.worth-it? sid)
+            (eval-warm id sid src)
+            (eval-plain id sid src))
+          (eval-def-warm id sid src))
+      (and (not (String.empty? &*nb-lib*)) (Cell.last-form-expression? src))
+        (eval-with-host id sid src)
       (eval-def-warm id sid src)))
 
   ; --- request handling -------------------------------------------------
