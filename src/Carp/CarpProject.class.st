@@ -46,7 +46,59 @@ CarpProject class >> fromDictionary: aDictionary [
 
 { #category : #'instance creation' }
 CarpProject class >> onRoot: aPathString [
-	^ CarpServerClient default projectAt: aPathString
+	^ self onRoot: aPathString entry: ''
+]
+
+{ #category : #'instance creation' }
+CarpProject class >> containing: aFileReference [
+	"The project a file belongs to, or nil when it belongs to none.
+
+	A project is a repository, so the repository wins wherever it is: a
+	library inside one looks like a project of its own — its directory holds
+	a file named after it, which is exactly how an entry is recognised — and
+	browsing one file of a repository should not open a fifth of it. Only
+	when nothing above the file is a working copy does the nearest directory
+	with an entry file count, for the checkouts that are not git."
+
+	| directory nearest |
+	directory := aFileReference asFileReference asAbsolute.
+	directory isDirectory ifFalse: [ directory := directory parent ].
+	nearest := nil.
+	[ directory isRoot ] whileFalse: [
+		(directory / '.git') exists
+			ifTrue: [ "the repository is where the search ends either way: a
+				file belongs to the repository holding it, and a repository
+				with nothing to load holds no Carp project at all"
+				^ (self hasEntryFile: directory)
+					ifTrue: [ self onRoot: directory pathString ]
+					ifFalse: [ nearest
+							ifNil: [ nil ]
+							ifNotNil: [ :each | self onRoot: each pathString ] ] ].
+		(nearest isNil and: [ self hasEntryFile: directory ])
+			ifTrue: [ nearest := directory ].
+		directory := directory parent ].
+	^ nearest ifNotNil: [ :each | self onRoot: each pathString ]
+]
+
+{ #category : #'instance creation' }
+CarpProject class >> hasEntryFile: aDirectory [
+	"Whether a directory looks like something the server could load: the
+	entries it knows how to find on its own."
+
+	^ (aDirectory / 'main.carp') exists
+		or: [ (aDirectory / (aDirectory basename , '.carp')) exists ]
+]
+
+{ #category : #'instance creation' }
+CarpProject class >> onRoot: aPathString entry: anEntryString [
+	"Open a repository through an entry of your choosing. The entry is what
+	the session is: a project whose views, fixtures or helpers only make
+	sense inside the tool puts them behind an entry that loads them, and
+	that file need not build outside it."
+
+	^ (CarpServerClient default projectAt: aPathString entry: anEntryString)
+		requestedEntry: anEntryString;
+		yourself
 ]
 
 { #category : #accessing }
@@ -269,11 +321,14 @@ CarpProject >> membersOf: aDefinition [
 
 { #category : #accessing }
 CarpProject >> definitionsByName [
-	^ definitionIndex
-		ifNil: [ definitionIndex := Dictionary new.
+	| index |
+	index := definitionIndex.
+	index
+		ifNil: [ index := Dictionary new.
 			self definitions
-				do: [ :each | definitionIndex at: each name ifAbsentPut: [ each ] ].
-			definitionIndex ]
+				do: [ :each | index at: each name ifAbsentPut: [ each ] ].
+			definitionIndex := index ].
+	^ index
 ]
 
 { #category : #accessing }
@@ -287,15 +342,20 @@ CarpProject >> examplesFor: aDefinition [
 	calling it. Built once for the whole project, because asking each
 	example what it exemplifies means parsing it."
 
-	exampleIndex
-		ifNil: [ exampleIndex := Dictionary new.
+	| index |
+	index := exampleIndex.
+	index
+		ifNil: [ index := Dictionary new.
 			self examples
 				do: [ :anExample |
 					anExample exemplifiedNames
 						do: [ :aName |
-							(exampleIndex at: aName ifAbsentPut: [ OrderedCollection new ])
-								add: anExample ] ] ].
-	^ (exampleIndex at: aDefinition name ifAbsent: [ #() ]) asArray
+							(index at: aName ifAbsentPut: [ OrderedCollection new ])
+								add: anExample ] ].
+			"assigned once it is whole: a reload can drop it from another
+			process while it is being built"
+			exampleIndex := index ].
+	^ (index at: aDefinition name ifAbsent: [ #() ]) asArray
 ]
 
 { #category : #accessing }
@@ -384,11 +444,34 @@ CarpProject >> gtActionBrowseFor: anAction [
 
 { #category : #inspecting }
 CarpProject >> asBrowserTool [
+	^ self asBrowserToolAt: nil
+]
+
+{ #category : #inspecting }
+CarpProject >> asBrowserToolAt: aDefinition [
+	"The browser, opened where you came from: browsing a project from one of
+	its files should land on that file rather than on the project's front
+	page."
+
 	^ GtPhlowExplicitTool new
 		name: self rootName;
 		icon: BrGlamorousVectorIcons hierarchy;
-		stencil: [ CarpBrowserElement onProject: self ];
+		stencil: [ | browser |
+			browser := CarpBrowserElement onProject: self.
+			aDefinition ifNotNil: [ browser browserModel showDefinition: aDefinition ].
+			browser ];
 		withLabelAndIconAptitude
+]
+
+{ #category : #accessing }
+CarpProject >> definitionInFile: aPathString [
+	"Something to land on when a file is all you have: the first thing it
+	defines, or the module the file opens with when that is all it holds."
+
+	| file |
+	file := self files detect: [ :each | each path = aPathString ] ifNone: [ ^ nil ].
+	^ (file definitions detect: [ :each | each isModule not ] ifNone: [ nil ])
+		ifNil: [ file definitions ifEmpty: [ nil ] ifNotEmpty: [ :them | them first ] ]
 ]
 
 { #category : #accessing }
