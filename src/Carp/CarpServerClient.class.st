@@ -378,10 +378,18 @@ CarpServerClient >> prepareSession: aSessionString [
 
 { #category : #'api - commands' }
 CarpServerClient >> loadProjectAt: aRootPathString session: aSessionString [
+	^ self loadProjectAt: aRootPathString entry: '' session: aSessionString
+]
+
+{ #category : #'api - commands' }
+CarpServerClient >> loadProjectAt: aRootPathString entry: anEntryString session: aSessionString [
 	"Warm a session whose base is the whole project, so annotate, complete
 	and doc in it see every project definition. Answers {files, millis}.
 	This is the expensive one — a whole compiler front end over the
-	repository — so it is called deliberately, not per view."
+	repository — so it is called deliberately, not per view.
+
+	The session is what the entry loads, which is how a project says what
+	its session holds beyond what it builds."
 
 	| response |
 	response := self
@@ -390,6 +398,7 @@ CarpServerClient >> loadProjectAt: aRootPathString session: aSessionString [
 					at: 'cmd' put: 'load-project';
 					at: 'session' put: aSessionString;
 					at: 'root' put: aRootPathString;
+					at: 'entry' put: anEntryString;
 					yourself).
 	^ response
 		at: 'ok'
@@ -399,9 +408,17 @@ CarpServerClient >> loadProjectAt: aRootPathString session: aSessionString [
 
 { #category : #'api - commands' }
 CarpServerClient >> projectAt: aRootPathString [
+	^ self projectAt: aRootPathString entry: ''
+]
+
+{ #category : #'api - commands' }
+CarpServerClient >> projectAt: aRootPathString entry: anEntryString [
 	"Answer the project rooted at a repository: its load order, which files
 	are its own and which are dependencies, and every definition with its
-	span in file coordinates."
+	span in file coordinates.
+
+	The entry decides what the project is: it is the file whose loads the
+	server walks. An empty one lets the server find the repository's own."
 
 	| response |
 	response := self
@@ -409,6 +426,7 @@ CarpServerClient >> projectAt: aRootPathString [
 					at: 'id' put: self nextRequestId;
 					at: 'cmd' put: 'project';
 					at: 'root' put: aRootPathString;
+					at: 'entry' put: anEntryString;
 					yourself).
 	^ CarpProject
 		fromDictionary: (response

@@ -21,7 +21,9 @@ Class {
 		'modules',
 		'annotations',
 		'definitionIndex',
-		'exampleIndex'
+		'exampleIndex',
+		'sessionStamps',
+		'requestedEntry'
 	],
 	#category : #'Carp-Project'
 }
@@ -74,7 +76,10 @@ CarpProject >> gtActionLoadSessionFor: anAction [
 
 { #category : #accessing }
 CarpProject >> isSessionLoaded [
-	^ sessionState == #loaded
+	"A refreshing session is a loaded one: it holds everything it held before,
+	and is being told about the files that changed under it."
+
+	^ sessionState == #loaded or: [ sessionState == #refreshing ]
 ]
 
 { #category : #accessing }
@@ -90,7 +95,10 @@ CarpProject >> loadSession [
 	| answer |
 	sessionState := #loading.
 	self changed.
-	answer := [ CarpServerClient default loadProjectAt: self root session: self sessionId ]
+	answer := [ CarpServerClient default
+			loadProjectAt: self root
+			entry: self requestedEntry
+			session: self sessionId ]
 			on: Error
 			do: [ :e |
 				sessionState := #failed.
@@ -252,6 +260,20 @@ CarpProject >> entry [
 { #category : #accessing }
 CarpProject >> entry: aString [
 	entry := aString
+]
+
+{ #category : #accessing }
+CarpProject >> requestedEntry [
+	"The entry this project was opened through, empty when the server was
+	left to find the repository's own. It is asked for again on every reload
+	and every session load, so the project stays the one that was opened."
+
+	^ requestedEntry ifNil: [ '' ]
+]
+
+{ #category : #accessing }
+CarpProject >> requestedEntry: aString [
+	requestedEntry := aString
 ]
 
 { #category : #accessing }

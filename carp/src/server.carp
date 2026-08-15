@@ -693,6 +693,16 @@ otherwise a file named after the repo.")
         (let [named (String.concat &[@root @"/" (directory-name root) @".carp"])]
           named))))
 
+  (doc entry-in "the file a session starts from: the one asked for, read
+relative to the repository the way a caller means it, or the repository's own
+when nothing was asked for.")
+  (defn entry-in [root entry]
+    (normalize
+      &(cond
+         (String.empty? entry) (entry-path root)
+         (String.starts-with? entry "/") @entry
+         (String.concat &[@root @"/" @entry]))))
+
   (doc load-order "every file the project loads, dependencies first, in the
 order the compiler would see them.")
   (defn load-order [root entry]
@@ -1980,7 +1990,7 @@ each file's kind, and its definitions with file-coordinate spans.")
 order, files and definitions. Reading only — the warm session is not
 touched.")
   (defn open-project [id root entry]
-    (let [start (Project.normalize &(if (String.empty? entry) (Project.entry-path root) @entry))]
+    (let [start (Project.entry-in root entry)]
       (if (Result.error? &(IO.read-file &start))
         (respond-err id &(String.concat &[@"no entry file at " @&start]))
         (respond-ok-json id (project-json root &start)))))
@@ -2217,9 +2227,8 @@ program's own definitions.")
                   (match (get-str &j "root")
                     (Result.Error e) (respond-err id &e)
                     (Result.Success root)
-                      (let [start (Project.normalize &(if (String.empty? &(Result.from-success (get-str &j "entry") @""))
-                                                        (Project.entry-path &root)
-                                                        (Result.from-success (get-str &j "entry") @"")))]
+                      (let [start (Project.entry-in &root
+                                                    &(Result.from-success (get-str &j "entry") @""))]
                         (load-project id &sid &root &start))))
             (= &cmd "prepare")
               (match (get-str &j "session")
