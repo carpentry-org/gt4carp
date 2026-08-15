@@ -788,62 +788,38 @@ CarpBrowserElement >> newRowFor: aDefinition [
 
 { #category : #'initialization - parts' }
 CarpBrowserElement >> newFacetsFor: aDefinition [
-	| holder strip facets |
-	facets := OrderedCollection new.
-	facets
-		add: 'Definition' -> [ self newDefinitionPaneFor: aDefinition ];
-		add: 'Documentation' -> [ self newDocumentationPaneFor: aDefinition ];
-		add: 'Examples' -> [ self newExamplesPaneFor: aDefinition ].
-	aDefinition isType
-		ifTrue: [ facets add: 'Members' -> [ self newMembersPaneFor: aDefinition ] ].
-	holder := BlElement new
-			layout: BlLinearLayout vertical;
+	"A definition has more sides than its source. What it does is the code;
+	what it is for is its documentation; what it looks like in use are its
+	examples; and a type also has the members Carp derives for it. You read
+	one at a time, so they are tabs — GT's own, which give the selected one
+	its underline and build a side only when you ask for it."
+
+	| tabs |
+	tabs := BrTabGroup new
+			aptitude: BrGlamorousTabGroupAptitude new;
 			constraintsDo: [ :c |
 				c horizontal matchParent.
 				c vertical exact: (self facetHeightFor: aDefinition) ];
 			yourself.
-	strip := BrHorizontalPane new
-			hMatchParent;
-			vFitContent;
-			alignCenterLeft;
-			padding: (BlInsets top: 2 left: 8 bottom: 0 right: 8);
-			cellSpacing: 4;
-			yourself.
-	facets
-		doWithIndex: [ :each :index |
-			strip
-				addChild: (BrButton new
-						aptitude: BrGlamorousButtonWithLabelAptitude new;
-						label: (self facetLabel: each key selected: index = 1);
-						action: [ :aButton |
-							"which facet you are reading is said in the labels — a
-							button carries an aptitude that owns its background and
-							border, and setting those directly fights it"
-							strip children
-								doWithIndex: [ :sibling :position |
-									sibling
-										label: (self
-												facetLabel: (facets at: position) key
-												selected: sibling == aButton) ].
-							holder removeChildren.
-							holder addChild: each value value ];
-						yourself) ].
-	holder addChild: facets first value value.
-	^ BlElement new
-		layout: BlLinearLayout vertical;
-		constraintsDo: [ :c |
-			c horizontal matchParent.
-			c vertical fitContent ];
-		addChild: strip;
-		addChild: holder;
+	tabs
+		addTab: (self facetTabLabelled: 'Definition' for: [ self newDefinitionPaneFor: aDefinition ]);
+		addTab: (self facetTabLabelled: 'Documentation' for: [ self newDocumentationPaneFor: aDefinition ]);
+		addTab: (self facetTabLabelled: 'Examples' for: [ self newExamplesPaneFor: aDefinition ]).
+	aDefinition isType
+		ifTrue: [ tabs
+				addTab: (self facetTabLabelled: 'Members' for: [ self newMembersPaneFor: aDefinition ]) ].
+	^ tabs
+]
+
+{ #category : #'initialization - parts' }
+CarpBrowserElement >> facetTabLabelled: aString for: aBlock [
+	^ BrTab new
+		aptitude: BrGlamorousTabAptitude new;
+		label: aString;
+		stencil: aBlock;
 		yourself
 ]
 
-{ #category : #style }
-CarpBrowserElement >> facetLabel: aString selected: aBoolean [
-	^ aBoolean
-		ifTrue: [ '· ' , aString ]
-		ifFalse: [ aString ]
 ]
 
 { #category : #'initialization - parts' }
