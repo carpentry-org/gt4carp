@@ -36,7 +36,8 @@ Class {
 		'drawer',
 		'drawerTabs',
 		'drawerTab',
-		'openRow'
+		'openRow',
+		'updatingLists'
 	],
 	#category : #'Carp-Browser'
 }
@@ -89,8 +90,9 @@ CarpBrowserElement >> initialize [
 	moduleList
 		when: BrSelectionChanged
 		do: [ :anEvent |
-			anEvent selectedDo: [ :anInterval |
-				browserModel selectedModule: (moduleList viewModel itemAt: anInterval first) ] ].
+			self whenUserSelects: [
+				anEvent selectedDo: [ :anInterval |
+					browserModel selectedModule: (moduleList viewModel itemAt: anInterval first) ] ] ].
 	definitionList := self newListLabelled: [ :each | each shortName ].
 	definitionList
 		itemDataBinder: [ :aLabel :each |
@@ -100,8 +102,9 @@ CarpBrowserElement >> initialize [
 	definitionList
 		when: BrSelectionChanged
 		do: [ :anEvent |
-			anEvent selectedDo: [ :anInterval |
-				browserModel selectedDefinition: (definitionList viewModel itemAt: anInterval first) ] ].
+			self whenUserSelects: [
+				anEvent selectedDo: [ :anInterval |
+					browserModel selectedDefinition: (definitionList viewModel itemAt: anInterval first) ] ] ].
 	coderPane := BlElement new
 			layout: BlLinearLayout vertical;
 			background: Color white;
@@ -602,9 +605,10 @@ CarpBrowserElement >> deleteSelectedDefinition [
 { #category : #updating }
 CarpBrowserElement >> onDefinitionSelected [
 	self
-		select: browserModel selectedDefinition
-		in: definitionList
-		among: browserModel sortedDefinitions.
+		whileUpdatingLists: [ self
+				select: browserModel selectedDefinition
+				in: definitionList
+				among: browserModel sortedDefinitions ].
 	self updateCoderPane
 ]
 
@@ -616,22 +620,64 @@ CarpBrowserElement >> onFilterChanged [
 	| modules definitions |
 	modules := browserModel modules.
 	definitions := browserModel definitions.
-	moduleList items: modules.
-	definitionList items: definitions.
-	(modules includes: browserModel selectedModule)
-		ifFalse: [ browserModel selectedModule: nil ].
-	(definitions includes: browserModel selectedDefinition)
-		ifFalse: [ browserModel selectedDefinition: nil ].
-	self select: browserModel selectedModule in: moduleList among: modules.
-	self select: browserModel selectedDefinition in: definitionList among: browserModel sortedDefinitions.
+	self
+		whileUpdatingLists: [ moduleList items: modules.
+			definitionList items: definitions.
+			(modules includes: browserModel selectedModule)
+				ifFalse: [ browserModel selectedModule: nil ].
+			(definitions includes: browserModel selectedDefinition)
+				ifFalse: [ browserModel selectedDefinition: nil ].
+			self select: browserModel selectedModule in: moduleList among: modules.
+			self
+				select: browserModel selectedDefinition
+				in: definitionList
+				among: browserModel sortedDefinitions ].
 	self updateCoderPane
 ]
 
 { #category : #updating }
 CarpBrowserElement >> onModuleSelected [
-	definitionList items: browserModel sortedDefinitions.
-	self select: browserModel selectedModule in: moduleList among: browserModel modules.
+	self
+		whileUpdatingLists: [ definitionList items: browserModel sortedDefinitions.
+			self select: browserModel selectedModule in: moduleList among: browserModel modules.
+			self
+				select: browserModel selectedDefinition
+				in: definitionList
+				among: browserModel sortedDefinitions ].
 	self updateCoderPane
+]
+
+{ #category : #updating }
+CarpBrowserElement >> whileUpdatingLists: aBlock [
+	"Filling a list and selecting in it are how the model reaches the view.
+	Both make the list announce a selection, which is how the view reaches
+	the model — so without this the two directions drive each other: a jump
+	changes the module, refilling the definition list selects something else,
+	that selection changes the model back, and the browser oscillates
+	forever. Announcements while we are updating are ours, not the user's."
+
+	| was |
+	was := updatingLists.
+	updatingLists := true.
+	^ [ aBlock value ] ensure: [ updatingLists := was ]
+]
+
+{ #category : #updating }
+CarpBrowserElement >> whenUserSelects: aBlock [
+	"Run the block only when the selection came from the user."
+
+	updatingLists == true ifTrue: [ ^ self ].
+	^ aBlock value
+]
+
+{ #category : #updating }
+CarpBrowserElement >> updateSearchField [
+	"The field writes the filter, and a jump can clear it, so it also has to
+	read it back — otherwise the box still says what it no longer narrows."
+
+	searchField ifNil: [ ^ self ].
+	searchField text asString = browserModel filter ifTrue: [ ^ self ].
+	searchField text: browserModel filter
 ]
 
 { #category : #updating }
@@ -652,13 +698,15 @@ CarpBrowserElement >> select: anObject in: aList among: aCollection [
 
 { #category : #updating }
 CarpBrowserElement >> onProjectChanged [
-	moduleList items: browserModel modules.
-	definitionList items: browserModel sortedDefinitions.
-	self select: browserModel selectedModule in: moduleList among: browserModel modules.
 	self
-		select: browserModel selectedDefinition
-		in: definitionList
-		among: browserModel sortedDefinitions.
+		whileUpdatingLists: [ self updateSearchField.
+			moduleList items: browserModel modules.
+			definitionList items: browserModel sortedDefinitions.
+			self select: browserModel selectedModule in: moduleList among: browserModel modules.
+			self
+				select: browserModel selectedDefinition
+				in: definitionList
+				among: browserModel sortedDefinitions ].
 	self updateStatus.
 	self updateCoderPane
 ]

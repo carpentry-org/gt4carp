@@ -128,16 +128,21 @@ CarpBrowserModel >> selectedDefinition: aDefinition [
 CarpBrowserModel >> showDefinition: aDefinition [
 	"Land on a definition wherever it lives, for when something outside the
 	columns — a problem, a reference, another tool — hands us one. A filter
-	that would hide it is dropped rather than silently swallowing the jump."
+	that would hide it is dropped rather than silently swallowing the jump.
+
+	One move, one announcement: going through the filter and the two
+	selections in turn would rebuild the browser three times, and each
+	rebuild throws away the element the jump was asked from."
 
 	| module definition |
 	aDefinition ifNil: [ ^ self ].
 	project ifNil: [ ^ self ].
 	module := project moduleNamed: aDefinition moduleName.
 	definition := project definitionNamed: aDefinition name.
-	(self modules includes: module) ifFalse: [ self filter: '' ].
-	self selectedModule: module.
-	self selectedDefinition: definition
+	(self modules includes: module) ifFalse: [ filter := '' ].
+	selectedModule := module.
+	selectedDefinition := definition.
+	self announce: CarpBrowserProjectChanged new
 ]
 
 { #category : #accessing }
