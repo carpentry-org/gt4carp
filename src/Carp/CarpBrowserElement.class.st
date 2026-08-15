@@ -993,32 +993,59 @@ CarpBrowserElement >> newExampleRowFor: anExample [
 				aptitude: BrGlamorousButtonWithIconAptitude;
 				icon: BrGlamorousVectorIcons playinspect;
 				label: 'Run this example';
-				action: [ self run: anExample into: result ]);
+				action: [ :aButton | self run: anExample into: result from: aButton ]);
 		addChild: (BrButton new
 				aptitude: BrGlamorousButtonWithIconAptitude;
 				icon: BrGlamorousVectorIcons edit;
 				label: 'Go to this example';
-				action: [ browserModel showDefinition: anExample ]);
+				action: [ :aButton | self goTo: anExample from: aButton ]);
 		yourself
 ]
 
 { #category : #actions }
-CarpBrowserElement >> run: anExample into: aLabel [
-	"Run an example in the project's own session, in the background: it is a
-	compile and a run, which is fast now but not instant."
+CarpBrowserElement >> goTo: aDefinition from: anElement [
+	"Jump after the click, not during it. Landing on a definition rebuilds
+	the pane, and the button asking for the jump lives inside the pane being
+	rebuilt: doing that inside the click leaves the event dispatching into
+	elements that are no longer there."
+
+	anElement
+		enqueueTask: (BlTaskAction new action: [ browserModel showDefinition: aDefinition ])
+]
+
+{ #category : #actions }
+CarpBrowserElement >> run: anExample into: aLabel from: anElement [
+	"Run an example in the project's own session and open what it answered.
+	The row keeps the short answer, and the object itself goes into a pane,
+	which is what running something in GT means. It runs in the background:
+	it is a compile and a run, which is fast now but not instant."
 
 	| project |
 	project := browserModel project.
 	aLabel text: 'running…'.
 	[ | answer |
-	answer := [ (project newPlaygroundCoder
-			primitiveEvaluate: '(' , anExample name , ')'
-			inContext: GtSourceCoderEvaluationContext new
-			onFailDo: [ :e | e messageText ]) printString ]
+	answer := [ (CarpServerClient default
+			evalSource: '(' , anExample name , ')'
+			session: project sessionId) preferredInspectable ]
 			on: Error
-			do: [ :e | e messageText ].
-	aLabel enqueueTask: (BlTaskAction new action: [ aLabel text: answer ]) ]
+			do: [ :e | e messageText ifNil: [ e class name ] ].
+	anElement
+		enqueueTask: (BlTaskAction new
+				action: [ aLabel text: (self shortAnswerFor: answer).
+					anElement phlow spawnObject: answer ]) ]
 		forkNamed: 'carp-run-example'
+]
+
+{ #category : #actions }
+CarpBrowserElement >> shortAnswerFor: anAnswer [
+	"What fits on the row: the value a run answered, or whatever the thing
+	itself has to say when it is not one."
+
+	| text |
+	text := (anAnswer printString ifNil: [ '' ]) asString trimBoth.
+	^ text size > 80
+		ifTrue: [ (text first: 79) , '…' ]
+		ifFalse: [ text ]
 ]
 
 { #category : #'initialization - parts' }
