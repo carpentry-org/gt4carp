@@ -92,13 +92,30 @@ CarpProjectFile >> commit [
 	current. Answers the committed definitions, or nil when there is no
 	session to commit into."
 
+	| answer |
 	self project ifNil: [ ^ nil ].
-	self project isSessionLoaded ifFalse: [ ^ nil ].
-	^ [ CarpServerClient default
-		upsertFile: self path
-		session: self project sessionId ]
-		on: Error
-		do: [ :e | nil ]
+	(#(#loaded #refreshing) includes: self project sessionState)
+		ifFalse: [ ^ nil ].
+	answer := [ CarpServerClient default
+			upsertFile: self path
+			session: self project sessionId ]
+			on: Error
+			do: [ :e | nil ].
+	answer ifNotNil: [ self project noteSessionSaw: self ].
+	^ answer
+]
+
+{ #category : #accessing }
+CarpProjectFile >> modificationStamp [
+	"What the file looks like from outside: when it was last written, and how
+	long it is. Enough to tell a session that has seen it from one that has
+	not."
+
+	^ [ | reference |
+	reference := self path asFileReference.
+	reference exists
+		ifTrue: [ Array with: reference modificationTime with: reference size ]
+		ifFalse: [ nil ] ] on: Error do: [ :e | nil ]
 ]
 
 { #category : #saving }

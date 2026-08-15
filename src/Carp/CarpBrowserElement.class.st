@@ -671,7 +671,7 @@ CarpBrowserElement >> updateStatus [
 	nameLabel text: project rootName.
 	sessionButton
 		ifNotNil: [ sessionButton
-				label: (project sessionState = #loaded
+				label: (project isSessionLoaded
 						ifTrue: [ 'Session loaded' ]
 						ifFalse: [ project sessionState = #loading
 								ifTrue: [ 'Loading…' ]
@@ -692,7 +692,9 @@ CarpBrowserElement >> updateStatus [
 								ifTrue: [ 'session loaded' ]
 								ifFalse: [ project sessionState = #loading
 										ifTrue: [ 'loading session…' ]
-										ifFalse: [ 'no session' ] ]).
+										ifFalse: [ project sessionState = #refreshing
+												ifTrue: [ 'session catching up…' ]
+												ifFalse: [ 'no session' ] ] ]).
 					project changes
 						ifNotEmpty: [ :them |
 							aStream

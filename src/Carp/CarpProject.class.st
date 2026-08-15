@@ -108,6 +108,7 @@ CarpProject >> loadSession [
 	sessionState := #loaded.
 	annotations := nil.
 	exampleIndex := nil.
+	self stampFiles.
 	self changed.
 	"Checking works the moment the session is loaded; running a cell needs one
 	more piece of session-wide work, and it is worth doing now rather than
@@ -141,16 +142,73 @@ CarpProject >> sessionState [
 
 { #category : #accessing }
 CarpProject >> reload [
-	"Re-read the tree from disk. The session keeps whatever it holds: it is
-	warmed from the files, so it goes stale the moment they change, and
-	reloading it is the expensive part."
+	"Re-read the tree from disk, then bring the session back in step with it:
+	a session is warmed from the files and goes stale the moment they change,
+	but only the files that changed have to be committed again, and that is
+	warm work rather than another load."
 
 	| fresh |
-	fresh := CarpServerClient default projectAt: self root.
+	fresh := CarpServerClient default projectAt: self root entry: self requestedEntry.
 	self files: fresh files.
 	self entry: fresh entry.
 	self forgetIndexes.
-	self changed
+	self changed.
+	self isSessionLoaded ifTrue: [ self refreshSessionInBackground ]
+]
+
+{ #category : #accessing }
+CarpProject >> refreshSession [
+	"Commit every file the session has not seen since it was warmed. Answers
+	how many were committed."
+
+	| stale |
+	self isSessionLoaded ifFalse: [ ^ 0 ].
+	stale := self staleFiles.
+	stale ifEmpty: [ ^ 0 ].
+	sessionState := #refreshing.
+	self changed.
+	stale do: [ :each | each commit ].
+	annotations := nil.
+	exampleIndex := nil.
+	sessionState := #loaded.
+	self changed.
+	^ stale size
+]
+
+{ #category : #accessing }
+CarpProject >> refreshSessionInBackground [
+	self sessionState == #refreshing ifTrue: [ ^ self ].
+	[ self refreshSession ] forkNamed: 'carp-project-refresh'
+]
+
+{ #category : #private }
+CarpProject >> staleFiles [
+	"The project's own files that changed on disk since the session last saw
+	them. Dependencies are left alone: they come from the library cache and
+	the session read them when it loaded."
+
+	sessionStamps ifNil: [ ^ #() ].
+	^ self files
+		select: [ :each |
+			each isDependency not
+				and: [ | seen |
+					seen := sessionStamps at: each path ifAbsent: [ nil ].
+					seen ~= each modificationStamp ] ]
+]
+
+{ #category : #private }
+CarpProject >> stampFiles [
+	sessionStamps := Dictionary new.
+	self files do: [ :each | self noteSessionSaw: each ]
+]
+
+{ #category : #private }
+CarpProject >> noteSessionSaw: aFile [
+	"Remember the file as the session has it, so a later reload can tell what
+	it still has to be told about."
+
+	sessionStamps ifNil: [ sessionStamps := Dictionary new ].
+	sessionStamps at: aFile path put: aFile modificationStamp
 ]
 
 { #category : #private }
@@ -283,7 +341,11 @@ CarpProject >> files [
 
 { #category : #accessing }
 CarpProject >> files: aCollection [
+	"Adopt the files: a file commits into its project's session, so one that
+	still points at the tree it was read from cannot commit anywhere."
+
 	files := aCollection.
+	files do: [ :each | each project: self ].
 	modules := nil.
 	definitionIndex := nil.
 	exampleIndex := nil
