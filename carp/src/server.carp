@@ -861,10 +861,11 @@ from: host facts, a stub Project module, core, and the include macros.")
               (String.concat [\"#include \\\"\" (relative-to (current-file) path) \"\\\"\"]))))
 "])))
 
-  (private root-source)
-  (hidden root-source)
-  (defn root-source []
-    (String.concat &[(boot-prelude) @"(load \"bufio.carp\")
+  (doc runtime-loads "the loads a base needs to have the notebook runtime in
+it: the socket library it is built on, then the runtime itself. Shared with a
+project base, whose sessions host values the same way a notebook's do.")
+  (defn runtime-loads []
+    (String.copy "(load \"bufio.carp\")
 (load \"socket/interfaces.carp\")
 (load \"socket/tcp_stream.carp\")
 (load \"socket/tcp_listener.carp\")
@@ -873,7 +874,12 @@ from: host facts, a stub Project module, core, and the include macros.")
 (load \"socket/unix_listener.carp\")
 (load \"socket/poll.carp\")
 (load \"notebook.carp\")
-"]))
+"))
+
+  (private root-source)
+  (hidden root-source)
+  (defn root-source []
+    (String.concat &[(boot-prelude) (runtime-loads)]))
 
   (private socket-piece!)
   (hidden socket-piece!)
@@ -881,6 +887,24 @@ from: host facts, a stub Project module, core, and the include macros.")
     (let [key (fmt "socket/%s.carp" name)
           path (fmt "%s/socket/0.2.3/src/%s.carp" &(lib-cache) name)]
       (push-source! sources &key &path)))
+
+  (doc push-runtime! "pushes the notebook runtime and what it is built on
+into a base's sources. Answers false when a piece cannot be read.")
+  (defn push-runtime! [sources]
+    (let-do [ok true]
+      (unless (push-source! sources
+                            "bufio.carp"
+                            &(fmt "%s/bufio/0.1.0/bufio.carp" &(lib-cache)))
+        (set! ok false))
+      (unless (socket-piece! sources "interfaces") (set! ok false))
+      (unless (socket-piece! sources "tcp_stream") (set! ok false))
+      (unless (socket-piece! sources "tcp_listener") (set! ok false))
+      (unless (socket-piece! sources "udp_socket") (set! ok false))
+      (unless (socket-piece! sources "unix_stream") (set! ok false))
+      (unless (socket-piece! sources "unix_listener") (set! ok false))
+      (unless (socket-piece! sources "poll") (set! ok false))
+      (unless (push-notebook! sources) (set! ok false))
+      ok))
 
   (doc load-base "the loaded host base module, or the reason it cannot be
 built.")
@@ -890,18 +914,7 @@ built.")
       (for [i 0 (Array.length &session-core-files)]
         (unless (push-core! &sources (Array.unsafe-nth &session-core-files i))
           (set! ok false)))
-      (unless (push-source! &sources
-                            "bufio.carp"
-                            &(fmt "%s/bufio/0.1.0/bufio.carp" &(lib-cache)))
-        (set! ok false))
-      (unless (socket-piece! &sources "interfaces") (set! ok false))
-      (unless (socket-piece! &sources "tcp_stream") (set! ok false))
-      (unless (socket-piece! &sources "tcp_listener") (set! ok false))
-      (unless (socket-piece! &sources "udp_socket") (set! ok false))
-      (unless (socket-piece! &sources "unix_stream") (set! ok false))
-      (unless (socket-piece! &sources "unix_listener") (set! ok false))
-      (unless (socket-piece! &sources "poll") (set! ok false))
-      (unless (push-notebook! &sources) (set! ok false))
+      (unless (push-runtime! &sources) (set! ok false))
       (Array.push-back! &sources
                         (ModuleSource.init @"__host-root__.carp"
                                            @"__host-root__.carp"
@@ -945,10 +958,13 @@ plain core when the base cannot be built.")
 (defmodule ProjectBase
   (private root-source)
   (hidden root-source)
-  (doc root-source "the boot prelude followed by one load per project file,
-in the order the compiler would see them.")
+  (doc root-source "the boot prelude and the notebook runtime, followed by
+one load per project file, in the order the compiler would see them. The
+runtime comes first so a project's own files may use it: a project says what
+its session holds through its entry, and views are the reason to.")
   (defn root-source [files]
-    (let-do [out (the (Array String) [(HostBase.boot-prelude)])
+    (let-do [out (the (Array String) [(HostBase.boot-prelude)
+                                      (HostBase.runtime-loads)])
              n (Array.length files)]
       (for [i 0 n]
         (Array.push-back! &out
@@ -991,6 +1007,7 @@ be built.")
             (Result.Error e)
               (do (IO.errorln &(fmt "project base: cannot read %s: %s" &path &e))
                   (set! ok false)))))
+      (unless (HostBase.push-runtime! &sources) (set! ok false))
       (for [i 0 n]
         (let [file (Array.unsafe-nth &files i)
               path (ProjectFile.path file)]
@@ -1380,22 +1397,13 @@ whole one."
   (hidden warm-cell)
   (doc warm-cell "the cell as the warm path emits it. A session already holds
 the project's own main, and the emitted program calls it, so the cell defines
-its own: that shadows the project's — running a cell must not launch the
-program the project builds — and gives a trailing expression somewhere to
-print its value from, which is what answers the request.")
+its own: that shadows the project's, because running a cell must not launch the
+program the project builds. The trailing expression is left alone — the session
+echoes a top-level result the way the whole compiler does, which is what answers
+the request. Wrapping it here instead meant guessing the calling convention of
+the value's `str`, and a derived one takes its argument by reference.")
   (defn warm-cell [src]
-    (if (Cell.last-form-expression? src)
-      (let [spans (Cell.top-level-spans src)
-            last-span (Array.unsafe-nth &spans (- (Array.length &spans) 1))
-            s @(Pair.a last-span)
-            e @(Pair.b last-span)]
-        (String.concat &[(Cell.byte-slice src 0 s)
-                         @"(defn main [] (IO.println &(str "
-                         (Cell.byte-slice src s e)
-                         @")))"
-                         (Cell.byte-slice src e (String.length src))
-                         @"\n"]))
-      (String.concat &[@src @"\n(defn main [] ())\n"])))
+    (String.concat &[@"(defn main [] ())\n" @src @"\n"]))
 
   (private cell-fault?)
   (hidden cell-fault?)
@@ -1451,6 +1459,72 @@ the session cannot answer: a warm gap must never reject a valid cell.")
                   (if (< exit 0)
                     (decline-warm id sid src &(file-or sid "warm-compile.log" "clang failed"))
                     (respond-run id sid src exit))))))))
+
+  (private clang-host)
+  (hidden clang-host)
+  (doc clang-host "compiles a translation unit the session emitted into the
+session's value host binary, the way clang-run compiles one to run and exit.")
+  (defn clang-host [sid]
+    (= 0
+       (System.system
+         &(fmt "cd '%s' && clang -O0 -I . -I '%s' -lm -o cell-host cell-warm.c > warm-compile.log 2>&1"
+               &(session-dir sid)
+               &*core-dir*))))
+
+  (private warm-host-cell)
+  (hidden warm-host-cell)
+  (doc warm-host-cell "the cell as the warm host path emits it: the shadowing
+main, the verbatim source of any view the cell defines, and the trailing
+expression handed to the runtime instead of printed.")
+  (defn warm-host-cell [src]
+    (String.concat &[@"(defn main [] ())\n"
+                     (view-source-overrides src)
+                     (wrap-cell src)
+                     @"\n"]))
+
+  (doc eval-warm-host "runs a cell warm and keeps the program alive as the
+session's value host, so what a cell answers is a live object with its own
+views rather than the text it prints. Everything the printing path does, plus
+the launch: the session is what makes it affordable, since only the cell goes
+through the front end.
+
+Falls back to the printing path whenever the value cannot be hosted — a type
+the runtime cannot register, a port it cannot get — because an answer in text
+beats no answer.")
+  (defn eval-warm-host [id sid src]
+    (let [idx (Warm.usable sid)]
+      (if (< idx 0)
+        (decline-warm id sid src "no usable warm session")
+        (match (Session.emit-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                  &(SourceInput.init (fmt "cell:%d" id) (warm-host-cell src)))
+          (Result.Error d)
+            (if (cell-fault? (Diagnostic.phase &d))
+              (respond-eval id
+                            1
+                            ""
+                            ""
+                            false
+                            0
+                            &(fmt "%s: %s" (Diagnostic.phase &d) (Diagnostic.message &d)))
+              (eval-warm id sid src))
+          (Result.Success c)
+            (match (IO.write-file &c &(session-file sid "cell-warm.c"))
+              (Result.Error _) (eval-warm id sid src)
+              (Result.Success _)
+                (if (not (clang-host sid))
+                  (eval-warm id sid src)
+                  (let-do [response @""
+                           attempt 0
+                           done false]
+                    (while-do (and (not done) (< attempt 5))
+                      (let-do [port (next-port!)
+                               token (eval-token sid attempt)]
+                        (launch-host! sid port &token)
+                        (match (wait-for-host id sid src port &token 600)
+                          (Maybe.Just resp) (do (set! response resp) (set! done true))
+                          (Maybe.Nothing) ()))
+                      (set! attempt (+ attempt 1)))
+                    (if done response (eval-warm id sid src)))))))))
 
   (private host-token)
   (hidden host-token)
@@ -2150,12 +2224,15 @@ program's own definitions.")
     (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
     (kill-host! sid)
     (cond
-      ; a project session is a whole compiler's worth of code: cold-compiling
-      ; it for every cell costs half a minute, so its cells run warm and give
-      ; up the value host (an inspectable object) for the speed
+      ; a project session is a whole compiler's worth of code, which is why
+      ; its cells run warm: only the cell goes through the front end. The
+      ; value host rides on the same emission, so a project cell answers a
+      ; live object too, and pays the launch rather than a cold compile
       (not (String.empty? &(Projects.entry-of sid)))
         (if (Cell.last-form-expression? src)
-          (eval-warm id sid src)
+          (if (String.empty? &*nb-lib*)
+            (eval-warm id sid src)
+            (eval-warm-host id sid src))
           (eval-def-warm id sid src))
       (and (not (String.empty? &*nb-lib*)) (Cell.last-form-expression? src))
         (eval-with-host id sid src)
