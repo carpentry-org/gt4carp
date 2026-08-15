@@ -343,9 +343,15 @@ along.")
   (def load-heads [@"load" @"load-once" @"load-and-use"])
 
   ; forms that configure the build rather than define anything; the IDE
-  ; hands the session definitions only, so these get blanked out
+  ; hands the session definitions only, so these get blanked out.
+  ;
+  ; `relative-include` and `add-c` are deliberately NOT among them: they name
+  ; the C a file needs, which is the other half of what it defines. A
+  ; `register`ed function is declared and implemented by the header it points
+  ; at, so blanking those leaves calls to a function that is nowhere — and
+  ; only once specialization reaches one, which is why it stayed hidden.
   (def config-heads [@"Project.config" @"Project.no-echo" @"add-cflag"
-                     @"add-lib" @"add-pkg" @"relative-include" @"add-c"])
+                     @"add-lib" @"add-pkg"])
 
   (def binding-heads [@"defn" @"defn-" @"def" @"def-" @"deftype" @"defmacro"
                       @"defndynamic" @"defdynamic" @"definterface" @"defalias"
