@@ -30,12 +30,48 @@ Class {
 
 { #category : #'instance creation' }
 CarpNativeDebugger class >> onProgram: aFileReference [
-	"Debug a compiled binary, stopped before its first instruction."
+	"Debug a compiled binary, stopped where its own code begins."
 
 	^ self new
 		program: aFileReference;
 		start;
 		yourself
+]
+
+{ #category : #'instance creation' }
+CarpNativeDebugger class >> onSourceFile: aFileReference [
+	"Build a Carp program for debugging and debug what comes out. This is the
+	whole loop: a file goes in, a stopped program comes back."
+
+	^ self onProgram: (self buildForDebugging: aFileReference)
+]
+
+{ #category : #building }
+CarpNativeDebugger class >> buildForDebugging: aFileReference [
+	"Compile a Carp file the way the command line does, with -g: debug
+	information, no optimization, and the generated C kept beside the binary,
+	because that C is the source a debugger of a compiled Carp program shows.
+
+	The binary lands beside the source rather than in a temporary directory:
+	its debug information names the C by path, so both have to stay where the
+	build put them."
+
+	| binary out |
+	binary := aFileReference parent / aFileReference basenameWithoutExtension.
+	out := GtExternalProcessBuilder new
+			command: CarpServerClient compilerBinary;
+			args: {'-g'.
+					'-b'.
+					'-c'.
+					CarpServerClient coreDirectory.
+					'-o'.
+					binary fullName.
+					aFileReference fullName};
+			output.
+	out status isSuccess
+		ifFalse: [ ^ self error: 'carp-compiler could not build ' , aFileReference basename
+				, ': ' , out stderrString trimBoth ].
+	^ binary
 ]
 
 { #category : #accessing }
@@ -100,16 +136,47 @@ CarpNativeDebugger >> port: anInteger [
 
 { #category : #'start-stop' }
 CarpNativeDebugger >> start [
-	"Spawn the adapter and stop the program at its entry point."
+	"Spawn the adapter and stop the program where its own code begins.
+
+	Stopping at the entry point stops at `_dyld_start`, which is the loader
+	rather than the program: there is no source to show and nothing to step
+	that anyone wrote. A breakpoint on `main` and one continue lands in the
+	program instead, which is where a reader thinks `stop at the start` means."
 
 	localRoot ifNil: [ localRoot := program parent ].
 	self startAdapter.
 	client := self connectToAdapter.
 	self initializeRemote.
 	self launchProgram.
+	self stopAtMain.
 	self configurationDone.
 	self requestAllThreads.
-	self requestAllStackTraces
+	self requestAllStackTraces.
+	self continueToMain
+]
+
+{ #category : #'start-stop' }
+CarpNativeDebugger >> stopAtMain [
+	"A breakpoint on the C entry point, which is the one symbol a Carp program
+	has under a name the debugger and the reader agree on. Carp's own `main`
+	is one step further in, under its mangled name."
+
+	client setFunctionBreakpoints: (DAPSetFunctionBreakpointsArguments new
+			breakpoints: { { 'name' -> 'main' } asDictionary })
+]
+
+{ #category : #'start-stop' }
+CarpNativeDebugger >> continueToMain [
+	"Run from the loader to the breakpoint on main. The adapter answers the
+	continue before the program stops again, so wait for the stop rather than
+	for the reply, and give up rather than hang if it never comes."
+
+	| deadline |
+	client stoppedThread ifNil: [ ^ self ].
+	client stoppedThread continue.
+	deadline := DateAndTime now + 10 seconds.
+	[ client isStopped or: [ DateAndTime now > deadline ] ]
+		whileFalse: [ (Delay forMilliseconds: 50) wait ]
 ]
 
 { #category : #'start-stop' }
