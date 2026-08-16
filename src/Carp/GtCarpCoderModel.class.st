@@ -121,7 +121,31 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 					anElement enqueueTask: (BlTaskAction new
 							action: [ anElement phlow spawnObject: message ]) ] ]
 				forkNamed: 'carp-debug' ]
-		id: #'source-coder--carp-debug-action-id'
+		id: #'source-coder--carp-debug-action-id'.
+
+	"The other debugger: not the expansion of the cell but the program it
+	compiles to, stopped in its own code. Building takes a whole compile, so
+	this too runs off the UI process."
+	addOns
+		addMainAction: 'Debug native' translated
+		icon: BrGlamorousVectorIcons play
+		action: [ :aCoderUIModel :anElement |
+			| source |
+			source := self currentSourceString.
+			[ [ | built debugger |
+			built := CarpServerClient default
+					buildDebugSource: source
+					session: self sessionId.
+			debugger := CarpNativeDebugger onProgram: (built at: 'binary') asFileReference.
+			anElement enqueueTask: (BlTaskAction new action: [ debugger open ]) ]
+				on: Error
+				do: [ :e |
+					| message |
+					message := e messageText ifNil: [ e class name ].
+					anElement enqueueTask: (BlTaskAction new
+							action: [ anElement phlow spawnObject: message ]) ] ]
+				forkNamed: 'carp-debug-native' ]
+		id: #'source-coder--carp-debug-native-action-id'
 ]
 
 { #category : #accessing }

@@ -91,6 +91,89 @@ CarpNativeDebugger class >> defaultServerExecutable [
 ]
 
 { #category : #accessing }
+CarpNativeDebugger >> styleSourceText: aText [
+	"A frame built with debug information stands in the Carp it was written
+	as, so it gets the styler the editors use. A frame in a C runtime file
+	does not, and is left alone: styling C as Carp reads worse than not
+	styling it at all."
+
+	^ (self stoppedInCarp and: [ aText isNotNil ])
+		ifTrue: [ [ CarpParser gtStyler style: aText ] on: Error do: [ :e | aText ] ]
+		ifFalse: [ aText ]
+]
+
+{ #category : #accessing }
+CarpNativeDebugger >> stoppedInCarp [
+	"Whether the frame being shown came from a Carp file. Without `#line`
+	directives in the build it never does, and the debugger shows the C it
+	really runs."
+
+	^ [ | thread |
+	thread := self stoppedThread.
+	thread notNil and: [ thread stackFrames anySatisfy: [ :each |
+		each source notNil and: [ (each source path ifNil: [ '' ]) endsWith: '.carp' ] ] ] ]
+		on: Error
+		do: [ :e | false ]
+]
+
+{ #category : #naming }
+CarpNativeDebugger >> displayNameForFrame: aDAPStackFrame [
+	"What to call a frame. The C name a Carp definition compiles to is the Carp
+	name with its type written after it, and a reader wants the first half."
+
+	^ self class carpNameFor: (aDAPStackFrame name ifNil: [ '' ])
+]
+
+{ #category : #naming }
+CarpNativeDebugger class >> carpNameFor: aString [
+	"The Carp name a compiled symbol came from.
+
+	The compiler writes a definition as C<n>_<name>__<type>, where n counts the
+	characters of the encoded name (see CAbi.mangle). A symbol without that
+	shape belongs to the C runtime rather than to Carp, and is answered as it
+	is: `main` and `carp_init_globals` are their own names."
+
+	| separator count encoded |
+	(aString size > 2 and: [ aString first = $C ]) ifFalse: [ ^ aString ].
+	separator := aString indexOf: $_ startingAt: 2.
+	separator = 0 ifTrue: [ ^ aString ].
+	count := [ (aString copyFrom: 2 to: separator - 1) asNumber ]
+			on: Error
+			do: [ :e | nil ].
+	(count isNil or: [ count isInteger not or: [ count <= 0 ] ]) ifTrue: [ ^ aString ].
+	separator + count > aString size ifTrue: [ ^ aString ].
+	encoded := aString copyFrom: separator + 1 to: separator + count.
+	^ self decodeCarpName: encoded
+]
+
+{ #category : #naming }
+CarpNativeDebugger class >> decodeCarpName: aString [
+	"Undo the encoding a C identifier forces on a Carp name: everything C
+	cannot spell is written _x<code>_, and the code is decimal, not hex."
+
+	| out index |
+	out := WriteStream on: String new.
+	index := 1.
+	[ index <= aString size ] whileTrue: [
+		| escape |
+		escape := ((aString at: index) = $_ and: [
+				index < aString size and: [ (aString at: index + 1) = $x ] ])
+					ifTrue: [ aString indexOf: $_ startingAt: index + 2 ]
+					ifFalse: [ 0 ].
+		escape > 0
+			ifTrue: [
+				| code |
+				code := [ (aString copyFrom: index + 2 to: escape - 1) asNumber ]
+						on: Error
+						do: [ :e | nil ].
+				code isInteger
+					ifTrue: [ out nextPut: (Character value: code). index := escape + 1 ]
+					ifFalse: [ out nextPut: (aString at: index). index := index + 1 ] ]
+			ifFalse: [ out nextPut: (aString at: index). index := index + 1 ] ].
+	^ out contents
+]
+
+{ #category : #accessing }
 CarpNativeDebugger >> program [
 	^ program
 ]

@@ -32,6 +32,7 @@
 ;   {"id": n, "cmd": "expand",    "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "expand-1",  "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "trace",     "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "build-debug", "session": "<name>", "source": "<carp>"}
 ;
 ; Usage also: server --dap <port> [compiler] [core-dir] [work-dir] [nb-lib]
 ;   speaks the Debug Adapter Protocol for compile-time evaluation instead.
@@ -1379,6 +1380,60 @@ use NB (defview and friends).")
       (let [exit (run-compile sid "-x" "stdout.log")]
         (respond-run id sid src exit))))
 
+  (private debug-cell)
+  (hidden debug-cell)
+  (doc debug-cell "the cell as a program to debug. A cell ending in an
+expression becomes a program that runs it, with the value dropped rather than
+printed: printing means dispatching `str` for a type the cell may have only
+just introduced, and a debugger is a bad place to find out it has none. A cell
+of definitions alone still has to link, so it gets a main that does nothing
+and the definitions to stop in.")
+  (defn debug-cell [src]
+    (if (Cell.last-form-expression? src)
+      (let [spans (Cell.top-level-spans src)
+            last-span (Array.unsafe-nth &spans (Int.dec (Array.length &spans)))
+            start @(Pair.a last-span)
+            end @(Pair.b last-span)]
+        (String.concat &[(Cell.byte-slice src 0 start)
+                         @"(defn main [] (ignore "
+                         (Cell.byte-slice src start end)
+                         @"))"
+                         (Cell.byte-slice src end (String.length src))
+                         @"\n"]))
+      (String.concat &[@"(defn main [] ())\n" @src @"\n"])))
+
+  (doc build-debug "builds the cell as a program a debugger can open, and
+answers where the binary and the C it was built from are.
+
+The cell is shaped the way the run paths shape it, so what gets debugged is
+what would run. The build is the compiler's own `-g`: unoptimized, and the
+generated C kept beside the binary, because that C is the source the debugger
+shows.")
+  (defn-do build-debug [id sid src]
+    (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
+    (let-do [prelude (if (String.empty? &*nb-lib*)
+                       @""
+                       @"(load \"notebook.carp\")\n")
+             program (String.concat &[prelude
+                                      (Projects.prelude sid)
+                                      (Session.defs-text &(Session.entries sid))
+                                      (debug-cell src)])]
+      (unless (String.empty? &*nb-lib*)
+        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
+                                     &*nb-lib*
+                                     &(session-dir sid)))))
+      (ignore (IO.write-file &program &(session-file sid "cell.carp")))
+      (let [exit (run-compile sid "-g -b -o cell-debug" "build.log")]
+        (if (Int.= exit 0)
+          (respond-ok-json id
+                           (JSON.obj [(JSON.entry @"binary"
+                                                  (JSON.Str (session-file sid "cell-debug")))
+                                      (JSON.entry @"source"
+                                                  (JSON.Str (session-file sid "cell-debug.c")))
+                                      (JSON.entry @"cell"
+                                                  (JSON.Str (session-file sid "cell.carp")))]))
+          (respond-err id &(file-or sid "stderr.log" "debug build failed"))))))
+
   (doc clang-run "compiles a translation unit the session emitted and runs it,
 answering the exit code. The compiler binary is not involved: the C is already
 there, so this is the last two hundred milliseconds of a build rather than a
@@ -2379,6 +2434,13 @@ program's own definitions.")
                   (match (get-str &j "source")
                     (Result.Error e) (respond-err id &e)
                     (Result.Success src) (eval-cell id &sid &src)))
+            (= &cmd "build-debug")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "source")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success src) (build-debug id &sid &src)))
             (respond-err id &(String.append "unknown cmd: " &cmd))))))
 
   (defn-do serve-one [stream]
