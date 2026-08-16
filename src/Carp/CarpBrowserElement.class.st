@@ -870,8 +870,6 @@ CarpBrowserElement >> facetTabLabelled: aString for: aBlock [
 		yourself
 ]
 
-]
-
 { #category : #'initialization - parts' }
 CarpBrowserElement >> newMembersPaneFor: aDefinition [
 	"What a type brings with it: the functions the compiler derived from its
@@ -928,11 +926,28 @@ CarpBrowserElement >> newMembersPaneFor: aDefinition [
 
 { #category : #style }
 CarpBrowserElement >> facetHeightFor: aDefinition [
-	"Enough for the definition to be read without a scrollbar, and no more."
+	"As tall as the definition needs, and never taller than the pane holding
+	it. A definition of two lines should not sit in a window-sized box, and
+	one of seven hundred should not push the rest of the module a screen and
+	a half away — past the pane it scrolls inside itself, which is what the
+	editor is good at."
 
-	| lines |
-	lines := aDefinition source lines size.
-	^ (((lines + 3) * 18 + 46) min: 420) max: 150
+	| wanted |
+	wanted := (aDefinition source lines size + 3) * 18 + 46.
+	^ (wanted min: self facetCeiling) max: 150
+]
+
+{ #category : #style }
+CarpBrowserElement >> facetCeiling [
+	"What the pane can give a definition: its own height, less the room the
+	header and the tab labels take. Before the browser has been laid out
+	there is nothing to ask, and a fixed answer stands in."
+
+	| available |
+	available := coderPane ifNil: [ 0 ] ifNotNil: [ :each | each height - 96 ].
+	^ available > 150
+		ifTrue: [ available ]
+		ifFalse: [ 420 ]
 ]
 
 { #category : #'initialization - parts' }
