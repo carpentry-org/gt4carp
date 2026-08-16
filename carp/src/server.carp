@@ -31,6 +31,10 @@
 ;   {"id": n, "cmd": "doc",       "session": "<name>", "name": "<symbol>"}
 ;   {"id": n, "cmd": "expand",    "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "expand-1",  "session": "<name>", "source": "<carp>"}
+;   {"id": n, "cmd": "trace",     "session": "<name>", "source": "<carp>"}
+;
+; Usage also: server --dap <port> [compiler] [core-dir] [work-dir] [nb-lib]
+;   speaks the Debug Adapter Protocol for compile-time evaluation instead.
 ;   {"id": n, "cmd": "project",      "root": "<repo>" [, "entry": "<file>"]}
 ;   {"id": n, "cmd": "load-project", "session": "<name>", "root": "<repo>"}
 ;   {"id": n, "cmd": "prepare",      "session": "<name>"}
@@ -2102,6 +2106,44 @@ anything to the session.")
                                    (JSON.obj [(JSON.entry @"expansion" (JSON.Str @src))
                                               (JSON.entry @"changed" (JSON.Bool false))]))))))))
 
+  (doc trace-cell "answers every compile-time step expanding a cell takes: the
+form, where it is, the frame it ran in, and how deep the evaluation was. The
+debugger walks this rather than stopping the compiler, because compile-time
+evaluation is deterministic and a recording can be walked in both directions.")
+  (defn trace-cell [id sid src]
+    (let [idx (Warm.ensure-any! sid)]
+      (if (< idx 0)
+        (respond-err id "a trace needs a warm session and none could be created")
+        (let [state (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+              input (SourceInput.init @"cell" @src)]
+          (let [traced (Session.trace-expand state &input)
+                steps @(Pair.a &traced)]
+              (let-do [rows (the (Array (Box JSON)) [])
+                       n (Array.length &steps)]
+                (for [i 0 n]
+                  (let [step (Array.unsafe-nth &steps i)
+                        span (CtStep.span step)]
+                    (Array.push-back! &rows
+                                      (Box.init
+                                        (JSON.obj
+                                          [(JSON.entry @"form" (JSON.Str @(CtStep.form step)))
+                                           (JSON.entry @"depth"
+                                                       (JSON.Num (Double.from-int @(CtStep.depth step))))
+                                           (JSON.entry @"frame"
+                                                       (JSON.Num (Double.from-int @(CtStep.frame step))))
+                                           (JSON.entry @"line"
+                                                       (JSON.Num (Double.from-int @(Info.line (SurfaceSpan.start span)))))
+                                           (JSON.entry @"column"
+                                                       (JSON.Num (Double.from-int @(Info.col (SurfaceSpan.start span)))))])))))
+                (respond-ok-json id
+                                 (JSON.obj [(JSON.entry @"steps" (JSON.Arr rows))
+                                            ;; the failure that ended the run, when one did:
+                                            ;; the last step says where it stopped, this says why
+                                            (JSON.entry @"failure"
+                                                        (match-ref (Pair.b &traced)
+                                                          (Maybe.Just d) (JSON.Str @(Diagnostic.message d))
+                                                          (Maybe.Nothing) (JSON.Null)))]))))))))
+
   (doc load-project "warms a session whose base is a whole project, so
 annotate, complete and doc in that session see every project definition.
 Answers how long it took and how many files went in.")
@@ -2296,6 +2338,13 @@ program's own definitions.")
                     (Result.Error e) (respond-err id &e)
                     (Result.Success src)
                       (expand-cell id &sid &src (= &cmd "expand-1"))))
+            (= &cmd "trace")
+              (match (get-str &j "session")
+                (Result.Error e) (respond-err id &e)
+                (Result.Success sid)
+                  (match (get-str &j "source")
+                    (Result.Error e) (respond-err id &e)
+                    (Result.Success src) (trace-cell id &sid &src)))
             (= &cmd "upsert-file")
               (match (get-str &j "session")
                 (Result.Error e) (respond-err id &e)
@@ -2360,6 +2409,931 @@ repeatedly, which means the socket itself is gone, ends the loop.")
             (do (set! failures 0)
                 (serve-one stream)))))))
 
+; --- debug adapter ------------------------------------------------------
+;
+; The compile-time language gets a debugger by speaking the Debug Adapter
+; Protocol, so the tools that already understand debuggers can drive it: GT
+; connects with its own DAP client, and so would anything else.
+;
+; The evaluation is recorded rather than suspended (see Session.trace-expand),
+; which makes `stepBack` an honest capability instead of a missing one — a
+; recording can be walked in both directions, and a stopped interpreter
+; cannot.
+
+(def *dap-steps* (the (Array CtStep) []))
+(def *dap-index* 0)
+(def *dap-source* @"")
+(def *dap-source-path* @"")
+(def *dap-session* @"dap")
+; a client that says goodbye is done with us, and the next one is waiting:
+; the adapter serves one debugging session at a time
+(def *dap-open* true)
+; how many cells this adapter has recorded, so each one can have its own file
+(def *dap-cell-count* 0)
+; why the recording ended, when it ended in a failure rather than a result
+(def *dap-failure* @"")
+; the values a client has been given a handle on, so it can ask for what is
+; inside them. A recording keeps text rather than values, so a handle is the
+; text of one form and its children are read back out of it on demand.
+(def *dap-nodes* (the (Array String) []))
+; handles below this belong to frames, which the protocol numbers from one
+(def *dap-node-base* 1000)
+
+(doc DapBreak "one place a client has asked the recording to stop, resolved
+to somewhere the recording actually stands. A client points at a line; a
+recording only has forms, so a breakpoint is kept as the form that was found
+there rather than as the line that was asked for.")
+(deftype DapBreak [file String
+                   line Int
+                   col Int
+                   id Int])
+
+(def *dap-breaks* (the (Array DapBreak) []))
+; breakpoints are named by number for the client's whole session, so a
+; breakpoint it is told about twice is the same breakpoint
+(def *dap-break-count* 0)
+
+(defmodule Dap
+  (private json-string)
+  (hidden json-string)
+  (defn json-string [value] (Result.unsafe-from-success (JSON.str value)))
+
+  (doc write-message "one DAP message: a Content-Length header, a blank line,
+then the JSON body.")
+  (defn write-message [br body]
+    (do
+      (ignore (BufReader.write br
+                               &(String.concat &[@"Content-Length: "
+                                                 (Int.str (String.length body))
+                                                 @"\r\n\r\n"
+                                                 (String.copy body)])))
+      (ignore (BufReader.flush br))))
+
+  (private header-length)
+  (hidden header-length)
+  (defn header-length [line]
+    (if (String.starts-with? line "Content-Length:")
+      (Maybe.from (Int.from-string &(String.trim &(String.suffix line 15))) -1)
+      -1))
+
+  (doc read-message "reads one DAP message, or Nothing when the client has
+gone away.")
+  (defn read-message [br]
+    (let-do [length -1
+             reading true
+             result (the (Maybe String) (Maybe.Nothing))]
+      (while reading
+        (match (BufReader.read-line br)
+          (Result.Error _) (set! reading false)
+          (Result.Success line)
+            (let [trimmed (String.trim &line)]
+              (if (String.empty? &trimmed)
+                (set! reading false)
+                (let [candidate (header-length &trimmed)]
+                  (when (Int.> candidate 0) (set! length candidate)))))))
+      (when (Int.> length 0)
+        (match (BufReader.read-n br length)
+          (Result.Error _) ()
+          (Result.Success bytes)
+            (set! result (Maybe.Just (String.from-bytes &bytes)))))
+      result))
+
+  (doc number-of "one field of a request, or a harmless default when the client
+did not send it.")
+  (defn number-of [object key]
+    (match (JSON.get object key)
+      (Maybe.Just (JSON.Num n)) (Double.to-int n)
+      _ 0))
+
+  (doc string-of "one field of a request, or a harmless default when the client
+did not send it.")
+  (defn string-of [object key]
+    (match (JSON.get object key)
+      (Maybe.Just (JSON.Str s)) @&s
+      _ @""))
+
+  (doc break-specs "the breakpoints a client asked for in one file, as line
+and column. A client that names no column means the line rather than one
+form on it, and says so with a zero.")
+  (defn break-specs [arguments]
+    (let-do [out (the (Array (Pair Int Int)) [])]
+      (match (JSON.get arguments "breakpoints")
+        (Maybe.Just (JSON.Arr items))
+          (let [n (Array.length &items)]
+            (for [i 0 n]
+              (let [item (Box.peek (Array.unsafe-nth &items i))]
+                (Array.push-back! &out
+                                  (Pair.init (number-of item "line")
+                                             (number-of item "column"))))))
+        _ ())
+      out))
+
+  (doc respond "a response to a request, carrying whatever the request asked
+for.")
+  (defn respond [seq command body]
+    (json-string
+      &(JSON.obj [(JSON.entry @"type" (JSON.Str @"response"))
+                  (JSON.entry @"request_seq" (JSON.Num (Double.from-int seq)))
+                  (JSON.entry @"success" (JSON.Bool true))
+                  (JSON.entry @"command" (JSON.Str @command))
+                  (JSON.entry @"body" body)])))
+
+  (doc event "an event the adapter raises on its own: the client is told
+where the evaluation stopped, or that it is over.")
+  (defn event [name body]
+    (json-string
+      &(JSON.obj [(JSON.entry @"type" (JSON.Str @"event"))
+                  (JSON.entry @"event" (JSON.Str @name))
+                  (JSON.entry @"body" body)]))))
+
+(defmodule DapDebug
+  (doc current "the step the debugger is stopped at.")
+  (defn current []
+    (if (Int.>= *dap-index* (Array.length &*dap-steps*))
+      (the (Maybe CtStep) (Maybe.Nothing))
+      (Maybe.Just @(Array.unsafe-nth &*dap-steps* *dap-index*))))
+
+  (doc frames "the compile-time stack where the debugger is stopped: the
+current form, then whatever it is nested inside. A recording keeps no stack
+of its own, so this is the last enclosing step at each shallower depth —
+which is the same thing, recovered.")
+  (defn frames []
+    (let-do [result (the (Array CtStep) [])
+             n (Array.length &*dap-steps*)]
+      (when (Int.< *dap-index* n)
+        (let-do [depth @(CtStep.depth (Array.unsafe-nth &*dap-steps* *dap-index*))
+                 i *dap-index*]
+          (Array.push-back! &result @(Array.unsafe-nth &*dap-steps* *dap-index*))
+          (while (Int.> i 0)
+            (do
+              (set! i (Int.dec i))
+              (let [candidate (Array.unsafe-nth &*dap-steps* i)]
+                (when (Int.< @(CtStep.depth candidate) depth)
+                  (do
+                    (Array.push-back! &result @candidate)
+                    (set! depth @(CtStep.depth candidate)))))))))
+      result))
+
+  (private basename)
+  (hidden basename)
+  (defn basename [path]
+    (let-do [cut -1
+             n (String.length path)]
+      (for [i 0 n]
+        (when (= (String.char-at path i) \/) (set! cut i)))
+      (if (Int.< cut 0) @path (Cell.byte-slice path (Int.inc cut) n))))
+
+  (private label)
+  (hidden label)
+  (doc label "a form as a frame name: one line, and short enough to read in
+a list.")
+  (defn label [form]
+    (let [flat (String.join " " &(String.split-by form &[\newline]))]
+      (if (Int.> (String.length &flat) 72)
+        (String.concat &[(Cell.byte-slice &flat 0 71) @"…"])
+        flat)))
+
+  (private file-json)
+  (hidden file-json)
+  (doc file-json "one file, as a source the client can ask us to open.")
+  (defn file-json [file]
+    (JSON.obj [(JSON.entry @"name" (JSON.Str (basename file)))
+               (JSON.entry @"path" (JSON.Str @file))]))
+
+  (private source-json)
+  (hidden source-json)
+  (doc source-json "where a step is. A step inside the cell being expanded
+has the cell as its file; one inside a macro the standard library defines
+knows its line but not yet its file, and says so rather than pointing at the
+cell, which would send a reader to an unrelated line.")
+  (defn source-json [step]
+    (let [file (CtStep.file step)]
+      (if (String.empty? file)
+        (JSON.obj [(JSON.entry @"name" (JSON.Str @"compile time"))])
+        (file-json file))))
+
+  (doc scopes-body "what a frame has in scope. One scope, because a
+compile-time frame has one kind of thing in it: the names bound by the let,
+the macro call, or the function that was entered.
+
+The reference a client asks back with is the frame's own index, offset so it
+is never zero: the protocol treats zero as `no children`.")
+  (defn scopes-body [frame-id]
+    (let [steps (frames)
+          n (Array.length &steps)
+          named (and (Int.>= frame-id 0) (Int.< frame-id n))
+          count (if named
+                  (Array.length (CtStep.bindings (Array.unsafe-nth &steps frame-id)))
+                  0)]
+      (JSON.obj [(JSON.entry @"scopes"
+                             (if (Int.= count 0)
+                               (JSON.Arr [])
+                               (JSON.Arr [(Box.init
+                                            (JSON.obj [(JSON.entry @"name" (JSON.Str @"Locals"))
+                                                       (JSON.entry @"presentationHint" (JSON.Str @"locals"))
+                                                       (JSON.entry @"variablesReference"
+                                                                   (JSON.Num (Double.from-int (Int.inc frame-id))))
+                                                       (JSON.entry @"namedVariables"
+                                                                   (JSON.Num (Double.from-int count)))
+                                                       (JSON.entry @"expensive" (JSON.Bool false))]))])))])))
+
+  (private rendered-items)
+  (hidden rendered-items)
+  (defn rendered-items [items]
+    (let-do [out (the (Array String) [])
+             n (Array.length items)]
+      (for [i 0 n]
+        (Array.push-back! &out (Surface.render (Box.peek (Array.unsafe-nth items i)))))
+      out))
+
+  (private children-of)
+  (hidden children-of)
+  (doc children-of "the forms directly inside one form, as text. A value in a
+recording is the code it was, so what is inside it is what the reader finds
+inside it: the elements of a list or an array. Anything else is a leaf, and
+text that no longer parses on its own is treated as one rather than guessed
+at.")
+  (defn children-of [text]
+    (let-do [result (the (Array String) [])]
+      (match (Surface.parse text)
+        (Result.Error _) ()
+        (Result.Success module)
+          (let [forms (SurfaceModule.forms &module)]
+            (when (Int.= (Array.length forms) 1)
+              (match-ref (SurfaceNode.form (Box.peek (Array.unsafe-nth forms 0)))
+                (SurfaceForm.List items) (set! result (rendered-items items))
+                (SurfaceForm.Array items) (set! result (rendered-items items))
+                (SurfaceForm.StaticArray items) (set! result (rendered-items items))
+                (SurfaceForm.Dictionary items) (set! result (rendered-items items))
+                _ ()))))
+      result))
+
+  (private handle-for)
+  (hidden handle-for)
+  (doc handle-for "a handle the client can ask about later, for a value worth
+looking inside, and zero for one that is not. Handles are handed out as they
+are needed and last as long as the recording does.")
+  (defn handle-for [text]
+    (if (Int.= 0 (Array.length &(children-of text)))
+      0
+      (let-do [index (Array.length &*dap-nodes*)]
+        (Array.push-back! &*dap-nodes* @text)
+        (Int.+ *dap-node-base* index))))
+
+  (private variable-json)
+  (hidden variable-json)
+  (defn variable-json [name value]
+    (JSON.obj [(JSON.entry @"name" (JSON.Str @name))
+               (JSON.entry @"value" (JSON.Str @value))
+               (JSON.entry @"variablesReference"
+                           (JSON.Num (Double.from-int (handle-for value))))]))
+
+  (doc variables-body "what a handle holds: the names of a frame's scope, or
+the forms inside a value. A value in a recording is code, so looking inside it
+is reading its parts, and its parts are values in the same sense.")
+  (defn variables-body [reference]
+    (let-do [rows (the (Array (Box JSON)) [])]
+      (if (Int.>= reference *dap-node-base*)
+        (let [index (Int.- reference *dap-node-base*)]
+          (when (Int.< index (Array.length &*dap-nodes*))
+            (let-do [children (children-of (Array.unsafe-nth &*dap-nodes* index))
+                     n (Array.length &children)]
+              (for [i 0 n]
+                (Array.push-back! &rows
+                                  (Box.init
+                                    (variable-json &(Int.str i)
+                                                   (Array.unsafe-nth &children i))))))))
+        (let-do [steps (frames)
+                 frame-id (Int.dec reference)]
+          (when (and (Int.>= frame-id 0) (Int.< frame-id (Array.length &steps)))
+            (let-do [bindings (CtStep.bindings (Array.unsafe-nth &steps frame-id))
+                     n (Array.length bindings)]
+              (for [i 0 n]
+                (let [binding (Array.unsafe-nth bindings i)]
+                  (Array.push-back! &rows
+                                    (Box.init
+                                      (variable-json (CtBinding.name binding)
+                                                     (CtBinding.value binding))))))))))
+      (JSON.obj [(JSON.entry @"variables" (JSON.Arr rows))])))
+
+  (doc stack-trace-body "the frames as the protocol wants them: an id to ask
+about later, a name to show, and where in which file.")
+  (defn stack-trace-body []
+    (let-do [steps (frames)
+             rows (the (Array (Box JSON)) [])
+             n (Array.length &steps)]
+      (for [i 0 n]
+        (let [step (Array.unsafe-nth &steps i)
+              span (CtStep.span step)]
+          (Array.push-back! &rows
+                            (Box.init
+                              (JSON.obj
+                                [(JSON.entry @"id" (JSON.Num (Double.from-int i)))
+                                 (JSON.entry @"name" (JSON.Str (label (CtStep.form step))))
+                                 (JSON.entry @"source" (source-json step))
+                                 (JSON.entry @"line"
+                                             (JSON.Num (Double.from-int @(Info.line (SurfaceSpan.start span)))))
+                                 (JSON.entry @"column"
+                                             (JSON.Num (Double.from-int @(Info.col (SurfaceSpan.start span)))))
+                                 ;; where the form ends, so a client highlights
+                                 ;; the form rather than the rest of the line
+                                 (JSON.entry @"endLine"
+                                             (JSON.Num (Double.from-int @(Info.line (SurfaceSpan.end span)))))
+                                 (JSON.entry @"endColumn"
+                                             (JSON.Num (Double.from-int @(Info.col (SurfaceSpan.end span)))))])))))
+      (JSON.obj [(JSON.entry @"stackFrames" (JSON.Arr rows))
+                 (JSON.entry @"totalFrames" (JSON.Num (Double.from-int n)))])))
+
+  (doc step-to! "moves the debugger, staying inside the recording.")
+  (defn step-to! [index]
+    (set! *dap-index*
+          (Int.max 0 (Int.min index (Int.dec (Array.length &*dap-steps*))))))
+
+  (private depth-at)
+  (hidden depth-at)
+  (defn depth-at [index]
+    (if (Int.>= index (Array.length &*dap-steps*))
+      0
+      @(CtStep.depth (Array.unsafe-nth &*dap-steps* index))))
+
+  (doc step-over! "the next step no deeper than this one.")
+  (defn step-over! []
+    (let-do [here (depth-at *dap-index*)
+             i (Int.inc *dap-index*)
+             n (Array.length &*dap-steps*)
+             found false]
+      (while (and (not found) (Int.< i n))
+        (if (Int.<= (depth-at i) here)
+          (do (step-to! i) (set! found true))
+          (set! i (Int.inc i))))
+      (unless found (step-to! (Int.dec n)))))
+
+  (doc step-out! "out of this evaluation and into whatever asked for it.")
+  (defn step-out! []
+    (let-do [here (depth-at *dap-index*)
+             i (Int.inc *dap-index*)
+             n (Array.length &*dap-steps*)
+             found false]
+      (while (and (not found) (Int.< i n))
+        (if (Int.< (depth-at i) here)
+          (do (step-to! i) (set! found true))
+          (set! i (Int.inc i))))
+      (unless found (step-to! (Int.dec n)))))
+
+  (doc step-back! "the mirror of `next`, walking the other way: the previous
+step no deeper than this one. Stepping back a single recorded form is rarely
+what a reader means — they mean the last thing at this level.")
+  (defn step-back! []
+    (let-do [here (depth-at *dap-index*)
+             i (Int.dec *dap-index*)
+             found false]
+      (while (and (not found) (Int.>= i 0))
+        (if (Int.<= (depth-at i) here)
+          (do (step-to! i) (set! found true))
+          (set! i (Int.dec i))))
+      (unless found (step-to! 0))))
+
+  (doc at-end? "whether the recording has been walked to its last step.")
+  (defn at-end? []
+    (Int.>= *dap-index* (Int.dec (Array.length &*dap-steps*))))
+
+  (private resolve-line)
+  (hidden resolve-line)
+  (doc resolve-line "the first line at or after `line` that `file` has a form
+starting on, or -1 when it has none. A reader points at a line, and a line
+may well hold no form at all: the breakpoint moves down to the first one that
+does, which is what pointing at a blank line means in any debugger.")
+  (defn resolve-line [file line]
+    (let-do [best -1
+             n (Array.length &*dap-steps*)]
+      (for [i 0 n]
+        (let [step (Array.unsafe-nth &*dap-steps* i)
+              at @(Info.line (SurfaceSpan.start (CtStep.span step)))]
+          (when (and (String.= (CtStep.file step) file)
+                     (and (Int.>= at line)
+                          (or (Int.< best 0) (Int.< at best))))
+            (set! best at))))
+      best))
+
+  (private leftmost-col)
+  (hidden leftmost-col)
+  (doc leftmost-col "the column of the outermost form starting on that line,
+or -1 when nothing starts there. A reader who names no column names the line,
+and a line means the form that opens it.")
+  (defn leftmost-col [file line]
+    (let-do [best -1
+             n (Array.length &*dap-steps*)]
+      (for [i 0 n]
+        (let [step (Array.unsafe-nth &*dap-steps* i)
+              start (SurfaceSpan.start (CtStep.span step))
+              at @(Info.col start)]
+          (when (and (String.= (CtStep.file step) file)
+                     (and (Int.= @(Info.line start) line)
+                          (or (Int.< best 0) (Int.< at best))))
+            (set! best at))))
+      best))
+
+  (private innermost-col)
+  (hidden innermost-col)
+  (doc innermost-col "which form on the line a column points into: the last
+one to start at or before it. Forms nest, and the one that started latest is
+the one the reader is inside — pointing at the `x` in `(twice x)` means `x`,
+not the call around it.")
+  (defn innermost-col [file line col]
+    (let-do [best -1
+             n (Array.length &*dap-steps*)]
+      (for [i 0 n]
+        (let [step (Array.unsafe-nth &*dap-steps* i)
+              start (SurfaceSpan.start (CtStep.span step))
+              at @(Info.col start)]
+          (when (and (String.= (CtStep.file step) file)
+                     (and (Int.= @(Info.line start) line)
+                          (and (Int.<= at col) (Int.> at best))))
+            (set! best at))))
+      best))
+
+  (private resolve-place)
+  (hidden resolve-place)
+  (doc resolve-place "the form a client means by a line and a column, as a
+line and a column of its own, or a line of -1 when the recording never
+reaches it.
+
+A column points into one form on the line. Without a column the line means
+its outermost form, and a line that holds no form at all means the first line
+after it that does — where the column is asked again from scratch, since a
+column on one line says nothing about another.")
+  (defn resolve-place [file line col]
+    (let-do [at -1
+             where -1]
+      (when (Int.> col 0)
+        (let [inner (innermost-col file line col)]
+          (when (Int.>= inner 0)
+            (do (set! at line) (set! where inner)))))
+      ;; a column past every form on the line, or no column at all
+      (when (Int.< at 0)
+        (let [start-line (if (Int.> col 0)
+                           ;; the line may still hold forms, all of them to the
+                           ;; right of the cursor: it is still this line
+                           (if (Int.>= (leftmost-col file line) 0) line (resolve-line file line))
+                           (resolve-line file line))]
+          (when (Int.>= start-line 0)
+            (do (set! at start-line)
+                (set! where (leftmost-col file start-line))))))
+      (Pair.init at where)))
+
+  (private break-json)
+  (hidden break-json)
+  (doc break-json "what became of one breakpoint. A client is told where it
+really landed rather than where it was asked for, and told plainly when it
+landed nowhere: a line the expansion never reaches has no form to stop at.")
+  (defn break-json [id file line col asked]
+    (if (Int.< line 0)
+      (JSON.obj [(JSON.entry @"id" (JSON.Num (Double.from-int id)))
+                 (JSON.entry @"verified" (JSON.Bool false))
+                 (JSON.entry @"line" (JSON.Num (Double.from-int asked)))
+                 (JSON.entry @"source" (file-json file))
+                 (JSON.entry @"message"
+                             (JSON.Str @"nothing is evaluated at or after this line"))])
+      (JSON.obj [(JSON.entry @"id" (JSON.Num (Double.from-int id)))
+                 (JSON.entry @"verified" (JSON.Bool true))
+                 (JSON.entry @"line" (JSON.Num (Double.from-int line)))
+                 (JSON.entry @"column" (JSON.Num (Double.from-int col)))
+                 (JSON.entry @"source" (file-json file))])))
+
+  (doc set-breaks! "replaces the breakpoints in one file. The protocol has no
+request to add or remove a single one: a client sends everything it wants
+stopped at in a file, and whatever it leaves out it has taken away.")
+  (defn set-breaks! [file wanted]
+    (let-do [kept (the (Array DapBreak) [])
+             rows (the (Array (Box JSON)) [])
+             n (Array.length &*dap-breaks*)
+             m (Array.length wanted)]
+      (for [i 0 n]
+        (let [break (Array.unsafe-nth &*dap-breaks* i)]
+          (unless (String.= (DapBreak.file break) file)
+            (Array.push-back! &kept @break))))
+      (for [i 0 m]
+        (let [asked (Array.unsafe-nth wanted i)
+              place (resolve-place file @(Pair.a asked) @(Pair.b asked))
+              line @(Pair.a &place)
+              col @(Pair.b &place)]
+          (do
+            (set! *dap-break-count* (Int.inc *dap-break-count*))
+            (when (Int.>= line 0)
+              (Array.push-back! &kept
+                                (DapBreak.init @file line col *dap-break-count*)))
+            (Array.push-back! &rows
+                              (Box.init (break-json *dap-break-count*
+                                                    file
+                                                    line
+                                                    col
+                                                    @(Pair.a asked)))))))
+      (set! *dap-breaks* kept)
+      (JSON.obj [(JSON.entry @"breakpoints" (JSON.Arr rows))])))
+
+  (doc clear-breaks! "forgets every breakpoint. The lines of one cell say
+nothing about the next one, so a new recording starts with none.")
+  (defn clear-breaks! [] (set! *dap-breaks* []))
+
+  (private next-col-at)
+  (hidden next-col-at)
+  (doc next-col-at "the leftmost form on the line starting to the right of
+`from`, or -1 when there is none. Walking the line this way answers the forms
+from the outside in, without sorting anything.")
+  (defn next-col-at [file line from]
+    (let-do [best -1
+             n (Array.length &*dap-steps*)]
+      (for [i 0 n]
+        (let [step (Array.unsafe-nth &*dap-steps* i)
+              start (SurfaceSpan.start (CtStep.span step))
+              at @(Info.col start)]
+          (when (and (String.= (CtStep.file step) file)
+                     (and (Int.= @(Info.line start) line)
+                          (and (Int.> at from)
+                               (or (Int.< best 0) (Int.< at best)))))
+            (set! best at))))
+      best))
+
+  (private location-json)
+  (hidden location-json)
+  (doc location-json "one place a breakpoint can stand, with the extent of the
+form standing there, so a client can tell which of several nested forms a
+reader is pointing inside. The end is one past the form's last character, the
+way the rest of the protocol reports one.")
+  (defn location-json [file line col]
+    (let-do [end-line line
+             end-col col
+             n (Array.length &*dap-steps*)
+             found false]
+      (for [i 0 n]
+        (unless found
+          (let [step (Array.unsafe-nth &*dap-steps* i)
+                span (CtStep.span step)
+                start (SurfaceSpan.start span)]
+            (when (and (String.= (CtStep.file step) file)
+                       (and (Int.= @(Info.line start) line)
+                            (Int.= @(Info.col start) col)))
+              (do
+                (set! end-line @(Info.line (SurfaceSpan.end span)))
+                (set! end-col @(Info.col (SurfaceSpan.end span)))
+                (set! found true))))))
+      (JSON.obj [(JSON.entry @"line" (JSON.Num (Double.from-int line)))
+                 (JSON.entry @"column" (JSON.Num (Double.from-int col)))
+                 (JSON.entry @"endLine" (JSON.Num (Double.from-int end-line)))
+                 (JSON.entry @"endColumn" (JSON.Num (Double.from-int end-col)))])))
+
+  (doc break-locations "every place on a line a breakpoint could stand: one
+for each form that starts there, outermost first, each with where its form
+ends. A client asks this before setting a breakpoint, both to tell which of
+the nested forms a reader is pointing inside and to recognise a breakpoint it
+already has, since the line pointed at and the form stopped at are rarely the
+same. A line that holds no form answers for the first line after it that
+does.")
+  (defn break-locations [file line]
+    (let-do [at (resolve-line file line)
+             rows (the (Array (Box JSON)) [])
+             from -1
+             running (Int.>= at 0)]
+      (while running
+        (let [next (next-col-at file at from)]
+          (if (Int.< next 0)
+            (set! running false)
+            (do
+              (Array.push-back! &rows (Box.init (location-json file at next)))
+              (set! from next)))))
+      (JSON.obj [(JSON.entry @"breakpoints" (JSON.Arr rows))])))
+
+  (private break-here?)
+  (hidden break-here?)
+  (doc break-here? "whether a breakpoint stands exactly where this step does.
+Breakpoints are stored resolved, so this is a comparison rather than a
+search, and a form evaluated many times is stopped at every time.")
+  (defn break-here? [index]
+    (let-do [hit false
+             step (Array.unsafe-nth &*dap-steps* index)
+             start (SurfaceSpan.start (CtStep.span step))
+             n (Array.length &*dap-breaks*)]
+      (for [i 0 n]
+        (let [break (Array.unsafe-nth &*dap-breaks* i)]
+          (when (and (String.= (DapBreak.file break) (CtStep.file step))
+                     (and (Int.= @(DapBreak.line break) @(Info.line start))
+                          (Int.= @(DapBreak.col break) @(Info.col start))))
+            (set! hit true))))
+      hit))
+
+  (doc run-to-break! "the next step a breakpoint stands on, or the end of the
+recording when none does. Nothing is running, so continuing is a search
+forward through the recording rather than letting an interpreter go.")
+  (defn run-to-break! []
+    (let-do [i (Int.inc *dap-index*)
+             n (Array.length &*dap-steps*)
+             found false]
+      (while (and (not found) (Int.< i n))
+        (if (break-here? i)
+          (do (step-to! i) (set! found true))
+          (set! i (Int.inc i))))
+      (unless found (step-to! (Int.dec n)))
+      found))
+
+  (doc back-to-break! "the mirror of continuing: the previous step a
+breakpoint stands on, or the start of the recording.")
+  (defn back-to-break! []
+    (let-do [i (Int.dec *dap-index*)
+             found false]
+      (while (and (not found) (Int.>= i 0))
+        (if (break-here? i)
+          (do (step-to! i) (set! found true))
+          (set! i (Int.dec i))))
+      (unless found (step-to! 0))
+      found)))
+
+(defmodule DapServer
+  (private stopped-event)
+  (hidden stopped-event)
+  (defn stopped-event [reason]
+    (Dap.event "stopped"
+               (JSON.obj [(JSON.entry @"reason" (JSON.Str (String.copy reason)))
+                          (JSON.entry @"threadId" (JSON.Num 1.0))
+                          (JSON.entry @"allThreadsStopped" (JSON.Bool true))])))
+
+  (private finished!)
+  (hidden finished!)
+  (doc finished! "tells the client the recording is over. A step that cannot
+move is not a step that does nothing: there is no more evaluation, either
+because the expansion finished or because it failed, and the failure is the
+one thing the recording cannot show on its own.")
+  (defn finished! [br]
+    (do
+      (unless (String.empty? &*dap-failure*)
+        (Dap.write-message br
+                           &(Dap.event "output"
+                                       (JSON.obj [(JSON.entry @"category" (JSON.Str @"stderr"))
+                                                  (JSON.entry @"output"
+                                                              (JSON.Str (String.concat &[@"expansion failed: "
+                                                                                         @&*dap-failure*
+                                                                                         @"\n"])))]))))
+      (Dap.write-message br &(Dap.event "terminated" (JSON.obj [])))))
+
+  (private capabilities)
+  (hidden capabilities)
+  (doc capabilities "what this adapter can do. Stepping backwards is in the
+list because the evaluation is a recording: going back is walking the other
+way, not undoing anything.
+
+Only capabilities we actually have are named. A client is free to build its
+model of us key by key, so a key it has never heard of is a client-side
+error rather than a fact it ignores, and a capability we do not have says
+nothing that leaving it out does not.")
+  (defn capabilities []
+    (JSON.obj [(JSON.entry @"supportsConfigurationDoneRequest" (JSON.Bool true))
+               (JSON.entry @"supportsStepBack" (JSON.Bool true))
+               (JSON.entry @"supportsBreakpointLocationsRequest" (JSON.Bool true))
+               (JSON.entry @"supportsTerminateRequest" (JSON.Bool true))]))
+
+  (private unix-newlines)
+  (hidden unix-newlines)
+  (doc unix-newlines "the same text with every line ending written the way the
+reader counts them. A client may hand over text delimited by carriage
+returns, which Pharo does because that is what its strings use internally;
+the reader counts newlines, so such a cell is one long line and every column
+is an offset into the whole file.")
+  (defn unix-newlines [text]
+    (let-do [parts (String.split-by text &[\return])
+             out (the (Array String) [])
+             n (Array.length &parts)]
+      (for [i 0 n]
+        (let [part (Array.unsafe-nth &parts i)]
+          (Array.push-back! &out
+                            (if (and (Int.> i 0) (String.starts-with? part "\n"))
+                              (String.suffix part 1)
+                              @part))))
+      (String.join "\n" &out)))
+
+  (private launch!)
+  (hidden launch!)
+  (doc launch! "records one expansion of the source the client asked about.
+Nothing is running afterwards: what the client steps through is the
+recording.")
+  (defn launch! [given]
+    (let-do [idx (Warm.ensure-any! &*dap-session*)
+             source-text (unix-newlines given)
+             source &source-text]
+      (set! *dap-source* @source)
+      ;; a launch of its own file: the spans in a recording are offsets into
+      ;; the text they were taken from, so a path that gets overwritten by the
+      ;; next launch leaves every earlier debugger pointing at a file that no
+      ;; longer says what its frames claim
+      (set! *dap-cell-count* (Int.inc *dap-cell-count*))
+      (set! *dap-source-path*
+            (String.concat &[@&*work-dir*
+                             @"/dap-cell-"
+                             (Int.str *dap-cell-count*)
+                             @".carp"]))
+      (ignore (IO.write-file source &*dap-source-path*))
+      (set! *dap-index* 0)
+      (set! *dap-steps* [])
+      (set! *dap-failure* @"")
+      (set! *dap-nodes* [])
+      (DapDebug.clear-breaks!)
+      (when (Int.>= idx 0)
+        ;; the cell is named by the file we just wrote it to, so a step in it
+        ;; points at something the client can open
+        (let [traced (Session.trace-expand (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                           &(SourceInput.init @&*dap-source-path* @source))]
+          (do
+            (set! *dap-steps* @(Pair.a &traced))
+            (match-ref (Pair.b &traced)
+              (Maybe.Just diagnostic)
+                (set! *dap-failure* @(Diagnostic.message diagnostic))
+              (Maybe.Nothing) ()))))))
+
+  (doc handle "one DAP request. Everything the client can ask for is either a
+fact about the recording or a move within it.")
+  (defn handle [br message]
+    (match (JSON.parse message)
+      (Result.Error _) ()
+      (Result.Success request)
+        (let [seq (Dap.number-of &request "seq")
+              command (Dap.string-of &request "command")]
+          (cond
+            (String.= &command "initialize")
+              (do
+                (Dap.write-message br &(Dap.respond seq &command (capabilities)))
+                (Dap.write-message br &(Dap.event "initialized" (JSON.obj []))))
+            (String.= &command "launch")
+              (let [arguments (match (JSON.get &request "arguments")
+                                (Maybe.Just value) value
+                                (Maybe.Nothing) (JSON.obj []))]
+                (do
+                  (launch! &(Dap.string-of &arguments "source"))
+                  (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+                  (Dap.write-message br
+                                     &(Dap.event "output"
+                                                 (JSON.obj [(JSON.entry @"category" (JSON.Str @"console"))
+                                                            (JSON.entry @"output"
+                                                                        (JSON.Str (fmt "%d compile-time steps recorded\n"
+                                                                                       (Array.length &*dap-steps*))))])))
+                  (Dap.write-message br &(stopped-event "entry"))))
+            (String.= &command "configurationDone")
+              (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+            (String.= &command "threads")
+              (Dap.write-message br
+                                 &(Dap.respond seq
+                                               &command
+                                               (JSON.obj [(JSON.entry @"threads"
+                                                                      (JSON.Arr [(Box.init
+                                                                                   (JSON.obj [(JSON.entry @"id" (JSON.Num 1.0))
+                                                                                              (JSON.entry @"name" (JSON.Str @"compile time"))]))]))])))
+            (String.= &command "stackTrace")
+              (Dap.write-message br &(Dap.respond seq &command (DapDebug.stack-trace-body)))
+            (String.= &command "source")
+              ;; the client asks us for the text of a frame's file rather than
+              ;; reading it itself: the cell it is stepping through only
+              ;; exists here
+              (let [arguments (match (JSON.get &request "arguments")
+                                (Maybe.Just value) value
+                                (Maybe.Nothing) (JSON.obj []))
+                    from-source (match (JSON.get &arguments "source")
+                                  (Maybe.Just value) (Dap.string-of &value "path")
+                                  (Maybe.Nothing) @"")
+                    path (if (String.empty? &from-source)
+                           (Dap.string-of &arguments "path")
+                           from-source)
+                    content (match (IO.read-file &path)
+                              (Result.Success text) text
+                              (Result.Error _) @"")]
+                (Dap.write-message br
+                                   &(Dap.respond seq
+                                                 &command
+                                                 (JSON.obj [(JSON.entry @"content" (JSON.Str content))]))))
+            (String.= &command "scopes")
+              (let [arguments (match (JSON.get &request "arguments")
+                                (Maybe.Just value) value
+                                (Maybe.Nothing) (JSON.obj []))]
+                (Dap.write-message br
+                                   &(Dap.respond seq
+                                                 &command
+                                                 (DapDebug.scopes-body (Dap.number-of &arguments "frameId")))))
+            (String.= &command "variables")
+              (let [arguments (match (JSON.get &request "arguments")
+                                (Maybe.Just value) value
+                                (Maybe.Nothing) (JSON.obj []))]
+                (Dap.write-message br
+                                   &(Dap.respond seq
+                                                 &command
+                                                 (DapDebug.variables-body (Dap.number-of &arguments "variablesReference")))))
+            (String.= &command "next")
+              (let-do [before *dap-index*]
+                (DapDebug.step-over!)
+                (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+                (if (Int.= before *dap-index*)
+                  (finished! br)
+                  (Dap.write-message br &(stopped-event "step"))))
+            (String.= &command "stepIn")
+              (let-do [before *dap-index*]
+                (DapDebug.step-to! (Int.inc *dap-index*))
+                (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+                (if (Int.= before *dap-index*)
+                  (finished! br)
+                  (Dap.write-message br &(stopped-event "step"))))
+            (String.= &command "stepOut")
+              (let-do [before *dap-index*]
+                (DapDebug.step-out!)
+                (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+                (if (Int.= before *dap-index*)
+                  (finished! br)
+                  (Dap.write-message br &(stopped-event "step"))))
+            (String.= &command "stepBack")
+              (do
+                (DapDebug.step-back!)
+                (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+                (Dap.write-message br &(stopped-event "step")))
+            (String.= &command "breakpointLocations")
+              (let [arguments (match (JSON.get &request "arguments")
+                                (Maybe.Just value) value
+                                (Maybe.Nothing) (JSON.obj []))
+                    source (match (JSON.get &arguments "source")
+                             (Maybe.Just value) value
+                             (Maybe.Nothing) (JSON.obj []))]
+                (Dap.write-message br
+                                   &(Dap.respond seq
+                                                 &command
+                                                 (DapDebug.break-locations &(Dap.string-of &source "path")
+                                                                           (Dap.number-of &arguments "line")))))
+            (String.= &command "setBreakpoints")
+              ;; the recording is what a breakpoint is set in: a line only
+              ;; becomes a breakpoint once we can say which form it is
+              (let [arguments (match (JSON.get &request "arguments")
+                                (Maybe.Just value) value
+                                (Maybe.Nothing) (JSON.obj []))
+                    source (match (JSON.get &arguments "source")
+                             (Maybe.Just value) value
+                             (Maybe.Nothing) (JSON.obj []))]
+                (Dap.write-message br
+                                   &(Dap.respond seq
+                                                 &command
+                                                 (DapDebug.set-breaks! &(Dap.string-of &source "path")
+                                                                       &(Dap.break-specs &arguments)))))
+            (String.= &command "continue")
+              (let-do [before *dap-index*
+                       hit (DapDebug.run-to-break!)]
+                (Dap.write-message br
+                                   &(Dap.respond seq
+                                                 &command
+                                                 (JSON.obj [(JSON.entry @"allThreadsContinued" (JSON.Bool true))])))
+                (if (Int.= before *dap-index*)
+                  (finished! br)
+                  (Dap.write-message br
+                                     &(stopped-event (if hit "breakpoint" "step")))))
+            (String.= &command "reverseContinue")
+              (let-do [hit (DapDebug.back-to-break!)]
+                (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+                (Dap.write-message br
+                                   &(stopped-event (if hit "breakpoint" "step"))))
+            (or (String.= &command "disconnect") (String.= &command "terminate"))
+              (do
+                (Dap.write-message br &(Dap.respond seq &command (JSON.obj [])))
+                (Dap.write-message br &(Dap.event "terminated" (JSON.obj [])))
+                (set! *dap-open* false))
+            (Dap.write-message br &(Dap.respond seq &command (JSON.obj []))))))) 
+
+  (doc serve "one debugging session, until the client goes away. Saying
+`disconnect` counts as going away: the socket may stay open on the client's
+side long after it is done with us, and the next debugger is waiting for the
+session.")
+  (defn serve [stream]
+    (let-do [br (TcpStream.buffered stream)
+             running true]
+      (set! *dap-open* true)
+      (while running
+        (match (Dap.read-message &br)
+          (Maybe.Nothing) (set! running false)
+          (Maybe.Just message)
+            (do (handle &br &message)
+                (when (not *dap-open*) (set! running false)))))
+      (BufReader.delete br)))
+
+  (doc listen "serves debugging sessions on a port of its own, one at a
+time. The session is built before the port opens: a client that can connect
+is a client that can be answered, and the wait for a compiler belongs to
+starting the adapter rather than to the first request.")
+  (defn listen [port]
+    (do
+      (ignore (Warm.ensure-any! &*dap-session*))
+      (IO.errorln "carp debug adapter: session ready")
+      (match (TcpListener.bind "127.0.0.1" port)
+        (Result.Error e)
+          (do (IO.errorln &(String.append "carp debug adapter: cannot listen: " &(str &e)))
+              (System.exit 1))
+        (Result.Success listener)
+          (let-do [running true]
+            (ignore (set-cloexec (TcpListener.poll-fd &listener)))
+            (IO.errorln &(fmt "carp debug adapter listening on port %d" port))
+            (while running
+              (match (TcpListener.accept &listener)
+                (Result.Error _) ()
+                (Result.Success stream) (serve stream))))))))
+
 ; --- startup ------------------------------------------------------------
 
 (defn-do die [stage msg]
@@ -2388,6 +3362,22 @@ repeatedly, which means the socket itself is gone, ends the loop.")
                   (Maybe.Nothing) @"")))
   (set! *work-dir* (arg-or 4 @"/tmp/carp-server-work"))
   (set! *nb-lib* (arg-or 5 (Maybe.from (IO.getenv "CARP_NB_LIB") @"")))
+  ;; --dap serves the Debug Adapter Protocol instead of the notebook
+  ;; protocol: same session machinery, a different thing to say about it
+  (when (and (> (StaticArray.length &System.args) 1)
+             (String.= (StaticArray.unsafe-nth &System.args 1) "--dap"))
+    (let-do [port (Maybe.from (Int.from-string &(arg-or 2 @"8996")) 8996)]
+      (set! *compiler* (arg-or 3 (Maybe.from (IO.getenv "CARP_COMPILER") @"")))
+      (set! *core-dir*
+            (arg-or 4
+                    (match (IO.getenv "CARP_DIR")
+                      (Maybe.Just dir) (String.append &dir "/core")
+                      (Maybe.Nothing) @"")))
+      (set! *work-dir* (arg-or 5 @"/tmp/carp-server-work"))
+      (set! *nb-lib* (arg-or 6 (Maybe.from (IO.getenv "CARP_NB_LIB") @"")))
+      (ignore (System.system &(String.concat &[@"mkdir -p '" @&*work-dir* @"'"])))
+      (DapServer.listen port)
+      (System.exit 0)))
   (when (String.empty? &*compiler*)
     (die "no compiler: " "pass one or set CARP_COMPILER"))
   (when (String.empty? &*core-dir*)

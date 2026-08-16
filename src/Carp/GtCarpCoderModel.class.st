@@ -97,7 +97,31 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 			anElement phlow spawnObject: expansion ]
 				on: Error
 				do: [ :e | anElement phlow spawnObject: (e messageText ifNil: [ e class name ]) ] ]
-		id: #'source-coder--carp-expand-action-id'
+		id: #'source-coder--carp-expand-action-id'.
+
+	"Expansion answers what a form became; this answers how it got there.
+	It is the tool to reach for when expansion fails, which is when `what it
+	became` is nothing at all."
+	addOns
+		addMainAction: 'Debug' translated
+		icon: BrGlamorousVectorIcons debug
+		action: [ :aCoderUIModel :anElement |
+			"Connecting to the adapter takes seconds, and this runs on the UI
+			process, so it happens on a process of its own; the window then
+			opens back on the UI process, which is the only one allowed to."
+			| source |
+			source := self currentSourceString.
+			[ [ | debugger |
+			debugger := CarpDAPDebugger onSource: source.
+			anElement enqueueTask: (BlTaskAction new action: [ debugger open ]) ]
+				on: Error
+				do: [ :e |
+					| message |
+					message := e messageText ifNil: [ e class name ].
+					anElement enqueueTask: (BlTaskAction new
+							action: [ anElement phlow spawnObject: message ]) ] ]
+				forkNamed: 'carp-debug' ]
+		id: #'source-coder--carp-debug-action-id'
 ]
 
 { #category : #accessing }
