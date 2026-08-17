@@ -23,11 +23,13 @@ core once (or a whole project, which takes longer) and then answers warm:
 inferred types, diagnostics, completion, documentation, macro expansion, and
 the code generation a cell needs to run.
 
-Building it needs either Carp compiler, but running it needs the
-self-hosting one:
+Build it with the self-hosting compiler, which is also what it runs on.
+Stock Carp cannot build it: a module member there has to be defined before
+it is used, and this file relies on the self-hosting compiler resolving them
+in any order.
 
 ```
-cd carp && carp --optimize -b src/server.carp
+cd carp && carp-compiler -b -c <carp>/core -o out/carp-server src/server.carp
 ```
 
 GT starts the server itself when nothing is listening. It looks for the
