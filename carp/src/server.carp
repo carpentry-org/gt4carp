@@ -256,6 +256,47 @@ Read as text because that is what an editor shows and writes back.")
           (set! found true)))
       found))
 
+  (doc unix-newlines "the same text with every line ending written the way the
+reader counts them. A client may hand over text delimited by carriage
+returns, which Pharo does because that is what its strings use internally;
+the reader counts newlines, so such a cell is one long line, every column is
+an offset into the whole file, and a debugger stopping in it reports the one
+line the whole cell appears to be.")
+  (defn unix-newlines [text]
+    (let-do [parts (String.split-by text &[\return])
+             out (the (Array String) [])
+             n (Array.length &parts)]
+      (for [i 0 n]
+        (let [part (Array.unsafe-nth &parts i)]
+          (Array.push-back! &out
+                            (if (and (Int.> i 0) (String.starts-with? part "\n"))
+                              (String.suffix part 1)
+                              @part))))
+      (String.join "\n" &out)))
+
+  (doc first-expression-line "the line the program starts running on: the
+first top-level form that is an expression rather than a definition, counting
+from one. Definitions are what a program can do, not what it does; a debugger
+that stops at the first line with code in it stops inside a function nobody
+has called yet. Zero when the text is all definitions and there is nothing to
+run.")
+  (defn first-expression-line [src]
+    (let-do [spans (top-level-spans src)
+             n (Array.length &spans)
+             found -1
+             i 0]
+      (while-do (and (Int.< i n) (Int.< found 0))
+        (let [span (Array.unsafe-nth &spans i)]
+          (unless (def-head? &(head-symbol src span))
+            (set! found @(Pair.a span)))
+          (set! i (Int.inc i))))
+      (if (Int.< found 0)
+        0
+        (let-do [line 1]
+          (for [j 0 found]
+            (when (= (String.char-at src j) \newline) (set! line (Int.inc line))))
+          line))))
+
   (doc last-form-expression? "whether the cell's final top-level form is an
 expression, i.e. whether it produces a result value.")
   (defn last-form-expression? [src]
@@ -1382,24 +1423,19 @@ use NB (defview and friends).")
 
   (private debug-cell)
   (hidden debug-cell)
-  (doc debug-cell "the cell as a program to debug. A cell ending in an
-expression becomes a program that runs it, with the value dropped rather than
-printed: printing means dispatching `str` for a type the cell may have only
-just introduced, and a debugger is a bad place to find out it has none. A cell
-of definitions alone still has to link, so it gets a main that does nothing
-and the definitions to stop in.")
+  (doc debug-cell "the cell as a program to debug.
+
+A cell ending in an expression is already a program: the backend runs
+top-level expressions from the entry point, so the text is left exactly as it
+was written. That matters more here than anywhere else — a debugger shows the
+file it built, and a reader stepping through their own cell should not have to
+step around a form somebody generated for them.
+
+A cell of definitions alone runs nothing, but still has to link, so it gets a
+main that does nothing and the definitions to stop in.")
   (defn debug-cell [src]
     (if (Cell.last-form-expression? src)
-      (let [spans (Cell.top-level-spans src)
-            last-span (Array.unsafe-nth &spans (Int.dec (Array.length &spans)))
-            start @(Pair.a last-span)
-            end @(Pair.b last-span)]
-        (String.concat &[(Cell.byte-slice src 0 start)
-                         @"(defn main [] (ignore "
-                         (Cell.byte-slice src start end)
-                         @"))"
-                         (Cell.byte-slice src end (String.length src))
-                         @"\n"]))
+      (String.concat &[@src @"\n"])
       (String.concat &[@"(defn main [] ())\n" @src @"\n"])))
 
   (doc build-debug "builds the cell as a program a debugger can open, and
@@ -1414,10 +1450,15 @@ shows.")
     (let-do [prelude (if (String.empty? &*nb-lib*)
                        @""
                        @"(load \"notebook.carp\")\n")
+             ;; the lines have to be lines before anything counts them: a
+             ;; debugger reports the line a form is on, and a cell delimited by
+             ;; carriage returns is one line to everything but the editor that
+             ;; sent it
+             text (Cell.unix-newlines src)
              program (String.concat &[prelude
                                       (Projects.prelude sid)
                                       (Session.defs-text &(Session.entries sid))
-                                      (debug-cell src)])]
+                                      (debug-cell &text)])]
       (unless (String.empty? &*nb-lib*)
         (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
                                      &*nb-lib*
@@ -1431,7 +1472,13 @@ shows.")
                                       (JSON.entry @"source"
                                                   (JSON.Str (session-file sid "cell-debug.c")))
                                       (JSON.entry @"cell"
-                                                  (JSON.Str (session-file sid "cell.carp")))]))
+                                                  (JSON.Str (session-file sid "cell.carp")))
+                                      ;; where the program starts running, so a
+                                      ;; debugger stops at the first thing it
+                                      ;; does rather than the first line that
+                                      ;; happens to hold code
+                                      (JSON.entry @"line"
+                                                  (JSON.Num (Double.from-int (Cell.first-expression-line &program))))]))
           (respond-err id &(file-or sid "stderr.log" "debug build failed"))))))
 
   (doc clang-run "compiles a translation unit the session emitted and runs it,
@@ -3152,25 +3199,6 @@ nothing that leaving it out does not.")
                (JSON.entry @"supportsBreakpointLocationsRequest" (JSON.Bool true))
                (JSON.entry @"supportsTerminateRequest" (JSON.Bool true))]))
 
-  (private unix-newlines)
-  (hidden unix-newlines)
-  (doc unix-newlines "the same text with every line ending written the way the
-reader counts them. A client may hand over text delimited by carriage
-returns, which Pharo does because that is what its strings use internally;
-the reader counts newlines, so such a cell is one long line and every column
-is an offset into the whole file.")
-  (defn unix-newlines [text]
-    (let-do [parts (String.split-by text &[\return])
-             out (the (Array String) [])
-             n (Array.length &parts)]
-      (for [i 0 n]
-        (let [part (Array.unsafe-nth &parts i)]
-          (Array.push-back! &out
-                            (if (and (Int.> i 0) (String.starts-with? part "\n"))
-                              (String.suffix part 1)
-                              @part))))
-      (String.join "\n" &out)))
-
   (private launch!)
   (hidden launch!)
   (doc launch! "records one expansion of the source the client asked about.
@@ -3178,7 +3206,7 @@ Nothing is running afterwards: what the client steps through is the
 recording.")
   (defn launch! [given]
     (let-do [idx (Warm.ensure-any! &*dap-session*)
-             source-text (unix-newlines given)
+             source-text (Cell.unix-newlines given)
              source &source-text]
       (set! *dap-source* @source)
       ;; a launch of its own file: the spans in a recording are offsets into

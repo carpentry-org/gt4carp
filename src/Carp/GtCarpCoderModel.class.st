@@ -124,28 +124,67 @@ GtCarpCoderModel >> initializeAddOns: addOns [
 		id: #'source-coder--carp-debug-action-id'.
 
 	"The other debugger: not the expansion of the cell but the program it
-	compiles to, stopped in its own code. Building takes a whole compile, so
-	this too runs off the UI process."
+	compiles to, stopped in its own code. The action does nothing itself: a
+	snippet keeps the block it was built with, so a block that holds behaviour
+	is a block that cannot be corrected. This one calls a method, and the
+	method can be."
 	addOns
 		addMainAction: 'Debug native' translated
 		icon: BrGlamorousVectorIcons play
-		action: [ :aCoderUIModel :anElement |
-			| source |
-			source := self currentSourceString.
-			[ [ | built debugger |
-			built := CarpServerClient default
-					buildDebugSource: source
-					session: self sessionId.
-			debugger := CarpNativeDebugger onProgram: (built at: 'binary') asFileReference.
-			anElement enqueueTask: (BlTaskAction new action: [ debugger open ]) ]
-				on: Error
-				do: [ :e |
-					| message |
-					message := e messageText ifNil: [ e class name ].
-					anElement enqueueTask: (BlTaskAction new
-							action: [ anElement phlow spawnObject: message ]) ] ]
-				forkNamed: 'carp-debug-native' ]
+		action: [ :aCoderUIModel :anElement | self debugNativeIn: anElement ]
 		id: #'source-coder--carp-debug-native-action-id'
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> debugNativeIn: anElement [
+	"Build the cell as a program and open a debugger on it. Building takes a
+	whole compile, so it happens off the UI process; the window opens back on
+	it, which is the only process allowed to."
+
+	| source |
+	source := self currentSourceString.
+	[ [ | built debugger |
+	self traceNative: 'building'.
+	built := CarpServerClient default buildDebugSource: source session: self sessionId.
+	self traceNative: 'built ' , (built at: 'binary' ifAbsent: [ '?' ]).
+	debugger := CarpNativeDebugger new
+			program: (built at: 'binary') asFileReference;
+			sourceFile: (built at: 'cell') asFileReference;
+			sourceLine: (built at: 'line' ifAbsent: [ nil ]);
+			start;
+			yourself.
+	self traceNative: 'started, opening'.
+	anElement enqueueTask: (BlTaskAction new action: [ debugger open ]) ]
+		on: Error
+		do: [ :e |
+			| message |
+			message := e class name , ': ' , (e messageText ifNil: [ '<no message>' ]).
+			self traceNative: 'RAISED ' , message
+				, ' | command: ' , ([ e response command printString ] on: Error do: [ :x | 'n/a' ])
+				, ' | success: ' , ([ e response success printString ] on: Error do: [ :x | 'n/a' ])
+				, String cr
+				, ([ e signalerContext printString ] on: Error do: [ :x | '' ]).
+			anElement enqueueTask: (BlTaskAction new
+					action: [ anElement phlow spawnObject: message ]) ] ]
+		forkNamed: 'carp-debug-native'
+]
+
+{ #category : #accessing }
+GtCarpCoderModel >> traceNative: aString [
+	"Write what the native-debug action is doing to a file. What happens when
+	the button is pressed happens in a forked process inside someone else's
+	image, and an exception there is a message spawned into a pane at best."
+
+	| file previous |
+	file := '/tmp/carp-native-action.log' asFileReference.
+	previous := file exists ifTrue: [ file contents ] ifFalse: [ '' ].
+	file writeStreamDo: [ :stream |
+		stream
+			nextPutAll: previous;
+			nextPutAll: DateAndTime now printString;
+			nextPutAll: '  ';
+			nextPutAll: aString;
+			nextPut: Character lf ]
 ]
 
 { #category : #accessing }
