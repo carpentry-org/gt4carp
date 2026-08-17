@@ -31,7 +31,6 @@
 ;   {"id": n, "cmd": "doc",       "session": "<name>", "name": "<symbol>"}
 ;   {"id": n, "cmd": "expand",    "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "expand-1",  "session": "<name>", "source": "<carp>"}
-;   {"id": n, "cmd": "trace",     "session": "<name>", "source": "<carp>"}
 ;   {"id": n, "cmd": "build-debug", "session": "<name>", "source": "<carp>"}
 ;
 ; Usage also: server --dap <port> [compiler] [core-dir] [work-dir] [nb-lib]
@@ -2208,43 +2207,6 @@ anything to the session.")
                                    (JSON.obj [(JSON.entry @"expansion" (JSON.Str @src))
                                               (JSON.entry @"changed" (JSON.Bool false))]))))))))
 
-  (doc trace-cell "answers every compile-time step expanding a cell takes: the
-form, where it is, the frame it ran in, and how deep the evaluation was. The
-debugger walks this rather than stopping the compiler, because compile-time
-evaluation is deterministic and a recording can be walked in both directions.")
-  (defn trace-cell [id sid src]
-    (let [idx (Warm.ensure-any! sid)]
-      (if (< idx 0)
-        (respond-err id "a trace needs a warm session and none could be created")
-        (let [state (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
-              input (SourceInput.init @"cell" @src)]
-          (let [traced (Session.trace-expand state &input)
-                steps @(Pair.a &traced)]
-              (let-do [rows (the (Array (Box JSON)) [])
-                       n (Array.length &steps)]
-                (for [i 0 n]
-                  (let [step (Array.unsafe-nth &steps i)
-                        span (CtStep.span step)]
-                    (Array.push-back! &rows
-                                      (Box.init
-                                        (JSON.obj
-                                          [(JSON.entry @"form" (JSON.Str @(CtStep.form step)))
-                                           (JSON.entry @"depth"
-                                                       (JSON.Num (Double.from-int @(CtStep.depth step))))
-                                           (JSON.entry @"frame"
-                                                       (JSON.Num (Double.from-int @(CtStep.frame step))))
-                                           (JSON.entry @"line"
-                                                       (JSON.Num (Double.from-int @(Info.line (SurfaceSpan.start span)))))
-                                           (JSON.entry @"column"
-                                                       (JSON.Num (Double.from-int @(Info.col (SurfaceSpan.start span)))))])))))
-                (respond-ok-json id
-                                 (JSON.obj [(JSON.entry @"steps" (JSON.Arr rows))
-                                            ;; the failure that ended the run, when one did:
-                                            ;; the last step says where it stopped, this says why
-                                            (JSON.entry @"failure"
-                                                        (match-ref (Pair.b &traced)
-                                                          (Maybe.Just d) (JSON.Str @(Diagnostic.message d))
-                                                          (Maybe.Nothing) (JSON.Null)))]))))))))
 
   (doc load-project "warms a session whose base is a whole project, so
 annotate, complete and doc in that session see every project definition.
@@ -2440,13 +2402,6 @@ program's own definitions.")
                     (Result.Error e) (respond-err id &e)
                     (Result.Success src)
                       (expand-cell id &sid &src (= &cmd "expand-1"))))
-            (= &cmd "trace")
-              (match (get-str &j "session")
-                (Result.Error e) (respond-err id &e)
-                (Result.Success sid)
-                  (match (get-str &j "source")
-                    (Result.Error e) (respond-err id &e)
-                    (Result.Success src) (trace-cell id &sid &src)))
             (= &cmd "upsert-file")
               (match (get-str &j "session")
                 (Result.Error e) (respond-err id &e)

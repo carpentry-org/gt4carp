@@ -436,31 +436,6 @@ CarpServerClient >> projectAt: aRootPathString entry: anEntryString [
 ]
 
 { #category : #'api - commands' }
-CarpServerClient >> traceSource: aSourceString session: aSessionString [
-	"Answer every compile-time step expanding a form takes: the form, where
-	it is, the frame it ran in, and how deep the evaluation was.
-
-	Compile-time evaluation is deterministic, so the compiler is never
-	stopped — it runs once and answers the recording, which is why stepping
-	backwards costs no more than stepping forwards."
-
-	| response |
-	response := self
-			rpc: (Dictionary new
-					at: 'id' put: self nextRequestId;
-					at: 'cmd' put: 'trace';
-					at: 'session' put: aSessionString;
-					at: 'source' put: aSourceString;
-					yourself).
-	^ ((response
-		at: 'ok'
-		ifAbsent: [ ^ CarpServerError new
-				signal: (response at: 'error' ifAbsent: [ 'malformed server response' ]) ])
-		at: 'steps'
-		ifAbsent: [ #() ]) collect: [ :each | CarpCompileTimeStep fromDictionary: each ]
-]
-
-{ #category : #'api - commands' }
 CarpServerClient >> buildDebugSource: aSourceString session: aSessionString [
 	"Build the cell as a program a debugger can open, and answer where the
 	binary and the C it was built from are.
