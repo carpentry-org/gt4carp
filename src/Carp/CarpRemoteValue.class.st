@@ -32,7 +32,7 @@ CarpRemoteValue class >> fromDictionary: aDictionary client: aClient [
 
 	| proxyClass |
 	proxyClass := self allSubclasses
-			detect: [ :each | each remoteTypeName = (aDictionary at: 'object_type') ]
+			detect: [ :each | each handlesRemoteType: (aDictionary at: 'object_type') ]
 			ifNone: [ self ].
 	^ proxyClass new
 		id: (aDictionary at: 'id');
@@ -49,6 +49,16 @@ CarpRemoteValue class >> remoteTypeName [
 	such as 'Grid'); the base proxies every type."
 
 	^ nil
+]
+
+{ #category : #'instance creation' }
+CarpRemoteValue class >> handlesRemoteType: aTypeName [
+	"Whether this proxy speaks for a Carp type. One name is the usual case
+	and the name itself says which; a proxy that stands for a family of
+	types — the integers, say, which differ in width and in nothing a
+	reader cares about — answers for each of them."
+
+	^ self remoteTypeName = aTypeName
 ]
 
 { #category : #finalization }
