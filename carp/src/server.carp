@@ -2578,9 +2578,12 @@ anything to the session.")
             (Result.Success expansion)
               (match expansion
                 (Maybe.Just rendered)
-                  (respond-ok-json id
-                                   (JSON.obj [(JSON.entry @"expansion" (JSON.Str rendered))
-                                              (JSON.entry @"changed" (JSON.Bool true))]))
+                  ; a rendering identical to the input expanded nothing,
+                  ; whatever the expander says: changed means progressed
+                  (let [progressed (not (String.= &rendered src))]
+                    (respond-ok-json id
+                                     (JSON.obj [(JSON.entry @"expansion" (JSON.Str rendered))
+                                                (JSON.entry @"changed" (JSON.Bool progressed))])))
                 (Maybe.Nothing)
                   (respond-ok-json id
                                    (JSON.obj [(JSON.entry @"expansion" (JSON.Str @src))

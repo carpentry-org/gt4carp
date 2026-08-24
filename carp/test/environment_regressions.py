@@ -16,10 +16,11 @@ completion offers it and annotate does not call it unknown.
 Cause F — macro environments. Contract: Evaluate, expand, expand-1 and
 the DAP adapter expand a macro against the same session environment.
   F1 expand-1 must see a macro defined earlier in the same source, the
-     way expand (F2) and Evaluate already do. Implementation only.
-  F3 expand must answer changed:false when nothing expanded; today an
-     unknown head answers changed:true with identical text. Implementation
-     only.
+     way expand (F2) and Evaluate already do. Stays red until metacarp's
+     expand-module-1-against seeds transient defmacros the way the full
+     expander does — a carp-compiler change, deliberately not made here.
+  F3 expand answers changed:false when nothing expanded — changed means
+     progressed, whatever the expander says.
   F4 anchors expand-1 on a committed macro.
   F5 a macro committed to a session must be visible when debugging that
      session's snippet. CONTRACT-PENDING: the DAP launch request carries
@@ -79,8 +80,7 @@ check("F2 expand sees a macro defined earlier in the same source",
 check("F3 expand answers changed:false when nothing expanded",
       healthy.rpc({"cmd": "expand", "session": sid("mx2"),
                    "source": "(no-such-macro 2)"}),
-      lambda r: r["ok"]["changed"] is False,
-      expect_red=True)
+      lambda r: r["ok"]["changed"] is False)
 
 S = sid("mx3")
 healthy.ev(S, "(defmacro twc [x] (list (quote +) x x))")
