@@ -64,12 +64,12 @@ slower by a compile, but the same world. A session that holds loads or
 build flags is tainted on purpose (the mirror cannot hold their meaning),
 so its queries pay the CLI price; that latency is the accepted cost of
 never answering from a smaller world than the runs use. Corollary kept by
-tests F1–F6: the macro tools should see the same macro environment —
-still a checkerboard where implementation alone cannot close it: expand-1
-misses same-cell macros (metacarp's expand-module-1-against does not seed
-transient defmacros the way the full expander does) and the DAP adapter
-misses committed ones (its launch carries no session — a product
-decision).
+tests F1–F6: the macro tools should see the same macro environment.
+Evaluate, expand and expand-1 now do — metacarp's expand-module-1-against
+seeds transient compile-time definitions in source order, pinned by a
+carp-session test of its own — so the one remaining gap is the DAP
+adapter, which misses committed macros because its launch carries no
+session (a product decision).
 
 Degradation is visible in-band: `ping` answers `warm: degraded` once a
 base build has failed, and the server still logs the cause to stderr —

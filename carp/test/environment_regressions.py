@@ -15,10 +15,10 @@ completion offers it and annotate does not call it unknown.
 
 Cause F — macro environments. Contract: Evaluate, expand, expand-1 and
 the DAP adapter expand a macro against the same session environment.
-  F1 expand-1 must see a macro defined earlier in the same source, the
-     way expand (F2) and Evaluate already do. Stays red until metacarp's
-     expand-module-1-against seeds transient defmacros the way the full
-     expander does — a carp-compiler change, deliberately not made here.
+  F1 expand-1 sees a macro defined earlier in the same source, the way
+     expand (F2) and Evaluate do: metacarp's expand-module-1-against seeds
+     transient compile-time definitions in source order. Needs a server
+     built against carp-compiler with that fix.
   F3 expand answers changed:false when nothing expanded — changed means
      progressed, whatever the expander says.
   F4 anchors expand-1 on a committed macro.
@@ -71,8 +71,7 @@ S = sid("mx")
 same_cell = "(defmacro th3 [x] (list (quote do) x x x))\n(th3 9)"
 check("F1 expand-1 sees a macro defined earlier in the same source",
       healthy.rpc({"cmd": "expand-1", "session": S, "source": same_cell}),
-      lambda r: r["ok"]["changed"] is True,
-      expect_red=True)
+      lambda r: r["ok"]["changed"] is True)
 check("F2 expand sees a macro defined earlier in the same source",
       healthy.rpc({"cmd": "expand", "session": S, "source": same_cell}),
       lambda r: r["ok"]["changed"] is True and "(do 9 9 9)" in r["ok"]["expansion"])
