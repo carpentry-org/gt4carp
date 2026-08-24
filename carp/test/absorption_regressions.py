@@ -30,10 +30,8 @@ implementation only. B4 (meta-set!) additionally needs a decision about
 which meta keys the session serves.
 
 Cause C — input normalization. Contract: a cell means the same program
-whatever its line endings. Today a `;` comment in CR-delimited text
-swallows the rest of the cell and the server reports success.
-Fix: implementation only (Cell.unix-newlines already exists and is applied
-on the debug paths; apply it on eval/annotate intake too).
+whatever its line endings; every command that carries source normalizes it
+at intake (get-source), the way the debug paths always did.
 
 Run: python3 absorption_regressions.py <port>
 """
@@ -129,7 +127,6 @@ check("B3 core documentation still served",
 
 check("C1 CR-delimited cell with a comment evaluates",
       srv.ev(sid("cr"), '; note\r(+ 40 2)'),
-      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "42",
-      expect_red=True)
+      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "42")
 
 finish()
