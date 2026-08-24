@@ -57,27 +57,38 @@ tainted or degraded; the DAP adapter answers only from itself.
 
 **Invariant to preserve: surfaces of one session agree on what exists.**
 If eval succeeds using a binding, completion offers it and annotate does
-not call it unknown (test E1/E2, currently violated when the warm base
-degrades). Corollary kept by tests F1–F6: the four macro tools (Evaluate,
-expand, expand-1, DAP debug) see the same macro environment — currently a
-checkerboard: expand-1 misses same-cell macros, the adapter misses
-committed ones, and full expand reports `changed:true` for text it did
-not change.
+not call it unknown (tests E1/E2). Enforced by routing: warm state that is
+missing, tainted or degraded sends annotate and completion through the
+CLI pipeline, which loads the notebook runtime the way the eval paths do —
+slower by a compile, but the same world. A session that holds loads or
+build flags is tainted on purpose (the mirror cannot hold their meaning),
+so its queries pay the CLI price; that latency is the accepted cost of
+never answering from a smaller world than the runs use. Corollary kept by
+tests F1–F6: the macro tools should see the same macro environment —
+still a checkerboard where implementation alone cannot close it: expand-1
+misses same-cell macros (metacarp's expand-module-1-against does not seed
+transient defmacros the way the full expander does) and the DAP adapter
+misses committed ones (its launch carries no session — a product
+decision).
 
-Degradations are logged to the server's stderr and GT discards the stream
-(`startServer` nulls stdout/stderr). Any fix that keeps the fallback
-ladder should carry warm status in-band (ping or per-response) instead.
+Degradation is visible in-band: `ping` answers `warm: degraded` once a
+base build has failed, and the server still logs the cause to stderr —
+which GT currently discards (`startServer` nulls stdout/stderr).
 
 ## 3. Identity
 
 - **Sessions** are bare strings minted in three places: page uid
   (base36), `project:<root>`, `default`; the DAP adapter hardcodes its
   own `dap`. Nothing namespaces them across GT images sharing a server.
-- **Definitions** have three identities that must converge and do not:
-  the session's textual key `head:second-symbol` (wrong for `implements`,
-  empty for `load`/string-argument heads, and head-scoped so cross-head
-  redefinition strands entries — tests A1–A3), carp-session's name-based
-  identity, and GT's `moduleName` parsing of qualified names.
+- **Definitions**: the session identifies an absorbed form by what it
+  establishes — a binding by its name alone (so redefinition under
+  another head replaces instead of conflicting), an annotation by what it
+  says about whom (`implements`/`derive` keep both symbols so two about
+  one subject coexist), a load or flag by its target string. Annotations
+  live inside their target's entry and travel with it into the warm
+  mirror as one input, which is what lets carp-session pair a doc with
+  its definition (tests A1–A3, B1–B2). GT's `moduleName` parsing of
+  qualified names is still a third, independent reading.
 - **Cells have no identity at all.** The protocol carries only source, so
   the server cannot distinguish an edited cell from a new one; renames
   leave ghosts (characterization test A4) and diagnostics cannot be
@@ -106,9 +117,11 @@ ladder should carry warm status in-band (ping or per-response) instead.
 - **Two diagnostic coordinate systems coexist**: annotate carries
   cell-relative byte spans; eval stderr carries composed-program
   line/column prose (a one-line cell can be blamed at "line 7"). The CLI
-  annotate fallback additionally returns program-relative local spans and
-  no diagnostics; it appears to be nearly unreachable, but nothing marks
-  its payloads as differently-based.
+  annotate path — routine now for tainted or degraded sessions — emits
+  span-less local rows (the editor anchors them by walking its own parse
+  tree; a future compiler that adds spans gets them rebased to cell
+  bytes) and still no diagnostics: a cell that fails to compile there
+  answers a protocol error, which the editor renders as no marks at all.
 - **Project definition spans are read at project-load time and trusted at
   save time.** `modificationStamp` machinery exists but gates only
   session refresh; nothing compares stamps before `replaceBytesFrom:`,
@@ -118,18 +131,23 @@ ladder should carry warm status in-band (ping or per-response) instead.
 - Debug builds map C to Carp via `#line` with a *relative* `cell.carp`
   path — resolvable because the binary is built in the session dir; a
   debugger launched with another cwd loses the mapping.
-- Line endings: only the debug paths normalize CR to LF
-  (`Cell.unix-newlines`); the eval/annotate paths do not, and a `;`
-  comment in CR-delimited text swallows the rest of the cell (test C1).
-  Lepiter stores CR-delimited snippet text, so intake normalization is
-  the server-side safety net.
+- Line endings: every command that carries source normalizes it at intake
+  (`get-source` applies `Cell.unix-newlines` in one place; the debug
+  paths already did). Spans in any answer are offsets into the normalized
+  text — byte-identical to the client's text for CR-delimited senders,
+  shifted for CRLF senders, which no known client is (test C1; Lepiter
+  stores CR-delimited snippet text).
 
 ## 5. Session and environment synchronization
 
-- Absorption and the warm mirror must stay in step: `Session.absorb!`
-  and `Warm.absorb!` use the same keys, and a failed mirror upsert taints
-  warm state so it declines to answer. Anything that changes absorption
-  must change both, or taint.
+- Absorption and the warm mirror must stay in step: `Warm.absorb!` runs
+  after `Session.absorb!` and re-commits every binding entry the cell
+  touched — by definition or by annotation — as one whole input through
+  `Session.upsert-input`. A failed mirror upsert taints warm state, and
+  entries the mirror cannot hold (loads, flags, `use`) taint it by
+  construction, which routes that session's queries to the CLI. Anything
+  that changes absorption must keep the mirror's view either complete or
+  tainted — never silently partial.
 - **Sessions are replayed source text.** Definition initializers run
   inside every later evaluation, not at definition time; their output is
   attributed to whatever cell runs next (test D-group covers the value
