@@ -1,33 +1,29 @@
 """Regressions for session absorption (server.carp: Session.absorb!, Cell).
 
-Cause A — definition identity. Absorbed forms are keyed by
-`head:second-symbol` text, so forms whose identity is not their second
-symbol destroy each other.
-  A1  implements: two implementations of one interface must both persist.
-      Fix: implementation only (key an implements form by the implementing
-      function, its third symbol). A1b and A5 anchor what already works:
-      the second implementation, and the compiler itself accepting
-      multiple implementations inside one cell.
-  A2  load: two load forms must both persist (second-symbol of a string
-      argument is empty, so every load shares the key `load:` today).
-      Fix: implementation only (key a load by its string target).
-  A3  cross-head redefinition: re-evaluating a definition must always be
-      able to repair a session; today `(defn x …)` then `(def x …)` fails
-      every later cell forever. The repairability contract is
-      implementation only (binding heads replace by name); full
-      edit-replaces-cell semantics would need cell identity in the
-      protocol, which is a product decision.
+Cause A — definition identity. Contract: a form's identity is what it
+establishes, and absorbing a successful cell never silently destroys an
+unrelated prior definition. (These were red while forms were keyed by
+`head:second-symbol` text, which collided across implements forms, loads
+and cross-head redefinition.)
+  A1  implements: two implementations of one interface both persist.
+      A1b and A5 anchor the second implementation and the compiler
+      accepting multiple implementations inside one cell.
+  A2  load: two load forms both persist.
+  A3  cross-head redefinition: re-evaluating a definition can always
+      repair a session — a binding replaces the binding of its name
+      whatever the head. Full edit-replaces-cell semantics would still
+      need cell identity in the protocol, which is a product decision.
   A4  rename ghost: CHARACTERIZATION, not a contract. With no cell
       identity, keeping the old name is consistent accumulate semantics.
       This pins today's behavior so a change to it is deliberate; if cell
       identity is ever added, flip this test.
 
-Cause B — absorption granularity. Cells are split into one session entry
-per form, so carp-session never pairs a `(doc …)` with its definition.
-Contract: documentation written in a notebook cell is served by the doc
-command, as it already is for project files and core. B1/B2 fixes are
-implementation only. B4 (meta-set!) additionally needs a decision about
-which meta keys the session serves.
+Cause B — absorption granularity. Contract: documentation written in a
+notebook cell is served by the doc command, as for project files and core;
+annotations travel inside their target's entry, so the warm mirror sees
+definition and documentation as one input. B4 (meta-set!) stays red until
+carp-session's document collector reads meta-set! forms — and a decision
+about which meta keys the session serves.
 
 Cause C — input normalization. Contract: a cell means the same program
 whatever its line endings; every command that carries source normalizes it
@@ -49,8 +45,7 @@ srv.ev(S, '(defn fancy-int [i] (str (Int.inc i)))\n(implements fancy fancy-int)'
 srv.ev(S, '(defn fancy-bool [b] (if b @"yes" @"no"))\n(implements fancy fancy-bool)')
 check("A1 both interface implementations persist",
       srv.ev(S, '(fancy 1)'),
-      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "2",
-      expect_red=True)
+      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "2")
 check("A1b latest implementation persists",
       srv.ev(S, '(fancy true)'),
       lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "yes")
@@ -71,8 +66,7 @@ srv.ev(S, '(load "%s/a.carp")' % loads)
 srv.ev(S, '(load "%s/b.carp")' % loads)
 check("A2 first load persists beside a second",
       srv.ev(S, '(reg-a-fn)'),
-      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "1",
-      expect_red=True)
+      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "1")
 check("A2b second load persists",
       srv.ev(S, '(reg-b-fn)'),
       lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "2")
@@ -84,8 +78,7 @@ srv.ev(S, '(def conv 2)')
 srv.ev(S, '(defn conv [] 3)')
 check("A3 re-evaluating a definition repairs the session",
       srv.ev(S, '(conv)'),
-      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "3",
-      expect_red=True)
+      lambda r: r["ok"]["exit"] == 0 and r["ok"]["value"] == "3")
 
 S = sid("ghost")
 srv.ev(S, '(defn old-name [] 11)')
@@ -100,16 +93,14 @@ S = sid("docs")
 srv.ev(S, '(doc mfd "inline doc")\n(defn mfd [] 1)')
 check("B1 same-cell doc served by the doc command",
       srv.rpc({"cmd": "doc", "session": S, "name": "mfd"}),
-      lambda r: r.get("ok", {}).get("documentation") == "inline doc",
-      expect_red=True)
+      lambda r: r.get("ok", {}).get("documentation") == "inline doc")
 
 S = sid("docs2")
 srv.ev(S, '(defn mfe [] 1)')
 srv.ev(S, '(doc mfe "later doc")')
 check("B2 cross-cell doc served by the doc command",
       srv.rpc({"cmd": "doc", "session": S, "name": "mfe"}),
-      lambda r: r.get("ok", {}).get("documentation") == "later doc",
-      expect_red=True)
+      lambda r: r.get("ok", {}).get("documentation") == "later doc")
 
 S = sid("docs3")
 srv.ev(S, '(defn mfm [] 1)')

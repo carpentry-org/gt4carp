@@ -75,7 +75,17 @@
 (def *nb-lib* @"")
 (def *server-port* 8765)
 
-(deftype SessionEntry [key String text String])
+; One absorbed form, identified by what it establishes. A binding entry is
+; keyed by the name it defines (whatever its head, so redefining a name
+; under another head replaces it instead of conflicting with it) and owns
+; the annotations that talk about that name. An annotation that arrives
+; before its definition waits as its own entry; a load or a build flag is
+; keyed by its target.
+(deftype SessionEntry [key String
+                       kind String   ; "binding" | "ann" | "other"
+                       text String
+                       target String ; an ann entry's subject, else empty
+                       anns (Array (Pair String String))])
 (def *sessions* (the (Map String (Array SessionEntry)) {}))
 (def *session-ports* (the (Map String Int) {}))
 (def *nb-port-counter* 0)
@@ -319,39 +329,182 @@ expression, i.e. whether it produces a result value.")
   (defn reset! [sid]
     (Map.put! &*sessions* sid &(the (Array SessionEntry) [])))
 
+  ; which heads bind a name, annotate one, or point at a file or a flag:
+  ; the identity of a form is what it establishes, and these are the three
+  ; shapes it can establish something in. (Cell.def-heads stays the union;
+  ; it classifies cells, this classifies identities.)
+  (def binding-heads [@"defn" @"defn-" @"def" @"defmodule" @"deftype"
+                      @"defmacro" @"defview" @"defndynamic" @"defdynamic"
+                      @"definterface" @"defalias" @"register" @"register-type"
+                      @"deftemplate"])
+  (def annotation-heads [@"doc" @"sig" @"private" @"hidden" @"implements"
+                         @"derive"])
+  (def target-heads [@"load" @"load-once" @"load-and-use" @"relative-include"
+                     @"add-c" @"add-cflag" @"add-lib" @"add-pkg"])
+
+  (private in?)
+  (hidden in?)
+  (defn in? [heads head]
+    (let-do [found false]
+      (for [i 0 (Array.length heads)]
+        (when (String.= (Array.unsafe-nth heads i) head) (set! found true)))
+      found))
+
+  (defn binding-head? [head] (in? &binding-heads head))
+  (defn annotation-head? [head] (in? &annotation-heads head))
+
+  (doc ann-target "the name an annotation talks about: implements names the
+interface second and its subject third, everything else names its subject
+second.")
+  (defn ann-target [src span head]
+    (if (String.= head "implements")
+      (Cell.third-symbol src span)
+      (Cell.second-symbol src span)))
+
+  (private ann-id)
+  (hidden ann-id)
+  (doc ann-id "the identity of an annotation: what it says, about whom.
+implements and derive keep both their symbols, so two of them about the
+same subject coexist; doc, sig and visibility replace their previous
+selves.")
+  (defn ann-id [src span head]
+    (if (or (String.= head "implements") (String.= head "derive"))
+      (String.concat &[@head @":" (Cell.second-symbol src span) @":"
+                       (Cell.third-symbol src span)])
+      (String.concat &[@head @":" (Cell.second-symbol src span)])))
+
+  (doc entry-text "one entry as the text it feeds a compile: the form
+itself, followed by the annotations that talk about it.")
+  (defn entry-text [entry]
+    (let-do [pieces [@(SessionEntry.text entry)]]
+      (for [i 0 (Array.length (SessionEntry.anns entry))]
+        (Array.push-back! &pieces
+                          @(Pair.b (Array.unsafe-nth (SessionEntry.anns entry) i))))
+      (String.join "\n" &pieces)))
+
   ; every session definition, in insertion order. (A doc form cannot be
   ; used here: `doc` resolves to the session library's Session.doc.)
   (defn defs-text [entries]
     (let-do [pieces (the (Array String) [])]
       (for [i 0 (Array.length entries)]
         (do (Array.push-back! &pieces
-                              @(SessionEntry.text (Array.unsafe-nth entries i)))
+                              (entry-text (Array.unsafe-nth entries i)))
             (Array.push-back! &pieces @"\n")))
       (String.concat &pieces)))
 
-  (defn upsert! [entries entry]
-    (let-do [replaced false]
+  (private index-of-key)
+  (hidden index-of-key)
+  (defn index-of-key [entries key]
+    (let-do [found -1]
       (for [i 0 (Array.length entries)]
-        (when (and (not replaced)
-                   (String.= (SessionEntry.key (Array.unsafe-nth entries i))
-                             (SessionEntry.key &entry)))
-          (do (Array.aset! entries i @&entry)
-              (set! replaced true))))
-      (unless replaced (Array.push-back! entries @&entry))))
+        (when (String.= (SessionEntry.key (Array.unsafe-nth entries i)) key)
+          (set! found i)))
+      found))
 
-  ; retains a successful cell's definition forms in the session, replacing
-  ; same-keyed definitions in place
+  (doc entry-for "the combined text of the binding entry keyed by a name,
+or empty when the session holds none.")
+  (defn entry-for [sid key]
+    (let-do [entries (entries sid)
+             found @""]
+      (for [i 0 (Array.length &entries)]
+        (let [entry (Array.unsafe-nth &entries i)]
+          (when (and (String.= (SessionEntry.key entry) key)
+                     (String.= (SessionEntry.kind entry) "binding"))
+            (set! found (entry-text entry)))))
+      found))
+
+  (private replace-text!)
+  (hidden replace-text!)
+  (defn replace-text! [entries idx text]
+    (let [entry @(Array.unsafe-nth entries idx)]
+      (Array.aset! entries idx (SessionEntry.set-text entry @text))))
+
+  (private attach-ann!)
+  (hidden attach-ann!)
+  (defn attach-ann! [entries idx id text]
+    (let-do [entry @(Array.unsafe-nth entries idx)
+             anns @(SessionEntry.anns &entry)
+             replaced false]
+      (for [i 0 (Array.length &anns)]
+        (when (and (not replaced)
+                   (String.= (Pair.a (Array.unsafe-nth &anns i)) id))
+          (do (Array.aset! &anns i (Pair.init @id @text))
+              (set! replaced true))))
+      (unless replaced (Array.push-back! &anns (Pair.init @id @text)))
+      (Array.aset! entries idx (SessionEntry.set-anns entry anns))))
+
+  (doc absorb! "retains a successful cell's forms in the session. A form
+replaces only a form with its own identity: a binding replaces the binding
+of the same name whatever its head, an annotation replaces what it said
+before about the same subject, a load or a flag replaces the same target.
+Annotations attach to the entry they talk about, so the entry is one whole
+input — definition and documentation together — wherever it is committed.")
   (defn absorb! [sid cell]
     (let-do [entries (Session.entries sid)
-             spans (Cell.top-level-spans cell)]
-      (for [i 0 (Array.length &spans)]
+             spans (Cell.top-level-spans cell)
+             n (Array.length &spans)]
+      ; bindings first: an annotation in the same cell attaches whichever
+      ; side of its definition it was written on
+      (for [i 0 n]
         (let [span (Array.unsafe-nth &spans i)
               head (Cell.head-symbol cell span)]
-          (when (Cell.def-head? &head)
-            (let [name (Cell.second-symbol cell span)
-                  key (String.concat &[@&head @":" @&name])
-                  text (Cell.span-text cell span)]
-              (upsert! &entries (SessionEntry.init key text))))))
+          (when (in? &binding-heads &head)
+            (let-do [name (Cell.second-symbol cell span)
+                     text (Cell.span-text cell span)
+                     idx (index-of-key &entries &name)]
+              (if (> idx -1)
+                ; in place: the name keeps its position and its
+                ; annotations, only the definition text changes
+                (replace-text! &entries idx &text)
+                (let-do [folded (the (Array (Pair String String)) [])
+                         kept (the (Array SessionEntry) [])]
+                  ; annotations that arrived before their definition move in
+                  (for [j 0 (Array.length &entries)]
+                    (let [entry (Array.unsafe-nth &entries j)]
+                      (if (and (String.= (SessionEntry.kind entry) "ann")
+                               (String.= (SessionEntry.target entry) &name))
+                        (Array.push-back! &folded
+                                          (Pair.init (String.suffix (SessionEntry.key entry) 4)
+                                                     @(SessionEntry.text entry)))
+                        (Array.push-back! &kept @entry))))
+                  (Array.push-back! &kept
+                                    (SessionEntry.init @&name @"binding" text @"" folded))
+                  (set! entries kept)))))))
+      ; then annotations and everything else
+      (for [i 0 n]
+        (let [span (Array.unsafe-nth &spans i)
+              head (Cell.head-symbol cell span)]
+          (cond
+            (in? &binding-heads &head) ()
+            (in? &annotation-heads &head)
+              (let-do [target (ann-target cell span &head)
+                       id (ann-id cell span &head)
+                       text (Cell.span-text cell span)
+                       idx (index-of-key &entries &target)]
+                (if (> idx -1)
+                  (attach-ann! &entries idx &id &text)
+                  ; nothing to attach to yet: kept standalone until its
+                  ; definition arrives, or forever for a name the session
+                  ; never defines
+                  (let-do [key (String.append "ann:" &id)
+                           sidx (index-of-key &entries &key)]
+                    (if (> sidx -1)
+                      (replace-text! &entries sidx &text)
+                      (Array.push-back! &entries
+                                        (SessionEntry.init key @"ann" text target []))))))
+            (Cell.def-head? &head)
+              (let-do [key (if (in? &target-heads &head)
+                             (String.concat &[@&head @":"
+                                              (Project.string-argument cell span)])
+                             (String.concat &[@&head @":"
+                                              (Cell.second-symbol cell span)]))
+                       text (Cell.span-text cell span)
+                       idx (index-of-key &entries &key)]
+                (if (> idx -1)
+                  (replace-text! &entries idx &text)
+                  (Array.push-back! &entries
+                                    (SessionEntry.init key @"other" text @"" []))))
+            ())))
       (store! sid entries))))
 
 ; --- projects ------------------------------------------------------------
@@ -1112,10 +1265,13 @@ be built.")
   (private mirror-upsert!)
   (hidden mirror-upsert!)
   ; a failed mirror taints the warm state: its view of the session is no
-  ; longer complete, so warm answers would lie
+  ; longer complete, so warm answers would lie. An entry goes in whole —
+  ; definition and annotations as one input, through the same door project
+  ; files come in through — so the session can pair a doc with what it
+  ; documents.
   (defn mirror-upsert! [idx key text]
-    (match (Session.upsert (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
-                           &(SourceInput.init @key @text))
+    (match (Session.upsert-input (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                 &(SourceInput.init @key @text))
       (Result.Error d)
         (do
           (IO.errorln &(fmt "warm upsert %s failed: %s" key (Diagnostic.message &d)))
@@ -1128,7 +1284,18 @@ be built.")
     (let [entries (Session.entries sid)]
       (for [i 0 (Array.length &entries)]
         (let [entry (Array.unsafe-nth &entries i)]
-          (mirror-upsert! idx (SessionEntry.key entry) (SessionEntry.text entry))))))
+          (cond
+            (String.= (SessionEntry.kind entry) "binding")
+              (mirror-upsert! idx
+                              (SessionEntry.key entry)
+                              &(Session.entry-text entry))
+            (String.= (SessionEntry.kind entry) "other")
+              ; a load or a flag has meaning the warm state cannot mirror:
+              ; the mirror is incomplete by construction and must say so
+              (taint! idx)
+            ; a standalone annotation carries no definition to commit; the
+            ; CLI paths see it through the replayed text
+            ())))))
 
   (doc install! "replaces a session's warm state with one built elsewhere —
 a project base, say. The mirror starts complete: nothing has been absorbed
@@ -1162,8 +1329,11 @@ for queries where a partial mirror (completion, documentation) beats none.")
     (let [idx (ensure! sid)]
       (if (> idx -1) idx (index-of sid))))
 
-  (doc absorb! "mirrors a successful cell's definition forms into the warm
-state, when one exists.")
+  (doc absorb! "mirrors a successful cell into the warm state, when one
+exists: every binding entry the cell touched — by definition or by
+annotation — is re-committed as one whole input, and a form the mirror
+cannot hold taints it. Runs after Session.absorb!, so the entries are
+already complete.")
   (defn absorb! [sid cell]
     (let [idx (index-of sid)]
       (when (> idx -1)
@@ -1171,10 +1341,24 @@ state, when one exists.")
           (for [i 0 (Array.length &spans)]
             (let [span (Array.unsafe-nth &spans i)
                   head (Cell.head-symbol cell span)]
-              (when (Cell.def-head? &head)
-                (mirror-upsert! idx
-                                &(String.concat &[@&head @":" (Cell.second-symbol cell span)])
-                                &(Cell.span-text cell span)))))))))
+              (cond
+                (Session.binding-head? &head)
+                  (let [name (Cell.second-symbol cell span)
+                        text (Session.entry-for sid &name)]
+                    (unless (String.empty? &text)
+                      (mirror-upsert! idx &name &text)))
+                (Session.annotation-head? &head)
+                  ; the annotation attached to an entry; re-commit that
+                  ; entry. One that attached to nothing has no definition
+                  ; to commit and stays out of the mirror.
+                  (let [target (Session.ann-target cell span &head)
+                        text (Session.entry-for sid &target)]
+                    (unless (String.empty? &text)
+                      (mirror-upsert! idx &target &text)))
+                (Cell.def-head? &head)
+                  ; loads, use and build flags: meaning the mirror cannot hold
+                  (taint! idx)
+                ())))))))
 
   (doc reset! "drops a session's warm user overlay, keeping the warm core.")
   (defn reset! [sid]
