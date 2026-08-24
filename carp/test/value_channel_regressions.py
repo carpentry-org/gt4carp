@@ -36,8 +36,7 @@ check("D1 program output is not answered as the value of a unit cell",
       lambda r: r["ok"]["exit"] == 0
       and r["ok"]["value"] == ""
       and "l1" in r["ok"]["stdout"]
-      and "l2" in r["ok"]["stdout"],
-      expect_red=True)
+      and "l2" in r["ok"]["stdout"])
 
 check("D2 host path keeps a multi-line value whole",
       srv.ev(sid("ml"), '@"a\\nb"'),
@@ -53,7 +52,6 @@ if len(sys.argv) > 2:
     nonb = Server(int(sys.argv[2]))
     check("D4 expression cells execute without a notebook library",
           nonb.ev(sid("nonb"), '(do (IO.println "ran") 42)'),
-          lambda r: r["ok"]["exit"] == 0 and "ran" in r["ok"]["stdout"],
-      expect_red=True)
+          lambda r: r["ok"]["exit"] == 0 and "ran" in r["ok"]["stdout"])
 
 finish()

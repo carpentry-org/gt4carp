@@ -107,6 +107,20 @@
       (String.append &(String.prefix &s *nb-max-print*) "…")
       s))
 
+  (hidden value-mark)
+  ; a control byte no program prints by accident; the server splits stdout
+  ; at the last line that starts with it
+  (def value-mark (String.from-bytes &[(Byte.from-int 1)]))
+
+  (doc capture-print "prints the cell's result on a line marked by a
+leading control byte, so the server can split it from the program's own
+output instead of guessing at the last line. Wrapped around the last
+expression on the paths that run to completion; the wrapped expression's
+own value becomes ().")
+  (sig capture-print (Fn [a] ()))
+  (defn capture-print [value]
+    (IO.println &(String.append &value-mark &(str &value))))
+
   (doc view-source "records the source text a view selector was written as;
 served view specifications prefer it over the macro's re-printed stamp.")
   (defn view-source [selector text]

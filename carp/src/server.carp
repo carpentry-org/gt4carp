@@ -1543,6 +1543,21 @@ NB.capture-and-serve so the compiled program becomes the value host.")
                        (Cell.byte-slice src e (String.length src))
                        @"\n"])))
 
+  (doc wrap-capture "wraps the cell's last top-level expression in
+NB.capture-print, so a run to completion prints its result marked instead
+of leaving the server to guess it from the last line of output.")
+  (defn wrap-capture [src]
+    (let [spans (Cell.top-level-spans src)
+          last-span (Array.unsafe-nth &spans (- (Array.length &spans) 1))
+          s @(Pair.a last-span)
+          e @(Pair.b last-span)]
+      (String.concat &[(Cell.byte-slice src 0 s)
+                       @"(NB.capture-print "
+                       (Cell.byte-slice src s e)
+                       @")"
+                       (Cell.byte-slice src e (String.length src))
+                       @"\n"])))
+
   (private run-compile)
   (hidden run-compile)
   (doc run-compile "compiles the session's cell.carp; answers the exit code.")
@@ -1558,18 +1573,34 @@ NB.capture-and-serve so the compiled program becomes the value host.")
       (Maybe.from (Int.from-string &(String.trim &(file-or sid "exit.code" "-1")))
                   -1)))
 
-  (private last-newline-index)
-  (hidden last-newline-index)
-  (defn last-newline-index [s]
-    (let-do [result -1
-             n (String.length s)]
+  (private split-value)
+  (hidden split-value)
+  (doc split-value "the program's output and its marked result, as a pair.
+The mark is the last line beginning with NB's value byte; everything after
+it is the value — across lines, since a value may hold newlines and
+nothing prints after the echo. Output without a mark made no value claim,
+and the last line of it is just the last thing the program printed.")
+  (defn split-value [out]
+    (let-do [n (String.length out)
+             mark -1]
       (for [i 0 n]
-        (when (= (String.char-at s i) \newline) (set! result i)))
-      result))
+        (when (and (= (String.char-at out i) (Char.from-int 1))
+                   (or (= i 0) (= (String.char-at out (- i 1)) \newline)))
+          (set! mark i)))
+      (if (< mark 0)
+        (Pair.init @out @"")
+        (let [stdout (Cell.byte-slice out 0 mark)
+              rest (Cell.byte-slice out (+ mark 1) n)
+              m (String.length &rest)]
+          (Pair.init stdout
+                     (if (and (> m 0) (= (String.char-at &rest (- m 1)) \newline))
+                       (Cell.byte-slice &rest 0 (- m 1))
+                       rest))))))
 
   (doc respond-run "answers a finished run: absorbs the cell when it
-succeeded, and splits the last line of its output off as the value of an
-expression cell. Shared by every path that compiles and runs a cell.")
+succeeded, and splits the marked result off from the program's own output
+when the run carried one. Shared by every path that compiles and runs a
+cell.")
   (defn-do respond-run [id sid src exit]
     (let-do [out (file-or sid "stdout.log" "")
              err (file-or sid "stderr.log" "")]
@@ -1577,27 +1608,15 @@ expression cell. Shared by every path that compiles and runs a cell.")
         (do
           (Session.absorb! sid src)
           (Warm.absorb! sid src)))
-      (if (and (= exit 0) (Cell.last-form-expression? src))
-        (let [n (String.length &out)
-              trimmed (if (and (> n 0)
-                               (= (String.char-at &out (- n 1)) \newline))
-                        (Cell.byte-slice &out 0 (- n 1))
-                        @&out)
-              idx (last-newline-index &trimmed)]
-          (if (< idx 0)
-            (respond-eval id exit "" &trimmed false 0 &err)
-            (respond-eval id
-                          exit
-                          &(Cell.byte-slice &trimmed 0 (+ idx 1))
-                          &(Cell.byte-slice &trimmed (+ idx 1) (String.length &trimmed))
-                          false
-                          0
-                          &err)))
+      (if (= exit 0)
+        (let [parts (split-value &out)]
+          (respond-eval id exit (Pair.a &parts) (Pair.b &parts) false 0 &err))
         (respond-eval id exit &out "" false 0 &err))))
 
   (doc eval-plain "the value-host-free path: compile and run to completion.
 The notebook runtime is loaded when configured, so definition-only cells can
-use NB (defview and friends).")
+use NB (defview and friends). Makes no value claim of its own — the answer
+is the run's output, whole.")
   (defn-do eval-plain [id sid src]
     (let-do [prelude (if (String.empty? &*nb-lib*)
                        @""
@@ -1614,6 +1633,34 @@ use NB (defview and friends).")
       (ignore (IO.write-file &program &(session-file sid "cell.carp")))
       (let [exit (run-compile sid "-x" "stdout.log")]
         (respond-run id sid src exit))))
+
+  (doc eval-plain-value "compiles and runs the cell with its trailing
+expression wrapped in NB.capture-print, so the result comes back marked
+rather than guessed from the output. Falls back to the unwrapped path when
+the wrap cannot compile — a value without a str instance, a definition
+nested where no expression goes — because an answer without a value claim
+beats none.")
+  (defn-do eval-plain-value [id sid src]
+    (if (or (String.empty? &*nb-lib*) (not (Cell.last-form-expression? src)))
+      (eval-plain id sid src)
+      (let-do [program (String.concat &[@"(load \"notebook.carp\")\n"
+                                        (Projects.prelude sid)
+                                        (Session.defs-text &(Session.entries sid))
+                                        (wrap-capture src)])]
+        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
+                                     &*nb-lib*
+                                     &(session-dir sid))))
+        (ignore (IO.write-file &program &(session-file sid "cell.carp")))
+        (if (/= 0 (run-compile sid "-b -o cell-run" "compile.log"))
+          (eval-plain id sid src)
+          (do
+            (ignore (System.system &(fmt "cd '%s' && ./cell-run > stdout.log 2> stderr.log; echo $? > exit.code"
+                                         &(session-dir sid))))
+            (respond-run id
+                         sid
+                         src
+                         (Maybe.from (Int.from-string &(String.trim &(file-or sid "exit.code" "-1")))
+                                     -1)))))))
 
   (private debug-cell)
   (hidden debug-cell)
@@ -1698,12 +1745,19 @@ whole one."
   (doc warm-cell "the cell as the warm path emits it. A session already holds
 the project's own main, and the emitted program calls it, so the cell defines
 its own: that shadows the project's, because running a cell must not launch the
-program the project builds. The trailing expression is left alone — the session
-echoes a top-level result the way the whole compiler does, which is what answers
-the request. Wrapping it here instead meant guessing the calling convention of
-the value's `str`, and a derived one takes its argument by reference.")
+program the project builds.")
   (defn warm-cell [src]
     (String.concat &[@"(defn main [] ())\n" @src @"\n"]))
+
+  (private warm-cell-value)
+  (hidden warm-cell-value)
+  (doc warm-cell-value "the warm cell with its trailing expression wrapped
+in NB.capture-print: the warm base carries the notebook runtime, so the
+result comes back marked instead of guessed from the output.")
+  (defn warm-cell-value [src]
+    (if (Cell.last-form-expression? src)
+      (String.concat &[@"(defn main [] ())\n" (wrap-capture src)])
+      (warm-cell src)))
 
   (private cell-fault?)
   (hidden cell-fault?)
@@ -1727,7 +1781,7 @@ half a minute again.")
   (defn decline-warm [id sid src reason]
     (do
       (ignore (IO.write-file reason &(session-file sid "warm.log")))
-      (eval-plain id sid src)))
+      (eval-plain-value id sid src)))
 
   (doc eval-warm "runs a cell against the warm session. The project and every
 definition committed before it are already expanded, resolved and inferred, so
@@ -1735,30 +1789,43 @@ only the cell's own code goes through the front end — the phases that dominate
 a cold compile of a large project. Specialization and code generation still see
 the whole program, and clang still runs. Falls back to the cold path whenever
 the session cannot answer: a warm gap must never reject a valid cell.")
+  (private run-emitted)
+  (hidden run-emitted)
+  (defn run-emitted [id sid src c]
+    (match (IO.write-file c &(session-file sid "cell-warm.c"))
+      (Result.Error e) (decline-warm id sid src &e)
+      (Result.Success _)
+        (let [exit (clang-run sid)]
+          (if (< exit 0)
+            (decline-warm id sid src &(file-or sid "warm-compile.log" "clang failed"))
+            (respond-run id sid src exit)))))
+
   (defn eval-warm [id sid src]
     (let [idx (Warm.usable sid)]
       (if (< idx 0)
         (decline-warm id sid src "no usable warm session")
         (match (Session.emit-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
-                                  &(SourceInput.init (fmt "cell:%d" id) (warm-cell src)))
+                                  &(SourceInput.init (fmt "cell:%d" id) (warm-cell-value src)))
           (Result.Error d)
             (if (cell-fault? (Diagnostic.phase &d))
-              (respond-eval id
-                            1
-                            ""
-                            ""
-                            false
-                            0
-                            &(fmt "%s: %s" (Diagnostic.phase &d) (Diagnostic.message &d)))
+              ; the wrap itself may be what cannot compile — a value with no
+              ; str instance — so the cell only counts as broken when it
+              ; fails unwrapped too
+              (match (Session.emit-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
+                                        &(SourceInput.init (fmt "cell:%d" id) (warm-cell src)))
+                (Result.Error d2)
+                  (if (cell-fault? (Diagnostic.phase &d2))
+                    (respond-eval id
+                                  1
+                                  ""
+                                  ""
+                                  false
+                                  0
+                                  &(fmt "%s: %s" (Diagnostic.phase &d2) (Diagnostic.message &d2)))
+                    (decline-warm id sid src (Diagnostic.message &d2)))
+                (Result.Success c) (run-emitted id sid src &c))
               (decline-warm id sid src (Diagnostic.message &d)))
-          (Result.Success c)
-            (match (IO.write-file &c &(session-file sid "cell-warm.c"))
-              (Result.Error e) (decline-warm id sid src &e)
-              (Result.Success _)
-                (let [exit (clang-run sid)]
-                  (if (< exit 0)
-                    (decline-warm id sid src &(file-or sid "warm-compile.log" "clang failed"))
-                    (respond-run id sid src exit))))))))
+          (Result.Success c) (run-emitted id sid src &c)))))
 
   (private clang-host)
   (hidden clang-host)
@@ -1995,7 +2062,8 @@ it as the session's value host, retrying on other ports when one is taken.")
       (ignore (IO.write-file &program &(session-file sid "cell.carp")))
       (if (/= (run-compile sid "-b -o cell-host" "compile.log") 0)
         ; the wrap can fail for value types the runtime cannot handle
-        ; (e.g. no str instance); fall back to the plain path
+        ; (e.g. no str instance); the capture wrap needs the same str, so
+        ; fall straight to the unwrapped path rather than fail it twice
         (eval-plain id sid src)
         (let-do [response @""
                  attempt 0
@@ -2537,6 +2605,11 @@ program's own definitions.")
           (eval-def-warm id sid src))
       (and (not (String.empty? &*nb-lib*)) (Cell.last-form-expression? src))
         (eval-with-host id sid src)
+      (Cell.last-form-expression? src)
+        ; no notebook runtime: no hosts and no marked values, but the cell
+        ; still runs — an expression cell that only type-checked would
+        ; report an execution that never happened
+        (eval-plain id sid src)
       (eval-def-warm id sid src)))
 
   ; --- request handling -------------------------------------------------
