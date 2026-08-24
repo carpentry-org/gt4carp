@@ -1,0 +1,169 @@
+# Invariants
+
+A map of the agreements between gt4carp's subsystems that nothing enforces
+structurally: what each boundary assumes, where the assumption lives on
+each side, what happens when it drifts, and which regression test (in
+`carp/test/`) watches it. Where the Test column says none, drift is
+currently detected by nothing.
+
+The subsystems: **GT** (the Pharo/Smalltalk packages), the **server**
+(`carp/src/server.carp`), **metacarp** (the self-hosting compiler and its
+`carp-session` library), the **DAP adapter** (the same server binary in
+`--dap` mode, a separate process), **value hosts** (compiled cell programs
+kept alive, `carp/src/notebook.carp`), **lldb-dap** (the native debugger's
+adapter), and **disk** (session work dirs and project files).
+
+## 1. Copied compiler knowledge
+
+Facts that metacarp owns and gt4carp restates. Every row is a silent
+failure when it drifts; none had a test before the regression suite, and
+most still have none because they need the GT image or a native debug run.
+
+| Fact | Authoritative | Copies | Drift symptom | Test |
+|---|---|---|---|---|
+| C symbol mangling `C<n>_name__<type>`, `L<n>_name_<id>`, `_x<code>_` escapes | `carp-c-abi/carp-c-abi.carp` (`CAbi.mangle`) | `CarpNativeDebugger` (`carpMainSymbol` = `C4_main__F0_Z1_U`, `decodeCarpName:`, `hidesVariable:`) | native debugger stops in `_dyld_start` or `main`, frame and variable names come out mangled | none (needs image + lldb) |
+| git library cache layout `~/.cache/carp/libs/<host>_COLON_<owner>/…` | metacarp `main.carp` load resolution | server `Project.cache-path`, `HostBase.lib-cache` | project browser silently drops dependency files; warm base fails and everything falls back to cold compiles | E1 catches the warm-base half indirectly |
+| boot prelude (host facts, Project stub, include macros) | `carp-session/carp-core-loader.carp` (private) | server `HostBase.boot-prelude` (a declared copy) | warm base fails to build, or warm and cold answer from subtly different compile-time environments | E1/E2 |
+| runtime pins `socket@0.2.3`, `bufio@0.1.0` | pinned twice inside this repo: `notebook.carp` loads and `HostBase` cache paths | the two must match each other and the cache layout | warm base silently incomplete after a version bump | E1/E2 |
+| diagnostic phase names (`parse expand resolve infer validate`) | metacarp `CompileError.phase` values | server `cell-fault?` whitelist | a renamed or added front-end phase turns real cell errors into pointless cold retries, or infrastructure failures into cell blame | none |
+| which heads run at top level vs define | metacarp's evaluation of top-level forms | server `Cell.def-heads` and `CarpNativeDebugger class>>definitionHeads` (verified identical; the one hard-coupled pair) | absorption misclassifies cells; the native debugger's entry line lands inside a definition | A-group covers the absorption side |
+| `#line` emission into the composed `cell.carp` (relative path) and core files (absolute) | metacarp `-g` codegen | native debugger's generated-code skipping, `framesCarryColumns == false`, form-extent recovery | debugger degrades to stopping in C, columns point into the wrong text | none (needs image) |
+
+Note the head lists that are *not* copies: `Project.binding-heads`,
+`annotation-heads`, `load-heads`, `config-heads` and the browser's kind
+table classify deliberately different subsets for different questions.
+Only `Cell.def-heads` and `definitionHeads` must stay identical.
+
+## 2. Answer provenance
+
+Every answer comes from one of several environments, and no response
+field says which. The environments:
+
+- **warm base** — core (+ socket + notebook runtime when the cache
+  resolves; a whole project for project sessions), built once per session,
+  silently replaced by bare core when its sources cannot be read.
+- **warm overlay** — definitions mirrored by absorption; a failed mirror
+  taints it, and taint routes queries to the CLI paths.
+- **CLI pipeline** — a full compiler run over replayed session text; adds
+  the notebook prelude on eval paths but not on the annotate/ownership
+  paths.
+- **host program** — the compiled cell itself, serving its live result.
+- **DAP adapter** — a separate process with a private `"dap"` session that
+  never sees notebook or project sessions.
+
+Who answers what: eval answers from CLI+notebook or warm emission or the
+host; annotate/complete/doc/expand answer from warm state even when it is
+tainted or degraded; the DAP adapter answers only from itself.
+
+**Invariant to preserve: surfaces of one session agree on what exists.**
+If eval succeeds using a binding, completion offers it and annotate does
+not call it unknown (test E1/E2, currently violated when the warm base
+degrades). Corollary kept by tests F1–F6: the four macro tools (Evaluate,
+expand, expand-1, DAP debug) see the same macro environment — currently a
+checkerboard: expand-1 misses same-cell macros, the adapter misses
+committed ones, and full expand reports `changed:true` for text it did
+not change.
+
+Degradations are logged to the server's stderr and GT discards the stream
+(`startServer` nulls stdout/stderr). Any fix that keeps the fallback
+ladder should carry warm status in-band (ping or per-response) instead.
+
+## 3. Identity
+
+- **Sessions** are bare strings minted in three places: page uid
+  (base36), `project:<root>`, `default`; the DAP adapter hardcodes its
+  own `dap`. Nothing namespaces them across GT images sharing a server.
+- **Definitions** have three identities that must converge and do not:
+  the session's textual key `head:second-symbol` (wrong for `implements`,
+  empty for `load`/string-argument heads, and head-scoped so cross-head
+  redefinition strands entries — tests A1–A3), carp-session's name-based
+  identity, and GT's `moduleName` parsing of qualified names.
+- **Cells have no identity at all.** The protocol carries only source, so
+  the server cannot distinguish an edited cell from a new one; renames
+  leave ghosts (characterization test A4) and diagnostics cannot be
+  blamed on the cell that introduced a conflict. Giving cells identity is
+  a protocol/product decision, not a bugfix.
+- **Values** are (host port, object id), authenticated only at the
+  server's launch handshake; reads on a host carry no token (only DELETE
+  is checked) and `CarpValueClient` fetches `/session` once and never
+  re-verifies, while ports recycle mod 500 and any new eval kills the
+  session's previous host. The identity needed to detect a stale
+  connection already exists at `GET /session`; the client ignores it.
+- **The server binary** identifies itself by build stamp (`--stamp` vs
+  ping); GT checks once per client instance.
+
+## 4. Source coordinates
+
+- The universal currency is **UTF-8 byte offsets, half-open, in file or
+  cell coordinates**. The compiler reports them; GT crosses to character
+  positions in exactly one place (`CarpStylerUtilities
+  charPositionsByByteOffsetIn:`); files are edited byte-wise
+  (`CarpProjectFile byteSliceFrom:to:`, `replaceBytesFrom:to:with:`).
+- The server preserves file coordinates through semantic filtering by
+  **blanking spans with spaces, never deleting** (`Project.blank-span!`).
+  Do not "clean up" the blanking: definition spans are file coordinates
+  because of it.
+- **Two diagnostic coordinate systems coexist**: annotate carries
+  cell-relative byte spans; eval stderr carries composed-program
+  line/column prose (a one-line cell can be blamed at "line 7"). The CLI
+  annotate fallback additionally returns program-relative local spans and
+  no diagnostics; it appears to be nearly unreachable, but nothing marks
+  its payloads as differently-based.
+- **Project definition spans are read at project-load time and trusted at
+  save time.** `modificationStamp` machinery exists but gates only
+  session refresh; nothing compares stamps before `replaceBytesFrom:`,
+  so an external edit between load and save corrupts the file. Any change
+  to the save path must add that comparison or re-derive spans first.
+  (Needs a GT-side test; not covered by the Python suites.)
+- Debug builds map C to Carp via `#line` with a *relative* `cell.carp`
+  path — resolvable because the binary is built in the session dir; a
+  debugger launched with another cwd loses the mapping.
+- Line endings: only the debug paths normalize CR to LF
+  (`Cell.unix-newlines`); the eval/annotate paths do not, and a `;`
+  comment in CR-delimited text swallows the rest of the cell (test C1).
+  Lepiter stores CR-delimited snippet text, so intake normalization is
+  the server-side safety net.
+
+## 5. Session and environment synchronization
+
+- Absorption and the warm mirror must stay in step: `Session.absorb!`
+  and `Warm.absorb!` use the same keys, and a failed mirror upsert taints
+  warm state so it declines to answer. Anything that changes absorption
+  must change both, or taint.
+- **Sessions are replayed source text.** Definition initializers run
+  inside every later evaluation, not at definition time; their output is
+  attributed to whatever cell runs next (test D-group covers the value
+  half). This is the deliberate model, not a bug; do not add caching that
+  assumes initializers ran once.
+- Absorbed cells are split into one input per form, which is what breaks
+  doc pairing (tests B1–B4); carp-session's `upsert-input` (whole-input
+  identity, used by the project paths, where docs work) is the intended
+  alternative, and `Session.remove`/`remove-input` exist but are not
+  exposed by the protocol — which is why a poisoned session has no repair
+  short of reset (test A3).
+- Project sessions: file stamps (`noteSessionSaw:`) decide which files to
+  re-commit on refresh; disk is written before the session is told
+  (`save:` then `commit`), so git, disk and session converge — but see
+  the span-staleness invariant above.
+- Value host lifecycle: each eval kills the session's previous host; the
+  server start kills **every** host on the machine (intended orphan
+  cleanup under a one-server-per-machine assumption — any second server,
+  including a test runner's, is a kill-all; `run_regressions.sh` warns).
+  Host ports allocate sequentially mod 500 above `port+100`; the native
+  debugger draws lldb-dap ports from 9000–9499, which overlaps the
+  default server's host range.
+- GT-side caches that can serve stale answers: the per-name documentation
+  cache (negative results cached for the coder's life), the lint cache
+  (by source hash, safe), the type-annotation cache (by source hash, safe;
+  failure hashes suppress retries), remote-value element caches (retained
+  after their host dies).
+
+## 6. Disk state as protocol
+
+The session work dir is an IPC surface, not scratch: `cell.carp`,
+`stdout.log`, `stderr.log`, `exit.code`, `run-exit.code`, `warm.log`,
+`cell-warm.c`, `cell-host`, `cell-debug(.c)`, `salt` are written and read
+across process boundaries with no locking; correctness rests on the
+server serializing requests per session. `dap-cell-<n>.carp` files are
+append-only on purpose — earlier debuggers keep pointing at true text —
+and must never be rewritten in place.
