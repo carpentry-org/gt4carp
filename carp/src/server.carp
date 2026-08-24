@@ -90,6 +90,11 @@
 (def *session-ports* (the (Map String Int) {}))
 (def *nb-port-counter* 0)
 (def *nb-salt* @"")
+; whether the warm base fell back to bare core: the sources it is built
+; from could not all be read. Warm answers would then come from a smaller
+; world than the compiles do, so queries route to the CLI instead, and
+; ping says so rather than leaving speed as the only symptom.
+(def *warm-base-degraded* false)
 
 ; --- cell scanning ------------------------------------------------------
 ; Splits a cell into top-level forms and classifies them as definitions
@@ -1138,11 +1143,14 @@ plain core when the base cannot be built.")
         (let [input (SourceInput.init @"session:host-core" @"")
               sourced (SourcedSurfaceModule.init input module)
               config (ExpandConfig.init [@"Dynamic"])]
-          (Session.create-from-module &sourced &config))
+          (do
+            (set! *warm-base-degraded* false)
+            (Session.create-from-module &sourced &config)))
       (Result.Error d)
         (do
           (IO.errorln &(fmt "host base failed (%s); falling back to plain core"
                             (Diagnostic.message &d)))
+          (set! *warm-base-degraded* true)
           (Session.create &*core-dir*)))))
 
 ; --- project sessions ---------------------------------------------------
@@ -2231,10 +2239,24 @@ and span-tagged locals with their owning definition.")
 
   (doc annotate-cell-cli "runs the compiler's annotate mode over the session's
 definitions plus the given source and answers the inferred types of the
-program's own definitions.")
+program's own definitions. The notebook runtime is loaded the way the eval
+paths load it, so this answers from the same environment a run would use —
+the point of falling back here at all.")
   (defn-do annotate-cell-cli [id sid src]
     (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
-    (let-do [program (String.concat &[(Session.defs-text &(Session.entries sid))
+    (unless (String.empty? &*nb-lib*)
+      (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
+                                   &*nb-lib*
+                                   &(session-dir sid)))))
+    (let-do [prelude (if (String.empty? &*nb-lib*)
+                       @""
+                       @"(load \"notebook.carp\")\n")
+             defs (Session.defs-text &(Session.entries sid))
+             ; where the cell begins in the composed program: the compiler
+             ; reports spans in program bytes, the editor wants cell bytes
+             cell-base (+ (String.length &prelude) (String.length &defs))
+             program (String.concat &[@&prelude
+                                      @&defs
                                       @src
                                       @"\n"])]
       (ignore (IO.write-file &program &(session-file sid "annotate.carp")))
@@ -2250,11 +2272,13 @@ program's own definitions.")
           (Result.Success j)
             (match (JSON.get &j "definitions")
               (Maybe.Just (JSON.Arr definitions))
-                (let-do [names (program-def-names &program)
+                (let-do [names (program-def-names src)
                          kept (the (Array (Box JSON)) [])]
-                  ; the cell's expressions first: their types are the last K
-                  ; entries of the emitted expression list (the compiler's
-                  ; boot prelude contributes leading ones)
+                  ; the CELL's names: the composed program also holds the
+                  ; session's definitions, and the editor asked about the
+                  ; cell. The cell's expressions first: their types are the
+                  ; last K entries of the emitted expression list (the
+                  ; compiler's boot prelude contributes leading ones)
                   (match (JSON.get &j "expressions")
                     (Maybe.Just (JSON.Arr expressions))
                       (let-do [texts (program-expression-texts &program)
@@ -2293,6 +2317,10 @@ program's own definitions.")
                                                                  (JSON.entry @"source" (JSON.Str source))]))))))
                           _ ())))
                     (let-do [kept-locals (the (Array (Box JSON)) [])]
+                      ; the compiler's locals carry no spans today — the
+                      ; editor anchors them by walking its own parse tree —
+                      ; but a row that does carry one carries it in program
+                      ; bytes, and the editor wants cell bytes
                       (match (JSON.get &j "locals")
                         (Maybe.Just (JSON.Arr all-locals))
                           (for [i 0 (Array.length &all-locals)]
@@ -2300,8 +2328,24 @@ program's own definitions.")
                               (match (JSON.get row "owner")
                                 (Maybe.Just (JSON.Str owner))
                                   (when (annotation-matches? &owner &names)
-                                    (Array.push-back! &kept-locals
-                                                      (Box.init (JSON.copy row))))
+                                    (let [raw-start (get-int row "start" -1)]
+                                      (if (< raw-start 0)
+                                        (Array.push-back! &kept-locals
+                                                          (Box.init (JSON.copy row)))
+                                        (when (>= (- raw-start cell-base) 0)
+                                          (Array.push-back! &kept-locals
+                                                            (Box.init
+                                                              (JSON.obj [(JSON.entry @"owner" (JSON.Str @&owner))
+                                                                         (JSON.entry @"name"
+                                                                                     (JSON.Str (match (JSON.get row "name")
+                                                                                                 (Maybe.Just (JSON.Str local-name)) local-name
+                                                                                                 _ @"")))
+                                                                         (JSON.entry @"type"
+                                                                                     (JSON.Str (match (JSON.get row "type")
+                                                                                                 (Maybe.Just (JSON.Str local-type)) local-type
+                                                                                                 _ @"")))
+                                                                         (JSON.entry @"start" (JSON.Num (Double.from-int (- raw-start cell-base))))
+                                                                         (JSON.entry @"end" (JSON.Num (Double.from-int (- (get-int row "end" -1) cell-base))))])))))))
                                 _ ())))
                         _ ())
                       (respond-ok-json id
@@ -2339,7 +2383,7 @@ here: it answers the same shape with its diagnostics filled in, so an editor
 can mark the failing form while the user is still typing.")
   (defn annotate-cell [id sid src]
     (let [idx (Warm.ensure! sid)]
-      (if (< idx 0)
+      (if (or (< idx 0) *warm-base-degraded*)
         (annotate-cell-cli id sid src)
         (match (Session.infer-cell (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
                                    &(SourceInput.init @"cell" @src))
@@ -2362,12 +2406,84 @@ can mark the failing form while the user is still typing.")
       (SessionDefKind.Interface) @"interface"
       (SessionDefKind.Other o) @o))
 
+  (private cli-environment)
+  (hidden cli-environment)
+  (doc cli-environment "every binding a CLI annotate over the session's
+text can see, as the compiler's own name/type rows: the environment for a
+session whose warm mirror cannot answer. Costs a compile where warm costs
+nothing, which is the price of answering from the world the runs use.")
+  (defn cli-environment [sid]
+    (do
+      (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
+      (unless (String.empty? &*nb-lib*)
+        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
+                                     &*nb-lib*
+                                     &(session-dir sid)))))
+      (let-do [prelude (if (String.empty? &*nb-lib*)
+                         @""
+                         @"(load \"notebook.carp\")\n")
+               program (String.concat &[prelude
+                                        (Session.defs-text &(Session.entries sid))
+                                        @"\n"])
+               rows (the (Array (Box JSON)) [])]
+        (ignore (IO.write-file &program &(session-file sid "annotate.carp")))
+        (ignore (System.system
+                  &(fmt "cd '%s' && exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- 10>&- 11>&- 12>&-; '%s' --annotate -c '%s' annotate.carp > annotate.json 2> annotate.err; echo $? > annotate.exit"
+                        &(session-dir sid)
+                        &*compiler*
+                        &*core-dir*)))
+        (when (= 0 (Maybe.from (Int.from-string &(String.trim &(file-or sid "annotate.exit" "-1"))) -1))
+          (match (JSON.parse &(file-or sid "annotate.json" "{}"))
+            (Result.Error _) ()
+            (Result.Success j)
+              (match (JSON.get &j "definitions")
+                (Maybe.Just (JSON.Arr definitions))
+                  (for [i 0 (Array.length &definitions)]
+                    (Array.push-back! &rows
+                                      (Box.init (JSON.copy (Box.peek (Array.unsafe-nth &definitions i))))))
+                _ ())))
+        rows)))
+
+  (private complete-cli)
+  (hidden complete-cli)
+  (doc complete-cli "completion from the CLI pipeline, for warm state that
+is missing, tainted or degraded: slower by an entire compile, but it sees
+what evaluation sees, and a wrong candidate list is worse than a slow
+one.")
+  (defn complete-cli [id sid prefix]
+    (let-do [rows (cli-environment sid)
+             out (the (Array (Box JSON)) [])
+             count 0]
+      (for [i 0 (Array.length &rows)]
+        (let [row (Box.peek (Array.unsafe-nth &rows i))]
+          (match (JSON.get row "name")
+            (Maybe.Just (JSON.Str name))
+              (when (and (< count 200) (String.starts-with? &name prefix))
+                (let [type-name (match (JSON.get row "type")
+                                  (Maybe.Just (JSON.Str t)) t
+                                  _ @"")]
+                  (do
+                    (set! count (+ count 1))
+                    (Array.push-back! &out
+                                      (Box.init
+                                        (JSON.obj [(JSON.entry @"name" (JSON.Str @&name))
+                                                   (JSON.entry @"kind"
+                                                               (JSON.Str (if (String.starts-with? &type-name "(Fn")
+                                                                           @"function"
+                                                                           @"value")))
+                                                   (JSON.entry @"scheme" (JSON.Str @&type-name))
+                                                   (JSON.entry @"doc" (JSON.Null))]))))))
+            _ ())))
+      (respond-ok-json id (JSON.obj [(JSON.entry @"candidates" (JSON.Arr out))]))))
+
   (doc complete-cell "answers warm completion candidates for a prefix:
-name, kind, scheme and documentation, capped at 200.")
+name, kind, scheme and documentation, capped at 200. A mirror that is
+missing, tainted or degraded answers through the CLI instead, so what
+completion offers is what a run would accept.")
   (defn complete-cell [id sid prefix]
     (let [idx (Warm.ensure-any! sid)]
-      (if (< idx 0)
-        (respond-err id "completion needs a warm session and none could be created")
+      (if (or (< idx 0) *warm-base-degraded* (< (Warm.usable sid) 0))
+        (complete-cli id sid prefix)
         (let-do [candidates (Session.complete (WarmEntry.state (Array.unsafe-nth &*warm-sessions* idx))
                                               prefix)
                  out (the (Array (Box JSON)) [])
@@ -2558,7 +2674,15 @@ definitions plus the given source and answers the plan rows for the
 program's own definitions.")
   (defn-do ownership-cell [id sid src]
     (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
-    (let-do [program (String.concat &[(Session.defs-text &(Session.entries sid))
+    (unless (String.empty? &*nb-lib*)
+      (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
+                                   &*nb-lib*
+                                   &(session-dir sid)))))
+    (let-do [prelude (if (String.empty? &*nb-lib*)
+                       @""
+                       @"(load \"notebook.carp\")\n")
+             program (String.concat &[prelude
+                                      (Session.defs-text &(Session.entries sid))
                                       @src
                                       @"\n"])]
       (ignore (IO.write-file &program &(session-file sid "ownership.carp")))
@@ -2622,10 +2746,17 @@ program's own definitions.")
               cmd (Result.from-success (get-str &j "cmd") @"")]
           (cond
             (= &cmd "ping")
+              ; warm reports "degraded" once a base has actually failed to
+              ; build; before the first session it is optimistic, which is
+              ; the honest reading of not having tried
               (Result.unsafe-from-success
                 (JSON.str &(JSON.obj [(JSON.entry @"id" (JSON.Num id))
                                       (JSON.entry @"ok" (JSON.Str @"pong"))
-                                      (JSON.entry @"stamp" (JSON.Str (build-stamp)))])))
+                                      (JSON.entry @"stamp" (JSON.Str (build-stamp)))
+                                      (JSON.entry @"warm"
+                                                  (JSON.Str (if *warm-base-degraded*
+                                                              @"degraded"
+                                                              @"ok")))])))
             (= &cmd "reset")
               (match (get-str &j "session")
                 (Result.Error e) (respond-err id &e)

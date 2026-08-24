@@ -6,11 +6,12 @@ nothing marks which one answered. Contract: within one session the query
 surfaces agree on whether a binding exists — if eval succeeds using it,
 completion offers it and annotate does not call it unknown.
   E1 runs against a deliberately degraded server (CARP_LIB_CACHE pointing
-  nowhere): today eval answers from the CLI+notebook environment while
-  annotate and completion answer from a bare-core warm base. The test
-  asserts coherence, not a direction; whether the fix refuses consistently
-  or degrades consistently is a product decision, making the degradation
-  visible at all is the implementation half. E2 anchors the healthy case.
+  nowhere): warm state that is missing, tainted or degraded routes
+  annotate and completion through the CLI pipeline, which loads the
+  notebook runtime the way the eval paths do — the same world, a compile
+  slower. The test asserts coherence, not a direction, so it stays valid
+  if the policy ever becomes refusal instead. E2 anchors the healthy
+  case; ping's warm field says when the degraded routing is in force.
 
 Cause F — macro environments. Contract: Evaluate, expand, expand-1 and
 the DAP adapter expand a macro against the same session environment.
@@ -61,8 +62,7 @@ S = sid("envd")
 degraded.ev(S, '(defn uses-nb [] (NB.cap @"xy"))')
 check("E1 degraded server: eval, annotate and completion still agree",
       coherence(degraded, S),
-      lambda t: t[0] == t[1] == t[2],
-      expect_red=True)
+      lambda t: t[0] == t[1] == t[2])
 
 # --- Cause F: macro environments -----------------------------------------
 
