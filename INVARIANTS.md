@@ -71,6 +71,12 @@ carp-session test of its own — so the one remaining gap is the DAP
 adapter, which misses committed macros because its launch carries no
 session (a product decision).
 
+One-step seeding covers defmacro, defndynamic and defdynamic, but not
+deftype members: full expansion also runs `register-deftype-members!`, so
+a transient deftype beside a macro that reads `(members T)` expands fully
+but not step-wise. Small and implementation-only; close it the next time
+`carp-expand` is open.
+
 Degradation is visible in-band: `ping` answers `warm: degraded` once a
 base build has failed, and the server still logs the cause to stderr —
 which GT currently discards (`startServer` nulls stdout/stderr).
