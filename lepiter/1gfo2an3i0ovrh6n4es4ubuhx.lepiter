@@ -34,12 +34,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "x1U+AtciSpmhw/TekZgtWw=="
+					"uidString" : "SvJtZY7YT6Sy1LCWa/eESQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Let’s start with the server, since it is the part that actually knows our language. That’s why I like to write it in the language itself, or at least right next to its compiler. For Carp, it lives in [`carp/src/server.carp`](https://github.com/carpentry-org/gt4carp/blob/master/carp/src/server.carp), a Carp program that uses the compiler as a library."
+				"string" : "Carp secretly has two languages in one file: the one that becomes a program, and the one that runs inside the compiler while it decides what that program will be. Macros belong to the second, and if you’ve ever written one, you know how hard they are to follow when all you see is what went in and what came out."
 			},
 			{
 				"__type" : "textSnippet",
@@ -71,12 +71,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "+hq8AAGyQGCRVqz/+aNVuA=="
+					"uidString" : "MoBrtzroTL2aZSl4oyfTFQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "The protocol is as small as I could make it. Every request and every response is a decimal length, a newline, and that many bytes of JSON. A request names a command and a session, like `{\"id\": 1, \"cmd\": \"eval\", \"session\": \"my-page\", \"source\": \"(+ 1 2)\"}`, and the answer to an `eval` tells us the exit code, what the program printed, and the printed value of the last expression: `{\"id\": 1, \"ok\": {\"exit\": 0, \"value\": \"3\", \"stdout\": \"\", \"stderr\": \"\", \"hasValue\": true, \"hostPort\": 18224}}`."
+				"string" : "So let’s look at what happens in between! The Expand action on a Carp snippet opens a {{gtClass:CarpMacroExpansion}}: the form as written, and every expansion step taken from it. We can step forward, step back, or expand fully to see what the compiler will actually compile. And we can do so without fear, since expansion runs against a private copy of the compile-time environment and never touches the session."
 			},
 			{
 				"__type" : "textSnippet",
@@ -108,12 +108,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "ypVHQK5DSTu5BXYM1Z7Jbw=="
+					"uidString" : "dgWyQWPQRrSo9WaRVc9Mug=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "`eval` is the only command we strictly need. The others (`annotate`, `complete`, `doc`, `expand`, and a few more) are what the second part of this booklet is about, and you can add them one at a time, whenever you feel like it."
+				"string" : "A step is one reduction anywhere in the form, outermost first, then each subform in order. Here is what that looks like, and this one even works without a server:"
 			},
 			{
 				"__type" : "textSnippet",
@@ -145,12 +145,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "LrXSN601SfSqU8lMYc4A9w=="
+					"uidString" : "W7j5WqQuRsCpXfBxdQD3tQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Sessions are what make this more than a glorified compile button. A session remembers the definitions of earlier cells, so we can define `twice` in one cell and call it in the next. In gt4carp, a session is a Lepiter page or a project, and how the server keeps them cheap is a story for [[A compiler that stays warm]]."
+				"string" : "{{gtExample:CarpMacroExpansionExamples>>#steppingIntoASubform|codeExpanded=false|previewExpanded=true}}"
 			},
 			{
 				"__type" : "textSnippet",
@@ -182,12 +182,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "vJZb2ocNSHKp3kJQzlyzmQ=="
+					"uidString" : "hOPBDgovSGWDg+nfHnQ02A=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "You might wonder why we don’t just speak LanguageLink’s protocol. Mostly because we don’t need most of it, and the things we do need (types, diagnostics with source spans, expansions) aren’t in it. Fourteen commands that each answer one question turned out to be much easier to write and test. The server even has a regression suite in `carp/test` that speaks the protocol from Python, which is a nice way to poke at it without GT."
+				"string" : "Of course, when an expansion fails, what it became is nothing at all, and that is exactly when we want to see how it got there. Luckily, there’s a debugger for that. Onwards!"
 			}
 		]
 	},
@@ -199,7 +199,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-06-11T17:49:05.418793+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"editEmail" : {
@@ -215,10 +215,10 @@
 	},
 	"pageType" : {
 		"__type" : "namedPage",
-		"title" : "Building a server"
+		"title" : "Stepping through macros"
 	},
 	"uid" : {
 		"__type" : "uuid",
-		"uuid" : "e4a14bbb-8f9d-0d00-bf7b-383c03c131a4"
+		"uuid" : "251d611d-1e35-4cbe-8ac2-6914e8449a18"
 	}
 }

@@ -325,7 +325,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-18T21:12:18.932746+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -335,7 +335,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "As a first step, we need to generate a parse tree. To do that, we can write our parser wtihout specifying anything but the rules themselves, without putting the resulting expressions into any classes. I like to start out doing that, to figure out whether I understand the grammar and see whether I can parse expressions."
+				"string" : "As a first step, we need to generate a parse tree. To do that, we can write our parser without specifying anything but the rules themselves, without putting the resulting expressions into any classes. I like to start out doing that, to figure out whether I understand the grammar and see whether I can parse expressions."
 			},
 			{
 				"__type" : "textSnippet",
@@ -473,7 +473,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-18T21:19:57.342894+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -483,7 +483,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "At this point we will need to provide names for the tokens and productions. Thisis best done from either the `Grammar` or `Annotations` tabs of the parser. In the video I linked to in [[Building a parser from an ANTLR grammar]] John Brant demonstrates what to do [in this section](https://youtu.be/ClxwPg_L54g?t=981)."
+				"string" : "At this point we will need to provide names for the tokens and productions. This is best done from either the `Grammar` or `Annotations` tabs of the parser. In the video I linked to in [[Building a parser from an ANTLR grammar]] John Brant demonstrates what to do [in this section](https://youtu.be/ClxwPg_L54g?t=981)."
 			},
 			{
 				"__type" : "textSnippet",
@@ -547,7 +547,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-18T21:21:17.790476+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -557,7 +557,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "As a tip: while not strictly necessary, it will be important later on whether you name tokens inside your rules or not. Unnamed tokens will not picked up by the styler and remain woefully unstyled, making you scratch your head why your highlighter doesn’t do what it should—I speak from experience!"
+				"string" : "As a tip: while not strictly necessary, it will be important later on whether you name tokens inside your rules or not. Unnamed tokens will not be picked up by the styler and remain woefully unstyled, making you scratch your head why your highlighter doesn’t do what it should—I speak from experience!"
 			},
 			{
 				"__type" : "textSnippet",
@@ -584,7 +584,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-18T21:22:10.192457+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -594,7 +594,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Once you click on `Accept` for your grammar, the appropriate clases, including all the members and their accessors, will be created for you. Congratulations, you have an AST!"
+				"string" : "Once you click on `Accept` for your grammar, the appropriate classes, including all the members and their accessors, will be created for you. Congratulations, you have an AST!"
 			},
 			{
 				"__type" : "textSnippet",
@@ -728,7 +728,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T18:04:50.114519+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"pageType" : {

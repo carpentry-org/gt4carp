@@ -34,12 +34,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "x1U+AtciSpmhw/TekZgtWw=="
+					"uidString" : "WyCdt5QNTEiE/2TV3uFf1A=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Let’s start with the server, since it is the part that actually knows our language. That’s why I like to write it in the language itself, or at least right next to its compiler. For Carp, it lives in [`carp/src/server.carp`](https://github.com/carpentry-org/gt4carp/blob/master/carp/src/server.carp), a Carp program that uses the compiler as a library."
+				"string" : "You made it through the second part, too! Before you go, a bit of honesty: gt4carp is usable, but it is far from finished. The biggest gap is distribution. The server is a binary built with Metacarp, and there is no nice way to ship it with the GT package yet."
 			},
 			{
 				"__type" : "textSnippet",
@@ -71,12 +71,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "+hq8AAGyQGCRVqz/+aNVuA=="
+					"uidString" : "u6TlQH/NQO+Z8f7XF6sbug=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "The protocol is as small as I could make it. Every request and every response is a decimal length, a newline, and that many bytes of JSON. A request names a command and a session, like `{\"id\": 1, \"cmd\": \"eval\", \"session\": \"my-page\", \"source\": \"(+ 1 2)\"}`, and the answer to an `eval` tells us the exit code, what the program printed, and the printed value of the last expression: `{\"id\": 1, \"ok\": {\"exit\": 0, \"value\": \"3\", \"stdout\": \"\", \"stderr\": \"\", \"hasValue\": true, \"hostPort\": 18224}}`."
+				"string" : "Cells don’t have identities either. The server sees source that defines `foo`, then source that defines `bar`, and can’t tell a new snippet from a renamed one, so old definitions can linger as ghosts. Reopening a module from a second snippet replaces what the first one defined. `DECISIONS.md` lays out the options, but I haven’t picked one yet."
 			},
 			{
 				"__type" : "textSnippet",
@@ -108,12 +108,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "ypVHQK5DSTu5BXYM1Z7Jbw=="
+					"uidString" : "DG5bQqYYRkqoyyYpJnYCLw=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "`eval` is the only command we strictly need. The others (`annotate`, `complete`, `doc`, `expand`, and a few more) are what the second part of this booklet is about, and you can add them one at a time, whenever you feel like it."
+				"string" : "And warm state can degrade quietly. The server falls back to slower paths to stay correct, but GT doesn’t tell you when it does, so things just get slower, and you are left wondering why."
 			},
 			{
 				"__type" : "textSnippet",
@@ -145,49 +145,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "LrXSN601SfSqU8lMYc4A9w=="
+					"uidString" : "fyRe7d5zRQG/iMtUZ1t3Uw=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Sessions are what make this more than a glorified compile button. A session remembers the definitions of earlier cells, so we can define `twice` in one cell and call it in the next. In gt4carp, a session is a Lepiter page or a project, and how the server keeps them cheap is a story for [[A compiler that stays warm]]."
-			},
-			{
-				"__type" : "textSnippet",
-				"children" : {
-					"__type" : "snippets",
-					"items" : [ ]
-				},
-				"createEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"createTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"editEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"editTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"uid" : {
-					"__type" : "uid",
-					"uidString" : "vJZb2ocNSHKp3kJQzlyzmQ=="
-				},
-				"paragraphStyle" : {
-					"__type" : "textStyle"
-				},
-				"string" : "You might wonder why we don’t just speak LanguageLink’s protocol. Mostly because we don’t need most of it, and the things we do need (types, diagnostics with source spans, expansions) aren’t in it. Fourteen commands that each answer one question turned out to be much easier to write and test. The server even has a regression suite in `carp/test` that speaks the protocol from Python, which is a nice way to poke at it without GT."
+				"string" : "If any of this sounds like fun to you, [the repository](https://github.com/carpentry-org/gt4carp) is on GitHub, and I’d love to hear from you. See you around!"
 			}
 		]
 	},
@@ -199,7 +162,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-06-11T17:49:05.418793+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"editEmail" : {
@@ -215,10 +178,10 @@
 	},
 	"pageType" : {
 		"__type" : "namedPage",
-		"title" : "Building a server"
+		"title" : "What’s missing"
 	},
 	"uid" : {
 		"__type" : "uuid",
-		"uuid" : "e4a14bbb-8f9d-0d00-bf7b-383c03c131a4"
+		"uuid" : "ca666807-3323-4b68-9fe4-2f930500c59e"
 	}
 }

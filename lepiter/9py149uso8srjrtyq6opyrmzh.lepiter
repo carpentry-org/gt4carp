@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:38:56.257815+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "If you read this booklet linearly from start to finish and followed along with your own implementation, you should now be able to execute code in custom Lepiter snippets! Exciting indeed!"
+				"string" : "If you read this part linearly from start to finish and followed along with your own implementation, you should now be able to execute code in custom Lepiter snippets! Exciting indeed!"
 			},
 			{
 				"__type" : "textSnippet",
@@ -103,7 +103,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:40:09.625312+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -113,7 +113,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Now, of course, the fun doesn’t stop here. For full interactivity, we might need to (de)serialize values in an almost seamless manner, like JSLink does. To do that, we will have to make GT understand our language semantically rather than just syntactically."
+				"string" : "Now, of course, the fun doesn’t stop here. So far, GT understands our language syntactically: it can parse it, color it, and send it off to be run. To really work with it, GT will have to understand it semantically, and the easiest way to get there is to ask the compiler."
 			},
 			{
 				"__type" : "textSnippet",
@@ -140,7 +140,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:41:08.513478+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -150,7 +150,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "We could also start using GT’s powers to visualize things about our codebase or to generate code, or we might want to create a custom IDE. Some of these fun adventures you will have to embark on on your own, but if you want some inspiration, the [[Bonus Chapters]] might hold some interest to you."
+				"string" : "That is where the second part of this booklet starts, with [[What came after]]. If you would rather play with your AST first, the [[Bonus Chapters]] might hold some interest to you."
 			},
 			{
 				"__type" : "textSnippet",
@@ -210,7 +210,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-06-11T18:38:07.35881+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"pageType" : {

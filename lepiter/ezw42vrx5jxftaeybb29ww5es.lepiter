@@ -34,12 +34,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "x1U+AtciSpmhw/TekZgtWw=="
+					"uidString" : "bNpls/1rQASwU6G7fp7/EA=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Let’s start with the server, since it is the part that actually knows our language. That’s why I like to write it in the language itself, or at least right next to its compiler. For Carp, it lives in [`carp/src/server.carp`](https://github.com/carpentry-org/gt4carp/blob/master/carp/src/server.carp), a Carp program that uses the compiler as a library."
+				"string" : "Welcome to the second part! The first part stopped more or less where the first version of gt4carp stopped: a parser, a highlighter, a snippet, and a way to run code. In this part, we get to have some fun with what came after."
 			},
 			{
 				"__type" : "textSnippet",
@@ -71,12 +71,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "+hq8AAGyQGCRVqz/+aNVuA=="
+					"uidString" : "/O40Kh7fQ9m3kRJjzGMK9A=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "The protocol is as small as I could make it. Every request and every response is a decimal length, a newline, and that many bytes of JSON. A request names a command and a session, like `{\"id\": 1, \"cmd\": \"eval\", \"session\": \"my-page\", \"source\": \"(+ 1 2)\"}`, and the answer to an `eval` tells us the exit code, what the program printed, and the printed value of the last expression: `{\"id\": 1, \"ok\": {\"exit\": 0, \"value\": \"3\", \"stdout\": \"\", \"stderr\": \"\", \"hasValue\": true, \"hostPort\": 18224}}`."
+				"string" : "Carp now has [Metacarp](https://github.com/cyberwitchery/metacarp), a compiler written in Carp whose phases are libraries and whose sessions can stay alive between inputs. That means our server can do a lot more than compile and run a cell. It can answer questions about our program: what type this is, what went wrong and where, what a macro expands to, what a project defines."
 			},
 			{
 				"__type" : "textSnippet",
@@ -108,12 +108,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "ypVHQK5DSTu5BXYM1Z7Jbw=="
+					"uidString" : "ffFKLOLUSzWZgglAabX1Rg=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "`eval` is the only command we strictly need. The others (`annotate`, `complete`, `doc`, `expand`, and a few more) are what the second part of this booklet is about, and you can add them one at a time, whenever you feel like it."
+				"string" : "In each of the following chapters, we take one of those answers, look at what the IDE does with it, and peek at the code that makes it happen. If you’d rather have the story than the tour, I wrote about it in [Carp in Glamorous Toolkit](https://blog.veitheller.de/Carp_in_Glamorous_Toolkit.html)."
 			},
 			{
 				"__type" : "textSnippet",
@@ -145,49 +145,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "LrXSN601SfSqU8lMYc4A9w=="
+					"uidString" : "T1SJVYeSTXGr5W4h7t0bEA=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Sessions are what make this more than a glorified compile button. A session remembers the definitions of earlier cells, so we can define `twice` in one cell and call it in the next. In gt4carp, a session is a Lepiter page or a project, and how the server keeps them cheap is a story for [[A compiler that stays warm]]."
-			},
-			{
-				"__type" : "textSnippet",
-				"children" : {
-					"__type" : "snippets",
-					"items" : [ ]
-				},
-				"createEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"createTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"editEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"editTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"uid" : {
-					"__type" : "uid",
-					"uidString" : "vJZb2ocNSHKp3kJQzlyzmQ=="
-				},
-				"paragraphStyle" : {
-					"__type" : "textStyle"
-				},
-				"string" : "You might wonder why we don’t just speak LanguageLink’s protocol. Mostly because we don’t need most of it, and the things we do need (types, diagnostics with source spans, expansions) aren’t in it. Fourteen commands that each answer one question turned out to be much easier to write and test. The server even has a regression suite in `carp/test` that speaks the protocol from Python, which is a nice way to poke at it without GT."
+				"string" : "A quick warning before we start: none of this is packaged yet. You have to build the server with Metacarp on your machine, as the [README](https://github.com/carpentry-org/gt4carp) describes, and GT looks for it where my checkout usually sits. Most snippets in these chapters need that server, but GT starts it on its own once it can find it."
 			}
 		]
 	},
@@ -199,7 +162,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-06-11T17:49:05.418793+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"editEmail" : {
@@ -215,10 +178,10 @@
 	},
 	"pageType" : {
 		"__type" : "namedPage",
-		"title" : "Building a server"
+		"title" : "What came after"
 	},
 	"uid" : {
 		"__type" : "uuid",
-		"uuid" : "e4a14bbb-8f9d-0d00-bf7b-383c03c131a4"
+		"uuid" : "64a7b88f-d525-4ad3-8011-e96cc33e51fd"
 	}
 }

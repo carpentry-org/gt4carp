@@ -34,12 +34,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "x1U+AtciSpmhw/TekZgtWw=="
+					"uidString" : "MwKSZKxxRb6TKIvnHHbDrg=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Let’s start with the server, since it is the part that actually knows our language. That’s why I like to write it in the language itself, or at least right next to its compiler. For Carp, it lives in [`carp/src/server.carp`](https://github.com/carpentry-org/gt4carp/blob/master/carp/src/server.carp), a Carp program that uses the compiler as a library."
+				"string" : "Two languages, two debuggers! Both speak the Debug Adapter Protocol, which GT already speaks for Python, JavaScript, and gdb. That means we didn’t have to build a debugger UI at all, which is always nice."
 			},
 			{
 				"__type" : "textSnippet",
@@ -71,12 +71,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "+hq8AAGyQGCRVqz/+aNVuA=="
+					"uidString" : "ps6trF8sTkWzj1K7OkRLsA=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "The protocol is as small as I could make it. Every request and every response is a decimal length, a newline, and that many bytes of JSON. A request names a command and a session, like `{\"id\": 1, \"cmd\": \"eval\", \"session\": \"my-page\", \"source\": \"(+ 1 2)\"}`, and the answer to an `eval` tells us the exit code, what the program printed, and the printed value of the last expression: `{\"id\": 1, \"ok\": {\"exit\": 0, \"value\": \"3\", \"stdout\": \"\", \"stderr\": \"\", \"hasValue\": true, \"hostPort\": 18224}}`."
+				"string" : "The first, {{gtClass:CarpDAPDebugger}}, debugs the language that runs while you compile. The Debug action on a snippet talks to the server in `--dap` mode, which records one expansion of the cell and lets us walk through it. Since we are walking a recording rather than a suspended interpreter, stepping backwards is just as cheap as stepping forwards. For now, it runs in a session of its own, so it can’t see macros defined elsewhere on the page yet."
 			},
 			{
 				"__type" : "textSnippet",
@@ -108,12 +108,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "ypVHQK5DSTu5BXYM1Z7Jbw=="
+					"uidString" : "zgSLlaRXTu6DcW8sfhLmIw=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "`eval` is the only command we strictly need. The others (`annotate`, `complete`, `doc`, `expand`, and a few more) are what the second part of this booklet is about, and you can add them one at a time, whenever you feel like it."
+				"string" : "The second, {{gtClass:CarpNativeDebugger}}, debugs the program a cell compiles to. Debug native builds the cell with debug information and starts `lldb-dap`, stopped where the cell’s own code begins. The compiler emits line directives that point back into the Carp source, and the debugger hides generated frames and variables and decodes mangled names. So when we step, we step through Carp, not through a pile of generated C."
 			},
 			{
 				"__type" : "textSnippet",
@@ -145,49 +145,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "LrXSN601SfSqU8lMYc4A9w=="
+					"uidString" : "e2cwxjGvSoWRT0OZJ8LIIg=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Sessions are what make this more than a glorified compile button. A session remembers the definitions of earlier cells, so we can define `twice` in one cell and call it in the next. In gt4carp, a session is a Lepiter page or a project, and how the server keeps them cheap is a story for [[A compiler that stays warm]]."
-			},
-			{
-				"__type" : "textSnippet",
-				"children" : {
-					"__type" : "snippets",
-					"items" : [ ]
-				},
-				"createEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"createTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"editEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"editTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"uid" : {
-					"__type" : "uid",
-					"uidString" : "vJZb2ocNSHKp3kJQzlyzmQ=="
-				},
-				"paragraphStyle" : {
-					"__type" : "textStyle"
-				},
-				"string" : "You might wonder why we don’t just speak LanguageLink’s protocol. Mostly because we don’t need most of it, and the things we do need (types, diagnostics with source spans, expansions) aren’t in it. Fourteen commands that each answer one question turned out to be much easier to write and test. The server even has a regression suite in `carp/test` that speaks the protocol from Python, which is a nice way to poke at it without GT."
+				"string" : "This one rests on a whole tower of agreements between the compiler and GT: how names are mangled, what the line map looks like, how byte offsets become character positions. When one of them drifts, the debugger stops somewhere in C and stares at us blankly. `INVARIANTS.md` lists them all, and most of them don’t have an automated test yet. Native debugging is hard, y’all."
 			}
 		]
 	},
@@ -199,7 +162,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-06-11T17:49:05.418793+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"editEmail" : {
@@ -215,10 +178,10 @@
 	},
 	"pageType" : {
 		"__type" : "namedPage",
-		"title" : "Building a server"
+		"title" : "Debugging"
 	},
 	"uid" : {
 		"__type" : "uuid",
-		"uuid" : "e4a14bbb-8f9d-0d00-bf7b-383c03c131a4"
+		"uuid" : "6cf074d5-3534-42b3-9eb5-5dc46503ee41"
 	}
 }

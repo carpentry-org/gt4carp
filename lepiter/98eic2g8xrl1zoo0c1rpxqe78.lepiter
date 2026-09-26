@@ -29,7 +29,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T20:47:09.979091+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -39,7 +39,81 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Getting code to execute is most likely the most tricky part of adding a language to GT. Most of the code in the Carp IDE deals with handling that part of the IDE experience. Additionally, LanguageLink requires a custom server setup, which needed to be written outside of GT."
+				"string" : "Getting code to execute is most likely the most tricky part of adding a language to GT. GT needs something it can hand a string of source code to, and that hands back an object it can inspect. How that something works is up to you."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "WqUFNBcrR9el0CO07z+9gQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "The usual route is LanguageLink, the framework behind GT’s Python and JavaScript support. It gives you a protocol, a server runtime you can reuse, and proxies for remote objects, and for most languages it is a fine place to start. The first version of gt4carp used it, and if you want to go that way, [[The LanguageLink route]] tells you how I did it."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "jsNXmgp4QXydK539yQJ4Ng=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "We are going to take another route, though. What I really wanted was a compiler that stays alive between snippets and tells GT about types, errors, and expansions, instead of just printing results. So we are going to write a small server of our own. Don’t worry, it’s less scary than it sounds!"
 			},
 			{
 				"__type" : "textSnippet",
@@ -66,7 +140,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T17:49:02.268331+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +150,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Because both parts of this process make a cohesive whole, I split this chapter into two sub-chapters, [[Building a LanguageLink client]] and [[Building a LanguageLink server]]."
+				"string" : "Both halves make a cohesive whole, so I split this chapter into sub-chapters: [[Building a server]], [[Building a client]], and [[What now?]], where we try it out."
 			}
 		]
 	},
@@ -99,7 +173,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T17:10:47.300048+02:00"
+			"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 		}
 	},
 	"pageType" : {

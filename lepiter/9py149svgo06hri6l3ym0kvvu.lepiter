@@ -29,7 +29,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:19:44.830424+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -39,7 +39,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "After the doozy that is setting up LanguageLink, you might think that making a custom snippet type is going to be even more effort. I’ve got good news for you."
+				"string" : "After the doozy that is setting up execution, you might think that making a custom snippet type is going to be even more effort. I’ve got good news for you."
 			},
 			{
 				"__type" : "textSnippet",
@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T20:46:02.5892+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Creating a snippet type is actually quite simple. Almost all of the code for Carp is in {{gtPackage:Carp|tag=Lepiter}}. The most important class is likely {{gtClass:LeCarpSnippet}}, because like {{gtClass:CarpApplication}} for LanguageLink, this class is the central player around which the rest of the team organizes."
+				"string" : "Creating a snippet type is actually quite simple. Almost all of the code for Carp is in {{gtPackage:Carp|tag=Lepiter}}. The most important class is likely {{gtClass:LeCarpSnippet}}, a subclass of {{gtClass:LeCodeSnippet}}. It gives itself a name for storage (a page saves it as `carpSnippet`), puts itself in the menu of snippet types, and makes a coder."
 			},
 			{
 				"__type" : "textSnippet",
@@ -103,7 +103,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-11T18:29:42.230718+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -113,7 +113,44 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Most of the code you will write will just be specialization over readily-available Lepiter classes. The only things that will be truly custom will most likely be your version of {{gtClass:LeExternalServerStrategy}} (in the case of Carp that is {{gtClass:LeCarpApplicationStrategy}}), which will bridge the gap between your LanguageLink application and the snippet itself, and your {{gtClass:GtSourceCoder}} ({{gtClass:GtCarpCoderModel}})."
+				"string" : "Most of the code you will write will just be specialization over readily-available Lepiter classes: a view model ({{gtClass:LeCarpSnippetViewModel}}) and an element ({{gtClass:LeCarpSnippetElement}}). The one thing that is truly custom is your {{gtClass:GtSourceCoder}}, which for Carp is {{gtClass:GtCarpCoderModel}}. It parses, styles, and evaluates, and it is where the rest of the IDE attaches."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "zsaKAbpaTp+BCFByRlEOLg=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "One thing we have to decide early is which session a snippet evaluates in. In gt4carp, all snippets on a page share one, named after the page ({{gtMethod:LeCarpSnippet>>#newCoder}}). That way a page behaves like a small program that we build up one snippet at a time, which feels just right for a notebook."
 			},
 			{
 				"__type" : "textSnippet",
@@ -173,7 +210,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-06-11T18:09:14.768068+02:00"
+			"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 		}
 	},
 	"pageType" : {

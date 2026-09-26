@@ -188,6 +188,43 @@
 					"__type" : "textStyle"
 				},
 				"string" : "In Carp, I also went down the extra mile of coloring parentheses according to their nesting level. The code for this is inside the rule for lists, maps and arrays, and it uses {{gtClass:CarpStylerUtilities}} to color the parentheses and register an event for when the cursor enters or leaves the region to highlight it. Should you want more complex highlighting and change it based on cursor position and interactions, this might give you a taste of how to do it."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "rVeK3DSIR7WaXZ74Rh2Lsw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "This styler only knows what the text looks like, though. The Carp coder has a few more up its sleeve, which style code by what the compiler says about it: inferred types, errors, lifetimes. They need a compiler to talk to, so we will meet them again in [[Types, diagnostics, and documentation]]."
 			}
 		]
 	},
@@ -210,7 +247,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T17:09:46.810502+02:00"
+			"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 		}
 	},
 	"pageType" : {

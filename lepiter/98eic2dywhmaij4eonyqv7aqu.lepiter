@@ -177,7 +177,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T16:50:16.779304+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -187,7 +187,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "I have never built an IDE. True, at the point of writing this document, I have been involved in building and maintaining the Glamorous Toolkit for over half a year. But before that, I mostly worked on language internals."
+				"string" : "I had never built an IDE. When I wrote the first version of this booklet in 2022, I had been involved in building and maintaining the Glamorous Toolkit for over half a year. Before that, I mostly worked on language internals."
 			},
 			{
 				"__type" : "textSnippet",
@@ -214,7 +214,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T16:51:16.178212+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -224,7 +224,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Maybe that blend of knowing the internals of Carp and the Glamorous Toolkit helped, but I found that with the help of the Toolkit, I was able to build something resembling an IDE in a few afternoons. It is not nearly done yet, but it can already do some of the things I was hoping it would do."
+				"string" : "Maybe that blend of knowing the internals of Carp and the Glamorous Toolkit helped, but I found that with the help of the Toolkit, I was able to build something resembling an IDE in a few afternoons. After that, it sat mostly untouched for a few years. In 2026 I came back to it with a compiler that can stay alive between inputs, and it grew into something much closer to what I had in mind."
 			},
 			{
 				"__type" : "textSnippet",
@@ -288,7 +288,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T16:53:37.769503+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -298,7 +298,44 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "In this book, I will go through the process of adding language support step by step. We will build a parser and play around with it for a bit. We will add a highlighter and marvel at how prettily it renders our code. We will add snippets, so we can look at Carp code from directly within Lepiter, and later Coder. We will add a LanguageLink interface, both the server and the client, so that we can execute Carp code. Finally, as a bonus, we will add a custom Coder element, such that we have something resembling an IDE in the end."
+				"string" : "This booklet has two parts. In the first, I will go through the process of adding language support step by step. We will build a parser and play around with it for a bit. We will add a highlighter and marvel at how prettily it renders our code. We will build a way to execute code, and a snippet type, so we can write and run Carp from directly within Lepiter. That part should be useful for whatever language you want to bring into GT."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "tUpqzNHHRe2oIlcD/SjFvw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "The second part is about what gt4carp does today, and how. Once the compiler can answer questions about a program instead of just running it, the IDE gets to show a lot more: types, diagnostics, macro expansions, live values, a native debugger, and a project browser. That part is more specific to Carp, but I think most of the ideas carry over to any language with a compiler you can talk to."
 			},
 			{
 				"__type" : "carpSnippet",
@@ -325,14 +362,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-08-21T13:29:36.280308+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
 					"uidString" : "sEr+VSCjDQCp+CTdALqe5Q=="
 				},
-				"code" : "; this is what we will be able to do\r(defn hello-world []\r  (IO.println \\\"Hello world!\\\"))"
+				"code" : "; this is what we will be able to do\r(defn twice [x] (* x 2))\r(twice 21)"
 			},
 			{
 				"__type" : "textSnippet",
@@ -433,7 +470,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T16:56:20.163201+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -443,7 +480,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Finally, you might every once in a while be tempted to not look at my prose, and just go off into the cavernous depths of code without guidance. Noone is hindering you. All the code is found within the `Carp` package. I suggest starting with {{gtClass:CarpParser}}, which is where I started."
+				"string" : "Finally, you might every once in a while be tempted to not look at my prose, and just go off into the cavernous depths of code without guidance. No one is hindering you. The GT side lives in the `Carp` packages, and the server and the notebook runtime live in `carp/src` of [the gt4carp repository](https://github.com/carpentry-org/gt4carp). I suggest starting with {{gtClass:CarpParser}}, which is where I started."
 			}
 		]
 	},
@@ -466,7 +503,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T16:45:12.647664+02:00"
+			"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 		}
 	},
 	"pageType" : {

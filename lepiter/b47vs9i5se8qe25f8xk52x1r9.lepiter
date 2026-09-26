@@ -18,7 +18,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:34:23.127464+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"editEmail" : {
@@ -29,17 +29,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:34:50.494585+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "Hs5lyj6ZDQCdzfQlDqn2mw=="
+					"uidString" : "q5MdpnLbTC2fbJCtthwBPQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Generating code is, in this case, the inverse of parsing: we have a tree, and we want to generate code matching our specification."
+				"string" : "Remember the styler from [[Styling your AST]]? It only knows what the text looks like. Now that we have a compiler to ask, we can do better. The Carp coder adds a handful of stylers that know what the compiler thinks, and you can find all of them in {{gtMethod:GtCarpCoderModel>>#initializeAddOns:}}."
 			},
 			{
 				"__type" : "textSnippet",
@@ -55,7 +55,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:34:51.781408+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"editEmail" : {
@@ -66,51 +66,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:36:01.841086+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "001CzD6ZDQCdz6J+Dqn2mw=="
+					"uidString" : "7QO6zZ/9Q0OUG6IWnoc1rw=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "In the case of Carp, I built a specific, new AST that matches the semantics of Carp rather than just the syntax. The example below should make this a little clearer."
-			},
-			{
-				"__type" : "pharoSnippet",
-				"children" : {
-					"__type" : "snippets",
-					"items" : [ ]
-				},
-				"createEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"createTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:36:07.105942+02:00"
-					}
-				},
-				"editEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"editTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-06-13T22:57:31.662829+02:00"
-					}
-				},
-				"uid" : {
-					"__type" : "uid",
-					"uidString" : "yC3J0D6ZDQCd0ZgmDqn2mw=="
-				},
-				"code" : "'Example' asCarpModule\r\taddExpression: (CarpStaticFunction\r\t\t\t named: 'example' asCarpSymbol\r\t\t\t withArguments: { \r\t\t\t\t\t 'x' asCarpSymbol.\r\t\t\t\t\t 'y' asCarpSymbol }\r\t\t\t andBody: {}'+' asCarpSymbol arguments: { \r\t\t\t\t\t\t\t  'x' asCarpSymbol.\r\t\t\t\t\t\t\t  'y' asCarpSymbol }));\r\taddExpression: (CarpDynamicVariable\r\t\t\t named: 'dyn-example' asCarpSymbol\r\t\t\t binding: 1 asCarpInteger);\r\ttoCarp"
+				"string" : "{{gtClass:CarpTypeAdornmentStyler}} shows inferred types next to definitions and expressions. They come from the server’s `annotate` command, which runs the compiler’s front half over the cell against the session. {{gtClass:CarpAnnotations}} then renames the solver’s type variables to the letters Carp signatures usually use, because nobody wants to read `t8838`."
 			},
 			{
 				"__type" : "textSnippet",
@@ -126,7 +92,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:36:24.187977+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"editEmail" : {
@@ -137,17 +103,51 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:37:20.312486+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "bUdd0T6ZDQCd0+EWDqn2mw=="
+					"uidString" : "06m6SepWQEqizNuOv3j9qQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "The AST we use here knows about modules, calls, and bindings. The AST we parse into does not, because it doesn’t have to. But once we wander forth into generating code, a new representation might be more appropriate."
+				"string" : "{{gtClass:CarpDiagnosticHighlightStyler}} underlines whatever the compiler rejected, with the phase and message in a tooltip. Go ahead and hover over this one:"
+			},
+			{
+				"__type" : "carpSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "SQbR9mUYQOWLNVTxHOFUVg=="
+				},
+				"code" : "(defn oops [] (+ 1 \"two\"))"
 			},
 			{
 				"__type" : "textSnippet",
@@ -163,7 +163,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:38:27.85143+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"editEmail" : {
@@ -174,17 +174,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:38:27.85143+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "48Ms2T6ZDQCd14cbDqn2mw=="
+					"uidString" : "RLR6TYRsTgiatGVMq2HTng=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "This is an example of having multiple representation of the same code in an environment. Many compilers have multiple intermediate representations, gradually lowering the abstraction level between phases, until finally generating code."
+				"string" : "{{gtClass:CarpLifetimeHighlightStyler}} shows the lifetime of the binding under the cursor: where it is born, where it is borrowed or copied, and where it moves or dies. It’s the borrow checker, made visible!"
 			},
 			{
 				"__type" : "textSnippet",
@@ -200,7 +200,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:37:23.024062+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"editEmail" : {
@@ -211,17 +211,17 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:39:27.969082+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "vYVC1T6ZDQCd1YgnDqn2mw=="
+					"uidString" : "a+8vVc4JTs+Fc+Waahv16w=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "We do something similar: by increasing the abstraction level, our toolkit becomes more expressive, capturing our use case better."
+				"string" : "{{gtClass:CarpDocumentationStyler}} puts a definition’s type and documentation one hover away, and {{gtClass:CarpLintHighlightStyler}} underlines whatever [angler](https://github.com/carpentry-org/angler), Carp’s linter, has to complain about."
 			},
 			{
 				"__type" : "textSnippet",
@@ -237,7 +237,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:39:55.39115+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"editEmail" : {
@@ -248,17 +248,54 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T19:40:21.249005+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "BCUP3j6ZDQCd2e0LDqn2mw=="
+					"uidString" : "STpiw4HsQeyvmFxSnW8Hvg=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "In the next chapter named [[A coder of one’s own]], we will use this code generator in our newly created coder."
+				"string" : "Completion isn’t a styler, but it works the same way: {{gtClass:CarpCompletionStrategy}} asks the server’s `complete` command for every visible name matching a prefix. That includes core and everything our earlier cells defined."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "YhahbPn9Sd+OxfkpjEVikg=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "All of these cache their answers by the text they styled, and the answers arrive asynchronously, so typing never waits for the compiler. While the cache is stale, they show nothing rather than something old. A missing underline is much less confusing than one in the wrong place, trust me."
 			}
 		]
 	},
@@ -270,7 +307,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T19:34:19.88496+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"editEmail" : {
@@ -281,15 +318,15 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T19:34:19.88496+02:00"
+			"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 		}
 	},
 	"pageType" : {
 		"__type" : "namedPage",
-		"title" : "Generating Code"
+		"title" : "Types, diagnostics, and documentation"
 	},
 	"uid" : {
 		"__type" : "uuid",
-		"uuid" : "4c1d65ca-3e99-0d00-9dcc-eaf60ea9f69b"
+		"uuid" : "257dd7b6-988d-490e-a4aa-e49bac62c8bb"
 	}
 }

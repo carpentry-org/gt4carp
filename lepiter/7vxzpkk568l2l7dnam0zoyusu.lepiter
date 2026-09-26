@@ -29,7 +29,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:24:36.631484+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -39,7 +39,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Before we build an IDE for Carp together, it might make sense to introduce you to Carp. I’ve written about the language extensively on [my blog](https://veitheller.de), but I’d like to take a stab at quickly introducing it here, for the purposes of this tutorial."
+				"string" : "Before we build an IDE for Carp together, it might make sense to introduce you to Carp. I’ve written about the language extensively on [my blog](https://blog.veitheller.de), but I’d like to take a stab at quickly introducing it here, for the purposes of this tutorial."
 			},
 			{
 				"__type" : "textSnippet",
@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:25:41.467247+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "If the description whets your appetite, be sure to check it out [on Github](https://github.com) and join our community [on Gitter](https://gitter.im/carp-lang/carp)."
+				"string" : "If the description whets your appetite, be sure to check it out [on GitHub](https://github.com/carp-lang/Carp) and join our community [on Discord](https://discord.gg/yyjnBcMqYM)."
 			},
 			{
 				"__type" : "textSnippet",
@@ -103,7 +103,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:39:56.823586+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -113,7 +113,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "##A short introduction"
+				"string" : "## A short introduction"
 			},
 			{
 				"__type" : "textSnippet",
@@ -244,7 +244,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T22:22:51.219115+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"pageType" : {

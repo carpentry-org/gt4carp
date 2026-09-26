@@ -34,12 +34,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "x1U+AtciSpmhw/TekZgtWw=="
+					"uidString" : "BrxKTPnnT96FrTrzxw68eA=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Let’s start with the server, since it is the part that actually knows our language. That’s why I like to write it in the language itself, or at least right next to its compiler. For Carp, it lives in [`carp/src/server.carp`](https://github.com/carpentry-org/gt4carp/blob/master/carp/src/server.carp), a Carp program that uses the compiler as a library."
+				"string" : "LanguageLink is how GT talks to Python, JavaScript, and a few other languages. To use it, you write an application, a subclass of {{gtClass:LanguageLinkApplication}}, and a server that speaks its protocol. If you need something to read along, {{gtClass:JSLinkApplication}} is complete and well-used, and I took a lot of inspiration from it."
 			},
 			{
 				"__type" : "textSnippet",
@@ -71,12 +71,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "+hq8AAGyQGCRVqz/+aNVuA=="
+					"uidString" : "BsNyOHdSSvWnDK+Yg5l2Nw=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "The protocol is as small as I could make it. Every request and every response is a decimal length, a newline, and that many bytes of JSON. A request names a command and a session, like `{\"id\": 1, \"cmd\": \"eval\", \"session\": \"my-page\", \"source\": \"(+ 1 2)\"}`, and the answer to an `eval` tells us the exit code, what the program printed, and the printed value of the last expression: `{\"id\": 1, \"ok\": {\"exit\": 0, \"value\": \"3\", \"stdout\": \"\", \"stderr\": \"\", \"hasValue\": true, \"hostPort\": 18224}}`."
+				"string" : "The first version of gt4carp went this way. Its application was very spartan: I tried to use stock LanguageLink classes wherever possible, and only added my own (an execution handler, a post-mortem debugger, and some settings) when that didn’t work. I didn’t write a server either! PythonBridge ships [a runtime](https://github.com/feenkcom/PythonBridge/tree/master/PythonBridgeRuntime) that includes all of the infrastructure, and the only part I had to change was how it handles `EvalCommand`s: mine fed the statements into a Carp REPL and read back whatever it printed."
 			},
 			{
 				"__type" : "textSnippet",
@@ -108,12 +108,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "ypVHQK5DSTu5BXYM1Z7Jbw=="
+					"uidString" : "v7Wfw02FR5mmJIYkxDDtfQ=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "`eval` is the only command we strictly need. The others (`annotate`, `complete`, `doc`, `expand`, and a few more) are what the second part of this booklet is about, and you can add them one at a time, whenever you feel like it."
+				"string" : "That got me running code in a few afternoons, and if your language has a REPL, it might do the same for you. Just browse the existing implementors of each piece of infrastructure and “compare notes”. It will get you surprisingly far."
 			},
 			{
 				"__type" : "textSnippet",
@@ -145,49 +145,12 @@
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "LrXSN601SfSqU8lMYc4A9w=="
+					"uidString" : "pYIITHzOSAuQnKEelmUxKA=="
 				},
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Sessions are what make this more than a glorified compile button. A session remembers the definitions of earlier cells, so we can define `twice` in one cell and call it in the next. In gt4carp, a session is a Lepiter page or a project, and how the server keeps them cheap is a story for [[A compiler that stays warm]]."
-			},
-			{
-				"__type" : "textSnippet",
-				"children" : {
-					"__type" : "snippets",
-					"items" : [ ]
-				},
-				"createEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"createTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"editEmail" : {
-					"__type" : "email",
-					"emailString" : "<unknown>"
-				},
-				"editTime" : {
-					"__type" : "time",
-					"time" : {
-						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
-					}
-				},
-				"uid" : {
-					"__type" : "uid",
-					"uidString" : "vJZb2ocNSHKp3kJQzlyzmQ=="
-				},
-				"paragraphStyle" : {
-					"__type" : "textStyle"
-				},
-				"string" : "You might wonder why we don’t just speak LanguageLink’s protocol. Mostly because we don’t need most of it, and the things we do need (types, diagnostics with source spans, expansions) aren’t in it. Fourteen commands that each answer one question turned out to be much easier to write and test. The server even has a regression suite in `carp/test` that speaks the protocol from Python, which is a nice way to poke at it without GT."
+				"string" : "Of course it had its limits, or it would still be here. The REPL answered with printed text, so every value came back as a string scraped from its output. And a REPL only knows how to run code. It can’t tell you what a form’s type is, where exactly an error happened, or what a macro expands to, and those were exactly the things I wanted the IDE to show. If you’re curious about the old code anyway, [this commit](https://github.com/carpentry-org/gt4carp/commit/9673c67) is where it went away."
 			}
 		]
 	},
@@ -199,7 +162,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-06-11T17:49:05.418793+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"editEmail" : {
@@ -215,10 +178,10 @@
 	},
 	"pageType" : {
 		"__type" : "namedPage",
-		"title" : "Building a server"
+		"title" : "The LanguageLink route"
 	},
 	"uid" : {
 		"__type" : "uuid",
-		"uuid" : "e4a14bbb-8f9d-0d00-bf7b-383c03c131a4"
+		"uuid" : "c208a99b-fe3d-496c-93a2-d3acd00af843"
 	}
 }

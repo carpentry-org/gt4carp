@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T17:52:10.981298+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "The prospect of riting a parser manually most likely elicits two responses from you: “this is going to be fun” or “what a nightmare”. Usually I fall into the first category, but depending on the complexity of the language’s grammar, I might also feel a little bit of the second option."
+				"string" : "The prospect of writing a parser manually most likely elicits two responses from you: “this is going to be fun” or “what a nightmare”. Usually I fall into the first category, but depending on the complexity of the language’s grammar, I might also feel a little bit of the second option."
 			},
 			{
 				"__type" : "textSnippet",
@@ -173,7 +173,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T17:09:16.687265+02:00"
+			"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 		}
 	},
 	"pageType" : {

@@ -29,7 +29,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:18:46.237869+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -39,7 +39,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "Having a fully fledged IDE at your fingertips is a glorious feeling. I’m sure if you’ve played with Glamorous Toolkit, you know what I’m talking about—not just a glorified editor, but an actual IDE!"
+				"string" : "Having a fully fledged IDE at your fingertips is a glorious feeling. I’m sure if you’ve played with Glamorous Toolkit, you know what I’m talking about: not just a glorified editor, but an actual IDE!"
 			},
 			{
 				"__type" : "textSnippet",
@@ -140,14 +140,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-08-21T11:47:48.008938+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
 					"uidString" : "5gg9GkGZDQCJ66tmBAU6hQ=="
 				},
-				"code" : "CarpModuleCoder forModule: ('Example' asCarpModule\rdocumentation: 'Example Module documentation';\raddUse: 'Test.carp';\raddExpression:\r\t\t (CarpDynamicVariable\r\t\t\t  named: 'x' asCarpSymbol\r\t\t\t  binding: 1 asCarpInteger))"
+				"code" : "\"a scratch project; point CarpProject onRoot: at a repository of your own\"\rCarpProjectExamples new project"
 			},
 			{
 				"__type" : "textSnippet",
@@ -174,7 +174,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:21:03.562716+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
@@ -184,7 +184,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "In this chapter, I will detail how I got there, and how you might be able to build similar facilities for your language of choice."
+				"string" : "Inspect it and press the browse button. Tada! The browser is {{gtClass:CarpBrowserElement}}. It shows a project’s modules, their definitions, and the selected definition’s coder. That is the same coder our snippets use, so we get inferred types, diagnostics, and completion, only this time against the whole project."
 			},
 			{
 				"__type" : "textSnippet",
@@ -211,7 +211,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:22:11.968841+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
@@ -221,7 +221,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "A quick disclaimer before we start: I’m using the intermediate representation introduced in [[Generating Code]]. You might need to get familiar with that chapter before making your way through this one."
+				"string" : "So how does it work? A project is a git repository whose entry file loads the rest ({{gtClass:CarpProject}}). The server walks that load graph and answers every definition with the byte span it occupies in its file. Modules are recovered from the qualified names rather than from the files, since a Carp file can hold several modules and a module can be spread over several files."
 			},
 			{
 				"__type" : "textSnippet",
@@ -248,7 +248,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:22:14.249896+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
@@ -258,7 +258,152 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "TODO"
+				"string" : "Editing a definition replaces exactly those bytes, writes the file, and commits the new definition into the warm project session. We still have files under the hood, we just don’t have to look at them. If you want to watch this happen without touching anything you care about, {{gtClass:CarpProjectExamples}} does all of it on a scratch repository."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "WFhYUCNKQpKfA4arlt3NOw=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "Documentation, declared signatures, visibility, and interfaces are separate top-level forms in Carp, but the browser shows them together with the definition they name ({{gtClass:CarpSourceDefinition}}). The same goes for examples, which are just ordinary definitions marked as such:"
+			},
+			{
+				"__type" : "carpSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "Z1agvABtTQWPvgqzmCDuvQ=="
+				},
+				"code" : "(defn an-origin [] (Pair.init 0 0))\r(meta-set! an-origin \"example\" true)"
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "fOC2RkPtS/WJG+rU47zUBg=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "What an example belongs to isn’t written down anywhere. The browser works it out from what the example returns and what it calls, which the compiler knows anyway. I don’t have to maintain a second hierarchy, which is good, because I would forget."
+			},
+			{
+				"__type" : "textSnippet",
+				"children" : {
+					"__type" : "snippets",
+					"items" : [ ]
+				},
+				"createEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"createTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"editEmail" : {
+					"__type" : "email",
+					"emailString" : "<unknown>"
+				},
+				"editTime" : {
+					"__type" : "time",
+					"time" : {
+						"__type" : "dateAndTime",
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
+					}
+				},
+				"uid" : {
+					"__type" : "uid",
+					"uidString" : "9pfFP94jRdGM5xhDbmGOGQ=="
+				},
+				"paragraphStyle" : {
+					"__type" : "textStyle"
+				},
+				"string" : "And finally, along the bottom, the browser has a drawer with a playground on the project’s session and a list of the problems the compiler sees, each of which takes us straight to its source. Something resembling an IDE indeed!"
 			}
 		]
 	},
@@ -281,7 +426,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T17:13:50.717236+02:00"
+			"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 		}
 	},
 	"pageType" : {

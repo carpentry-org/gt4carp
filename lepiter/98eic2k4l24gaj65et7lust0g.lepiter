@@ -66,7 +66,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:00:54.834762+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -76,7 +76,7 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "When I first got the Carp parser working, for instance, I asked myself the question “How are the files in the standard library interconnected?” Using the parser and a simple wrapper class named {{gtClass:CarpFile}} I was able to answer that question within minutes."
+				"string" : "When I first got the Carp parser working, for instance, I asked myself the question “How are the files in the standard library interconnected?” Using nothing but the parser, I was able to answer that question within minutes."
 			},
 			{
 				"__type" : "textSnippet",
@@ -103,7 +103,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:13:44.45603+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
@@ -113,10 +113,10 @@
 				"paragraphStyle" : {
 					"__type" : "textStyle"
 				},
-				"string" : "First, I parsed all the files from the standard library and got all the `load` statements. From that, I built a mapping from files to the files they include."
+				"string" : "First, we parse all the files from the standard library and collect their `load` statements. From that, we build a mapping from files to the files they load."
 			},
 			{
-				"__type" : "textSnippet",
+				"__type" : "pharoSnippet",
 				"children" : {
 					"__type" : "snippets",
 					"items" : [ ]
@@ -129,7 +129,7 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:09:14.547385+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"editEmail" : {
@@ -140,17 +140,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:12:30.516602+02:00"
+						"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
-					"uidString" : "Fbbt1kCZDQCJm4QRBAU6hQ=="
+					"uidString" : "QhJBBYNqRgO1NvYUIRYw+w=="
 				},
-				"paragraphStyle" : {
-					"__type" : "textStyle"
-				},
-				"string" : "{{gtExample:CarpFile class >> #coreLoadStatements |codeExpanded=false| previewExpanded=true|previewShow=#gtItemsFor:}}"
+				"code" : "core := CarpServerClient coreDirectory asFileReference.\rloads := Dictionary new.\r(core filesMatching: '*.carp') do: [ :file |\r\t| ast |\r\tast := CarpParser parse: file contents.\r\tloads\r\t\tat: file basename\r\t\tput: (((ast allNodesOfType: CarpListNode)\r\t\t\tselect: [ :list |\r\t\t\t\tlist expressions size = 2\r\t\t\t\t\tand: [ (list expressions first isKindOf: CarpVariableNode)\r\t\t\t\t\tand: [ list expressions first value source beginsWith: 'load' ] ] ])\r\t\t\tcollect: [ :list | list expressions second value source trimBoth: [ :c | c = $\" ] ]) ].\rloads"
 			},
 			{
 				"__type" : "textSnippet",
@@ -214,14 +211,14 @@
 					"__type" : "time",
 					"time" : {
 						"__type" : "dateAndTime",
-						"dateAndTimeString" : "2022-04-17T22:15:49.272055+02:00"
+						"dateAndTimeString" : "2026-09-26T21:45:39.487355+02:00"
 					}
 				},
 				"uid" : {
 					"__type" : "uid",
 					"uidString" : "t5/kCEGZDQCJsYevBAU6hQ=="
 				},
-				"code" : "\"the mapping from above\"\raDict := CarpFile coreLoadStatements.\r\r\"the actual view\"\rview := GtMondrian new. \rview nodes\r\tstencil: [:each |\r\t\tBlElement new\r\t\t\tsize: 5@5;\r\t\t\tgeometry: BlCircleGeometry new;\r\t\t\tbackground: Color gray ];\r\twith: aDict keys.\rview edges connectToAll: [:each | aDict at: each ]. \rview layout force. \rview"
+				"code" : "\"the mapping from above\"\raDict := loads.\r\r\"the actual view\"\rview := GtMondrian new. \rview nodes\r\tstencil: [:each |\r\t\tBlElement new\r\t\t\tsize: 5@5;\r\t\t\tgeometry: BlCircleGeometry new;\r\t\t\tbackground: Color gray ];\r\twith: aDict keys.\rview edges connectToAll: [:each | aDict at: each ]. \rview layout force. \rview"
 			},
 			{
 				"__type" : "textSnippet",
@@ -281,7 +278,7 @@
 		"__type" : "time",
 		"time" : {
 			"__type" : "dateAndTime",
-			"dateAndTimeString" : "2022-04-17T18:15:31.357765+02:00"
+			"dateAndTimeString" : "2026-09-26T21:49:16.267433+02:00"
 		}
 	},
 	"pageType" : {
