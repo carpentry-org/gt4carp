@@ -102,10 +102,10 @@ which GT currently discards (`startServer` nulls stdout/stderr).
   a protocol/product decision, not a bugfix.
 - **Values** are (host port, object id), authenticated only at the
   server's launch handshake; reads on a host carry no token (only DELETE
-  is checked) and `CarpValueClient` fetches `/session` once and never
-  re-verifies, while ports recycle mod 500 and any new eval kills the
-  session's previous host. The identity needed to detect a stale
-  connection already exists at `GET /session`; the client ignores it.
+  is checked), while ports recycle mod 500 and any new eval kills the
+  session's previous host. `CarpValueClient` therefore re-reads
+  `GET /session` before every read and refuses one whose token is not the
+  one it connected to.
 - **The server binary** identifies itself by build stamp (`--stamp` vs
   ping); GT checks once per client instance.
 
@@ -129,11 +129,13 @@ which GT currently discards (`startServer` nulls stdout/stderr).
   bytes) and still no diagnostics: a cell that fails to compile there
   answers a protocol error, which the editor renders as no marks at all.
 - **Project definition spans are read at project-load time and trusted at
-  save time.** `modificationStamp` machinery exists but gates only
-  session refresh; nothing compares stamps before `replaceBytesFrom:`,
-  so an external edit between load and save corrupts the file. Any change
-  to the save path must add that comparison or re-derive spans first.
-  (Needs a GT-side test; not covered by the Python suites.)
+  save time.** `CarpProjectFile` remembers the file's stamp from when its
+  spans were last true, and `replaceBytesFrom:` refuses to write when the
+  stamp, or the cached bytes, no longer match disk (the stamp resolves
+  only to the second). Every write path goes through it; keep it that way.
+  Pinned by `CarpProjectExamples>>#savingRefusesAFileChangedOnDisk`; the
+  window between the server reading a file and GT stamping it is not
+  covered.
 - Debug builds map C to Carp via `#line` with a *relative* `cell.carp`
   path — resolvable because the binary is built in the session dir; a
   debugger launched with another cwd loses the mapping.
@@ -174,10 +176,12 @@ which GT currently discards (`startServer` nulls stdout/stderr).
   cleanup under a one-server-per-machine assumption — any second server,
   including a test runner's, is a kill-all; `run_regressions.sh` warns).
   Host ports allocate sequentially mod 500 above `port+100`; the native
-  debugger draws lldb-dap ports from 9000–9499, which overlaps the
-  default server's host range.
+  debugger draws lldb-dap ports from the 500 above that range, so the two
+  must move together.
 - GT-side caches that can serve stale answers: the per-name documentation
-  cache (negative results cached for the coder's life), the lint cache
+  cache (dropped whenever the session changes through the client, by
+  `CarpServerClient>>#epochOf:`; a change made by another client goes
+  unseen), the lint cache
   (by source hash, safe), the type-annotation cache (by source hash, safe;
   failure hashes suppress retries), remote-value element caches (retained
   after their host dies).

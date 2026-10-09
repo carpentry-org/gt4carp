@@ -399,9 +399,10 @@ CarpNativeDebugger >> serverExecutable: aFileReference [
 { #category : #accessing }
 CarpNativeDebugger >> port [
 	"One adapter per debugged program, so the port is per debugger rather than
-	a constant."
+	a constant. The server gives value hosts the 500 ports from its own port
+	+ 100 (next-port! in server.carp), so draw from the 500 above those."
 
-	^ port ifNil: [ port := 9000 + (Random new nextInteger: 500) ]
+	^ port ifNil: [ port := CarpServerClient defaultPort + 600 + (Random new nextInteger: 500) ]
 ]
 
 { #category : #accessing }

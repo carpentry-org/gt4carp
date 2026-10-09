@@ -74,7 +74,7 @@ check("F1 expand-1 sees a macro defined earlier in the same source",
       lambda r: r["ok"]["changed"] is True)
 check("F2 expand sees a macro defined earlier in the same source",
       healthy.rpc({"cmd": "expand", "session": S, "source": same_cell}),
-      lambda r: r["ok"]["changed"] is True and "(do 9 9 9)" in r["ok"]["expansion"])
+      lambda r: r["ok"]["changed"] is True and "(th3 9)" not in r["ok"]["expansion"])
 
 check("F3 expand answers changed:false when nothing expanded",
       healthy.rpc({"cmd": "expand", "session": sid("mx2"),

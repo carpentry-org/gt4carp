@@ -15,7 +15,8 @@ Class {
 		'kind',
 		'definitions',
 		'contents',
-		'project'
+		'project',
+		'readStamp'
 	],
 	#category : #'Carp-Project'
 }
@@ -26,6 +27,7 @@ CarpProjectFile class >> fromDictionary: aDictionary [
 	file := self new
 			path: (aDictionary at: 'path' ifAbsent: [ '' ]);
 			kind: (aDictionary at: 'kind' ifAbsent: [ 'project' ]);
+			noteRead;
 			yourself.
 	file
 		definitions: ((aDictionary at: 'definitions' ifAbsent: [ #() ])
@@ -232,6 +234,7 @@ CarpProjectFile >> replaceBytesFrom: aStart to: aStop with: aString [
 	business. Answers the length change, so spans after it can follow."
 
 	| bytes replacement updated |
+	self ensureUnchangedOnDisk.
 	bytes := self contentsBytes.
 	replacement := aString utf8Encoded.
 	updated := (bytes first: aStart) , replacement
@@ -242,8 +245,34 @@ CarpProjectFile >> replaceBytesFrom: aStart to: aStop with: aString [
 		binaryWriteStreamDo: [ :stream |
 			stream truncate.
 			stream nextPutAll: updated ].
-	contents := nil.
+	contents := updated utf8Decoded.
+	self noteRead.
 	^ replacement size - (aStop - aStart)
+]
+
+{ #category : #saving }
+CarpProjectFile >> ensureUnchangedOnDisk [
+	"Spans are byte offsets into the file as it was when they were read. If
+	something else has written it since, they point at the wrong bytes and
+	writing through them corrupts the file, so refuse; reloading the project
+	reads the spans again. The stamp only resolves to the second, so the
+	bytes are compared too whenever they are at hand."
+
+	| changed |
+	changed := self modificationStamp ~= readStamp
+			or: [ contents notNil
+					and: [ ([ self path asFileReference binaryReadStreamDo: [ :stream | stream upToEnd ] ]
+							on: Error
+							do: [ :e | nil ]) ~= self contentsBytes ] ].
+	changed
+		ifTrue: [ Error signal: self path , ' changed on disk since it was read; reload the project before saving' ]
+]
+
+{ #category : #private }
+CarpProjectFile >> noteRead [
+	"Remember what the file looked like when its spans were last true."
+
+	readStamp := self modificationStamp
 ]
 
 { #category : #accessing }

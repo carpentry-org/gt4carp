@@ -156,6 +156,29 @@ CarpProjectExamples >> savingADefinitionRewritesItsFile [
 ]
 
 { #category : #examples }
+CarpProjectExamples >> savingRefusesAFileChangedOnDisk [
+	"Spans are offsets into the file as it was read. When something else
+	writes the file in the meantime, saving through them would land on the
+	wrong bytes, so it refuses and leaves the other writer's file alone —
+	also when the edit keeps the size and lands within the same second."
+
+	<gtExample>
+	<return: #CarpProject>
+	| project definition file outside refused |
+	project := self project.
+	definition := project definitionNamed: 'Shapes.area'.
+	definition source.
+	file := definition file path asFileReference.
+	outside := file contents copyReplaceAll: 'the area of a circle.' with: 'THE AREA OF A CIRCLE.'.
+	file writeStreamDo: [ :stream | stream truncate. stream nextPutAll: outside ].
+	refused := false.
+	[ definition save: '(defn area [c] 0.0)' ] on: Error do: [ :e | refused := true ].
+	self assert: refused.
+	self assert: file contents equals: outside.
+	^ project
+]
+
+{ #category : #examples }
 CarpProjectExamples >> addingAndDeletingRoundTrips [
 	"A definition added to a module and then deleted leaves the file exactly
 	as it was."

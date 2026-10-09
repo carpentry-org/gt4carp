@@ -12,7 +12,8 @@ Class {
 		'typeAnnotationsHash',
 		'typeAnnotationsFailedHash',
 		'typeAnnotationsPending',
-		'documentationCache'
+		'documentationCache',
+		'documentationEpoch'
 	],
 	#category : #'Carp-Coder'
 }
@@ -233,11 +234,16 @@ GtCarpCoderModel >> lintFindingsFor: aString [
 
 { #category : #accessing }
 GtCarpCoderModel >> documentationFor: aName [
-	"The session's doc string for a name, or nil. Cached per name for the
-	life of the coder: docs are fetched when a tooltip is shown, and the
-	same symbol is hovered again and again."
+	"The session's doc string for a name, or nil. Cached per name until the
+	session changes: docs are fetched when a tooltip is shown, and the same
+	symbol is hovered again and again, but a cell evaluated anywhere in the
+	session can add or change one."
 
-	documentationCache ifNil: [ documentationCache := Dictionary new ].
+	| epoch |
+	epoch := CarpServerClient default epochOf: self sessionId.
+	(documentationCache isNil or: [ documentationEpoch ~= epoch ])
+		ifTrue: [ documentationCache := Dictionary new.
+			documentationEpoch := epoch ].
 	^ (documentationCache
 		at: aName
 		ifAbsentPut: [ [ (CarpServerClient default docFor: aName session: self sessionId)

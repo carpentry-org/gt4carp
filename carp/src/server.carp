@@ -55,7 +55,7 @@
 ; session, cells are checked against that base (see Warm below)
 (load "../../../carpentry-org/carp-compiler/carp-session/carp-session.carp")
 (load "git@github.com:carpentry-org/socket@0.2.3")
-(load "git@github.com:carpentry-org/json@0.5.0")
+(load "git@github.com:carpentry-org/json@0.7.1")
 
 (Project.config "title" "carp-server")
 

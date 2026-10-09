@@ -20,7 +20,8 @@ Class {
 		'nextId',
 		'mutex',
 		'checkedFreshness',
-		'serverProcess'
+		'serverProcess',
+		'sessionEpochs'
 	],
 	#classVars : [
 		'Default',
@@ -259,6 +260,20 @@ CarpServerClient >> initialize [
 	nextId := 0.
 	checkedFreshness := false.
 	mutex := Mutex new
+]
+
+{ #category : #accessing }
+CarpServerClient >> epochOf: aSessionString [
+	"How often a session has been changed through this client. Anything that
+	caches the session's answers keys on it, so a cell evaluated in one
+	snippet invalidates what another snippet of the page remembers."
+
+	^ self sessionEpochs at: aSessionString ifAbsent: [ 0 ]
+]
+
+{ #category : #private }
+CarpServerClient >> sessionEpochs [
+	^ sessionEpochs ifNil: [ sessionEpochs := Dictionary new ]
 ]
 
 { #category : #testing }
@@ -529,6 +544,10 @@ CarpServerClient >> resetSession: aSessionString [
 CarpServerClient >> rpc: aDictionary [
 	^ mutex critical: [ | attempts |
 			self ensureServerRunning.
+			(#('eval' 'upsert-file' 'load-project' 'reset') includes: (aDictionary at: 'cmd'))
+				ifTrue: [ | session |
+					session := aDictionary at: 'session'.
+					self sessionEpochs at: session put: (self epochOf: session) + 1 ].
 			attempts := 0.
 			[ [ stream := self openConnection.
 			self sendFrame: (STONJSON toString: aDictionary) utf8Encoded.
