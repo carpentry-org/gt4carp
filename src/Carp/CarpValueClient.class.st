@@ -43,6 +43,18 @@ CarpValueClient >> connectTo: aNumber [
 	serverId := self retrieveServerId
 ]
 
+{ #category : #private }
+CarpValueClient >> get: aPath [
+	"A read from the host this client connected to, and no other. Ports
+	recycle and every eval kills the session's previous host, so the port
+	can be serving a different program by now; its session token says
+	whether it still is."
+
+	self retrieveSession = sessionId
+		ifFalse: [ CarpServerError new signal: 'the value host on port ' , port printString , ' is gone' ].
+	^ self connection get: aPath
+]
+
 { #category : #accessing }
 CarpValueClient >> port [
 	^ port
@@ -95,13 +107,13 @@ CarpValueClient >> remoteViewsSpecificationsOf: anObjectId [
 { #category : #private }
 CarpValueClient >> retrieveObject: anObjectId [
 	^ STONJSON
-		fromString: (self connection get: ('objects/{1}' format: {anObjectId})) contents
+		fromString: (self get: ('objects/{1}' format: {anObjectId})) contents
 ]
 
 { #category : #private }
 CarpValueClient >> retrievePhlowObjectViews: anObjectId [
 	^ STONJSON
-		fromString: (self connection get: ('objects/{1}/views' format: {anObjectId})) contents
+		fromString: (self get: ('objects/{1}/views' format: {anObjectId})) contents
 ]
 
 { #category : #private }
@@ -117,7 +129,7 @@ CarpValueClient >> retrieveSession [
 { #category : #private }
 CarpValueClient >> retrieveViewChildren: anObjectId methodSelector: aMethodSelector path: aNodePath [
 	^ STONJSON
-		fromString: (self connection
+		fromString: (self
 				get: ('objects/{1}/views/{2}/children/{3}'
 						format: {anObjectId.
 								aMethodSelector.
@@ -127,7 +139,7 @@ CarpValueClient >> retrieveViewChildren: anObjectId methodSelector: aMethodSelec
 { #category : #private }
 CarpValueClient >> retrieveViewItems: anObjectId methodSelector: aMethodSelector [
 	^ STONJSON
-		fromString: (self connection
+		fromString: (self
 				get: ('objects/{1}/views/{2}/items'
 						format: {anObjectId.
 								aMethodSelector})) contents
@@ -136,7 +148,7 @@ CarpValueClient >> retrieveViewItems: anObjectId methodSelector: aMethodSelector
 { #category : #private }
 CarpValueClient >> retrieveViewSentItem: anInspectedObjectId methodSelector: aMethodSelector selectedObjectId: aSelectedObjectId [
 	^ STONJSON
-		fromString: (self connection
+		fromString: (self
 				get: ('objects/{1}/views/{2}/send/{3}'
 						format: {anInspectedObjectId.
 								aMethodSelector.
