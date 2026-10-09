@@ -74,8 +74,3 @@ next, and what it unblocks.
    the server's stderr and ignores the field. Decide where the indicator
    lives — the snippet label already shows the server address — before
    wiring anything.
-
-Implementation-only, no decision needed, listed for order: the one-step
-deftype-members parity gap (INVARIANTS.md §2) — fold
-`register-deftype-members!` into one-step seeding next time carp-expand
-is open.
