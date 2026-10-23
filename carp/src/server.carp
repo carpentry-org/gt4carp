@@ -54,8 +54,9 @@
 ; the warm compiler sessions: core is loaded and inferred once per notebook
 ; session, cells are checked against that base (see Warm below)
 (load "../../../carpentry-org/carp-compiler/carp-session/carp-session.carp")
+(load "../../../carpentry-org/carp-compiler/carp-views/source.carp")
 (load "git@github.com:carpentry-org/socket@0.2.3")
-(load "git@github.com:carpentry-org/json@0.7.1")
+(load "git@github.com:carpentry-org/json@0.7.2")
 
 (Project.config "title" "carp-server")
 
@@ -68,6 +69,31 @@
   String value = __DATE__ \" \" __TIME__;
   return String_copy(&value);
 }")
+
+(defmodule NotebookRuntime
+  (doc source "combines the notebook adapter with the exact shared view source
+embedded in this server. Warm checks and executable cells use the same module.")
+  (defn source [path]
+    (match (IO.read-file path)
+      (Result.Error error) (Result.Error error)
+      (Result.Success adapter)
+        (let-do [lines (String.split-by &adapter &[\newline])
+                 body (the (Array String) [])]
+          (for [i 0 (Array.length &lines)]
+            (let [line (Array.unsafe-nth &lines i)]
+              (unless (String.starts-with? line "(load \"../../../carpentry-org/carp-compiler/carp-views/")
+                (Array.push-back! &body @line))))
+          (Result.Success
+            (String.concat &[(CarpViews.source) @"\n" (String.join "\n" &body)])))))
+
+  (doc stage "writes that same module for an executable cell.")
+  (defn stage [source-path target-path]
+    (match (source source-path)
+      (Result.Error error) (IO.errorln &error)
+      (Result.Success text)
+        (match (IO.write-file &text target-path)
+          (Result.Success _) ()
+          (Result.Error error) (IO.errorln &error)))))
 
 (def *compiler* @"")
 (def *core-dir* @"")
@@ -1017,16 +1043,12 @@ and a cell that wants it can still call what main calls.")
   (private push-notebook!)
   (hidden push-notebook!)
   (defn push-notebook! [sources]
-    (match (IO.read-file &*nb-lib*)
+    (match (NotebookRuntime.source &*nb-lib*)
       (Result.Success source)
         (do (Array.push-back! sources
-                              (ModuleSource.init @"notebook.carp"
-                                                 @&*nb-lib*
-                                                 (strip-git-loads source)))
-            true)
+              (ModuleSource.init @"notebook.carp" @&*nb-lib* (strip-git-loads source))) true)
       (Result.Error e)
-        (do (IO.errorln &(fmt "host base: cannot read notebook: %s" &e))
-            false)))
+        (do (IO.errorln &(fmt "host base: cannot read notebook: %s" &e)) false)))
 
   ; copy of SessionCoreLoader's private boot prelude: everything a base
   ; needs before its own files are loaded. Shared with ProjectBase.
@@ -1635,9 +1657,7 @@ is the run's output, whole.")
                                       @src
                                       @"\n"])]
       (unless (String.empty? &*nb-lib*)
-        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
-                                     &*nb-lib*
-                                     &(session-dir sid)))))
+        (NotebookRuntime.stage &*nb-lib* &(fmt "%s/notebook.carp" &(session-dir sid))))
       (ignore (IO.write-file &program &(session-file sid "cell.carp")))
       (let [exit (run-compile sid "-x" "stdout.log")]
         (respond-run id sid src exit))))
@@ -1655,9 +1675,7 @@ beats none.")
                                         (Projects.prelude sid)
                                         (Session.defs-text &(Session.entries sid))
                                         (wrap-capture src)])]
-        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
-                                     &*nb-lib*
-                                     &(session-dir sid))))
+        (NotebookRuntime.stage &*nb-lib* &(fmt "%s/notebook.carp" &(session-dir sid)))
         (ignore (IO.write-file &program &(session-file sid "cell.carp")))
         (if (/= 0 (run-compile sid "-b -o cell-run" "compile.log"))
           (eval-plain id sid src)
@@ -1709,9 +1727,7 @@ shows.")
                                       (Session.defs-text &(Session.entries sid))
                                       (debug-cell &text)])]
       (unless (String.empty? &*nb-lib*)
-        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
-                                     &*nb-lib*
-                                     &(session-dir sid)))))
+        (NotebookRuntime.stage &*nb-lib* &(fmt "%s/notebook.carp" &(session-dir sid))))
       (ignore (IO.write-file &program &(session-file sid "cell.carp")))
       (let [exit (run-compile sid "-g -b -o cell-debug" "build.log")]
         (if (Int.= exit 0)
@@ -2051,10 +2067,10 @@ the user wrote it rather than the macro's re-printed stamp.")
 it as the session's value host, retrying on other ports when one is taken.")
   (defn-do eval-with-host [id sid src]
     (let-do [defs (Session.defs-text &(Session.entries sid))
-             ; notebook.carp's own defviews (the built-in views) get their
+             ; shared built-in defviews get their
              ; verbatim source the same way cell defviews do; cell overrides
              ; come second so redefinitions win
-             nb-src (match (IO.read-file &*nb-lib*)
+             nb-src (match (NotebookRuntime.source &*nb-lib*)
                       (Result.Success s) s
                       (Result.Error _) @"")
              overrides (String.concat &[(view-source-overrides &nb-src)
@@ -2064,9 +2080,7 @@ it as the session's value host, retrying on other ports when one is taken.")
                                       defs
                                       overrides
                                       (wrap-cell src)])]
-      (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
-                                   &*nb-lib*
-                                   &(session-dir sid))))
+      (NotebookRuntime.stage &*nb-lib* &(fmt "%s/notebook.carp" &(session-dir sid)))
       (ignore (IO.write-file &program &(session-file sid "cell.carp")))
       (if (/= (run-compile sid "-b -o cell-host" "compile.log") 0)
         ; the wrap can fail for value types the runtime cannot handle
@@ -2245,9 +2259,7 @@ the point of falling back here at all.")
   (defn-do annotate-cell-cli [id sid src]
     (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
     (unless (String.empty? &*nb-lib*)
-      (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
-                                   &*nb-lib*
-                                   &(session-dir sid)))))
+      (NotebookRuntime.stage &*nb-lib* &(fmt "%s/notebook.carp" &(session-dir sid))))
     (let-do [prelude (if (String.empty? &*nb-lib*)
                        @""
                        @"(load \"notebook.carp\")\n")
@@ -2416,9 +2428,7 @@ nothing, which is the price of answering from the world the runs use.")
     (do
       (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
       (unless (String.empty? &*nb-lib*)
-        (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
-                                     &*nb-lib*
-                                     &(session-dir sid)))))
+        (NotebookRuntime.stage &*nb-lib* &(fmt "%s/notebook.carp" &(session-dir sid))))
       (let-do [prelude (if (String.empty? &*nb-lib*)
                          @""
                          @"(load \"notebook.carp\")\n")
@@ -2678,9 +2688,7 @@ program's own definitions.")
   (defn-do ownership-cell [id sid src]
     (ignore (System.system &(fmt "mkdir -p '%s'" &(session-dir sid))))
     (unless (String.empty? &*nb-lib*)
-      (ignore (System.system &(fmt "cp '%s' '%s/notebook.carp'"
-                                   &*nb-lib*
-                                   &(session-dir sid)))))
+      (NotebookRuntime.stage &*nb-lib* &(fmt "%s/notebook.carp" &(session-dir sid))))
     (let-do [prelude (if (String.empty? &*nb-lib*)
                        @""
                        @"(load \"notebook.carp\")\n")

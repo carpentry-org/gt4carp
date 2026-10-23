@@ -37,6 +37,23 @@ binary, the compiler and the standard library where this repository usually
 sits, which you can override class-side on `CarpServerClient` or through the
 `CARP_SERVER`, `CARP_COMPILER` and `CARP_DIR` environment variables.
 
+The general `defview` model and standard providers live in Metacarp's
+`carp-views` library. Reusable views use `View.*` builders, `ViewSpec`, and
+`ViewRequest`. This repository supplies notebook capture, remote Phlow
+specifications, HTTP serving, and GT clients. Its `NB` module is the notebook
+adapter. Both the server's warm base and
+compiled cells use the shared source embedded in the server binary. Rebuild the
+server after changing that runtime. The JSON dependency is 0.7.2, which supports
+Core's open-addressing Map.
+
+List views request bounded ranges from the host. The item endpoint accepts
+`/objects/{id}/views/{selector}/items/{offset}/{count}` with a zero-based offset;
+`/count` returns the full item count. The original `/items` URL remains a
+256-item default page. GT's data source requests subsequent pages as needed.
+Collection `size` reads the count; explicitly asking for `elements` materializes
+all pages. Built-in item objects borrow their parent storage and keep it alive
+until their remote leases are released.
+
 ## Installing
 
 ```

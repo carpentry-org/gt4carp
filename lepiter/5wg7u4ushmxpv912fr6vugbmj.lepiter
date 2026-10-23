@@ -147,7 +147,7 @@
 					"__type" : "uid",
 					"uidString" : "QVtBh/KQSRS2BcVlht7r7w=="
 				},
-				"code" : "(deftype Point [x Int y Int])\r\r(defview coords [p Point]\r  (=> (NB.text)\r      (NB.title @\"Coords\")\r      (NB.content (fmt \"x: %d, y: %d\" @(Point.x p) @(Point.y p)))))\r\r(Point.init 1 2)"
+				"code" : "(deftype Point [x Int y Int])\r\r(defview coords [p Point]\r  (=> (View.text)\r      (View.title @\"Coords\")\r      (View.content (fmt \"x: %d, y: %d\" @(Point.x p) @(Point.y p)))))\r\r(Point.init 1 2)"
 			},
 			{
 				"__type" : "textSnippet",

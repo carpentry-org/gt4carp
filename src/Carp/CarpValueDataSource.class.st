@@ -11,7 +11,9 @@ Class {
 		'client',
 		'items',
 		'objects',
-		'viewSource'
+		'viewSource',
+		'itemCount',
+		'children'
 	],
 	#category : #'Carp-Execution'
 }
@@ -37,6 +39,10 @@ CarpValueDataSource >> definingMethod [
 
 { #category : #accessing }
 CarpValueDataSource >> flushItemsIterator [
+	items := nil.
+	objects := nil.
+	children := nil.
+	itemCount := nil
 ]
 
 { #category : #accessing }
@@ -71,26 +77,32 @@ CarpValueDataSource >> objectId: anInteger [
 
 { #category : #accessing }
 CarpValueDataSource >> retrieveItems: anItemsCount fromIndex: startIndex [
-	startIndex > 1 ifTrue: [ ^ #() ].
-
-	items ifNil: [ items := client
-				retrieveViewItems: objectId
-				methodSelector: methodSelector.
-			objects := items
-					collect: [ :item | CarpRemoteValue fromDictionary: (item at: 'phlowObject') client: client ] ].
-
-	^ items
+	| count cached page |
+	items ifNil: [ items := Dictionary new. objects := Dictionary new ].
+	itemCount ifNil: [ itemCount := client retrieveViewItemCount: objectId methodSelector: methodSelector ].
+	count := ((anItemsCount min: 1024) min: itemCount - startIndex + 1) max: 0.
+	count = 0 ifTrue: [ ^ #() ].
+	cached := (startIndex to: startIndex + count - 1) allSatisfy: [ :index | items includesKey: index ].
+	cached ifTrue: [ ^ (startIndex to: startIndex + count - 1) collect: [ :index | items at: index ] ].
+	page := client retrieveViewItems: objectId methodSelector: methodSelector fromIndex: startIndex - 1 count: count.
+	page withIndexDo: [ :node :index |
+		| position object |
+		position := startIndex + index - 1.
+		object := node at: 'phlowObject' ifAbsent: [ nil ].
+		items at: position put: node.
+		objects at: position put: (object ifNotNil: [ CarpRemoteValue fromDictionary: object client: client ]) ].
+	^ page
 ]
 
 { #category : #accessing }
 CarpValueDataSource >> retrieveChildrenForNodeAtPath: aNodePath [
-	"Tree expansion: children hang off the node object itself, so the host
-	only needs the path's last id."
-
-	^ client
-		retrieveViewChildren: objectId
-		methodSelector: methodSelector
-		path: aNodePath
+	children ifNil: [ children := Dictionary new ].
+	^ (children at: aNodePath asArray ifAbsentPut: [
+		| nodes leases |
+		nodes := client retrieveViewChildren: objectId methodSelector: methodSelector path: aNodePath.
+		leases := nodes collect: [ :node | (node at: 'phlowObject' ifAbsent: [ nil ])
+			ifNotNil: [ :object | CarpRemoteValue fromDictionary: object client: client ] ].
+		{nodes. leases} ]) first
 ]
 
 { #category : #accessing }
@@ -108,10 +120,13 @@ CarpValueDataSource >> retriveSentItemAtPath: aNodePath [
 
 { #category : #accessing }
 CarpValueDataSource >> retriveSentItemAt: anInteger [
+	| object |
+	object := objects at: anInteger ifAbsent: [ ^ nil ].
+	object ifNil: [ ^ nil ].
 	^ CarpRemoteValue
 		fromDictionary: (client
 				retrieveViewSentItem: objectId
 				methodSelector: methodSelector
-				selectedObjectId: (objects at: anInteger) id)
+				selectedObjectId: object id)
 		client: client
 ]
