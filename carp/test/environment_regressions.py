@@ -43,24 +43,24 @@ dap_port = int(sys.argv[3])
 
 
 def coherence(server, session):
-    "eval / annotate / completion agreement on NB, as (eval, annotate, complete)."
-    e = server.ev(session, '(NB.cap @"hello")')
+    "eval / annotate / completion agreement on View, as (eval, annotate, complete)."
+    e = server.ev(session, '(View.cap @"hello")')
     a = server.rpc({"cmd": "annotate", "session": session,
-                    "source": '(NB.cap @"hello")'})
-    c = server.rpc({"cmd": "complete", "session": session, "prefix": "NB."})
+                    "source": '(View.cap @"hello")'})
+    c = server.rpc({"cmd": "complete", "session": session, "prefix": "View."})
     return (e.get("ok", {}).get("exit") == 0,
             "ok" in a and a["ok"].get("diagnostics") == [],
             len(c.get("ok", {}).get("candidates", [])) > 0)
 
 
 S = sid("envh")
-healthy.ev(S, '(defn uses-nb [] (NB.cap @"xy"))')
-check("E2 healthy server: eval, annotate and completion agree on NB",
+healthy.ev(S, '(defn uses-view [] (View.cap @"xy"))')
+check("E2 healthy server: eval, annotate and completion agree on View",
       coherence(healthy, S),
       lambda t: t == (True, True, True))
 
 S = sid("envd")
-degraded.ev(S, '(defn uses-nb [] (NB.cap @"xy"))')
+degraded.ev(S, '(defn uses-view [] (View.cap @"xy"))')
 check("E1 degraded server: eval, annotate and completion still agree",
       coherence(degraded, S),
       lambda t: t[0] == t[1] == t[2])

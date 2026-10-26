@@ -138,11 +138,7 @@ CarpValueClient >> retrieveViewChildren: anObjectId methodSelector: aMethodSelec
 
 { #category : #private }
 CarpValueClient >> retrieveViewItems: anObjectId methodSelector: aMethodSelector [
-	^ STONJSON
-		fromString: (self
-				get: ('objects/{1}/views/{2}/items'
-						format: {anObjectId.
-								aMethodSelector})) contents
+	^ self retrieveViewItems: anObjectId methodSelector: aMethodSelector fromIndex: 0 count: 256
 ]
 
 { #category : #private }
@@ -158,4 +154,18 @@ CarpValueClient >> retrieveViewSentItem: anInspectedObjectId methodSelector: aMe
 { #category : #accessing }
 CarpValueClient >> sessionId [
 	^ sessionId
+]
+
+{ #category : #private }
+CarpValueClient >> retrieveViewItems: anObjectId methodSelector: aMethodSelector fromIndex: offset count: count [
+	^ STONJSON fromString: (self
+		get: ('objects/{1}/views/{2}/items/{3}/{4}'
+			format: {anObjectId. aMethodSelector. offset. count})) contents
+]
+
+{ #category : #private }
+CarpValueClient >> retrieveViewItemCount: anObjectId methodSelector: aMethodSelector [
+	^ STONJSON fromString: (self
+		get: ('objects/{1}/views/{2}/count'
+			format: {anObjectId. aMethodSelector})) contents
 ]

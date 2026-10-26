@@ -48,17 +48,21 @@ CarpRemoteCollection >> remoteViewSpecifications [
 
 { #category : #accessing }
 CarpRemoteCollection >> elements [
-	"What the host says I hold, fetched once and kept: a collection is read
-	far more often than it changes, and it cannot change here at all."
-
-	^ elements
-		ifNil: [ elements := self itemsViewSelector
-					ifNil: [ #() ]
-					ifNotNil: [ :aSelector |
-						[ (self client retrieveViewItems: self id methodSelector: aSelector)
-							collect: [ :each | self elementFrom: each ] ]
-							on: Error
-							do: [ :e | #() ] ] ]
+	"Explicitly materialize every element; ordinary remote views use bounded pages."
+	^ elements ifNil: [
+		| selector total offset result |
+		selector := self itemsViewSelector.
+		selector ifNil: [ ^ #() ].
+		total := self client retrieveViewItemCount: self id methodSelector: selector.
+		offset := 0.
+		result := OrderedCollection new.
+		[ offset < total ] whileTrue: [
+			| page |
+			page := self client retrieveViewItems: self id methodSelector: selector fromIndex: offset count: (256 min: total - offset).
+			page ifEmpty: [ self error: 'The value host returned an empty page before the collection ended' ].
+			result addAll: (page collect: [ :node | self elementFrom: node ]).
+			offset := offset + page size ].
+		elements := result asArray ]
 ]
 
 { #category : #accessing }
@@ -78,13 +82,14 @@ CarpRemoteCollection >> elementFrom: aNode [
 
 { #category : #accessing }
 CarpRemoteCollection >> size [
-	^ self elements size
+	^ self itemsViewSelector
+		ifNil: [ 0 ]
+		ifNotNil: [ :selector | self client retrieveViewItemCount: self id methodSelector: selector ]
 ]
 
 { #category : #inspecting }
 CarpRemoteCollection >> gtElementsFor: aView [
 	<gtView>
-	self elements ifEmpty: [ ^ aView empty ].
 	^ aView columnedList
 		title: 'Elements';
 		priority: 3;

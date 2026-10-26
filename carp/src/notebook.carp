@@ -1,557 +1,20 @@
-; notebook.carp — value-host runtime for gt4carp notebook cells.
-;
-; The carp server wraps a cell's last expression in
-; (NB.capture-and-serve <expr> 0 ""). After the program has run, the process
-; stays alive as the session's VALUE HOST: the result is registered as a
-; live object with a vtable of declarative phlow views, and served over the
-; remote-phlow HTTP+JSON protocol (CarpValueClient on the GT side) — so GT
-; inspects Carp values with its own remote-phlow machinery:
-;
-;   GET    /session                              -> "<token>"
-;   GET    /id                                   -> "carp-value-host"
-;   GET    /objects/{id}                         -> object dictionary
-;   GET    /objects/{id}/views                   -> [view specification…]
-;   GET    /objects/{id}/views/{selector}/items  -> [item node…]
-;   GET    /objects/{id}/views/{sel}/send/{oid}  -> object dictionary
-;   GET    /objects/{id}/views/{sel}/children/{path} -> [item node…]
-;   DELETE /session/{sid}/objects/{oid}          -> true
-;
-; A view is one regular function over the value that builds an NbView with
-; its metadata through combinators, the same shape as every other remote
-; phlow implementation:
-;
-;   (defview coords [p Point]
-;     (=> (NB.text)
-;         (NB.title @"Coords")
-;         (NB.content (fmt "x: %d" @(Point.x p)))))
-;
-; defview defines the plain function, stamps the view with its own source
-; (the server overrides the stamp with the verbatim text where it has it),
-; and regenerates the type's nb-register implementation from all views
-; declared so far — the function's name is the view's method selector. It
-; works for generic binder types ((Array a) registers under Array), implicit
-; Print (str) and, for record deftypes, Raw views come along, and a view
-; that does not apply to a value answers (NB.empty). The built-in views of
-; the standard library types below are ordinary defviews.
-;
-; Object registration goes through the nb-register interface: specific impls
-; for containers, a sig'd generic str fallback for everything else. Items are
-; computed lazily from the live value and item selection registers the
-; selected element as a new live object.
-;
-; NOTE: the generic fallback plus specific impls resolves under
-; carpentry-org/carp-compiler (most-specific wins) but is currently broken
-; there for MULTI-parameter type constructors (Map, Pair pick the generic
-; impl); the reference compiler rejects the pattern entirely. Cells compile
-; with carp-compiler; the Map/Pair impls below are dormant until that fix.
-
+; Notebook adapter for the shared declarative view runtime.
+(load "../../../carpentry-org/carp-compiler/carp-views/carp-views.carp")
 (load "git@github.com:carpentry-org/socket@0.2.3")
 
-; A column pairs a header with a per-index cell formatter, so a columned
-; view is items x columns; each cell closure returns one String.
-(deftype NbColumn
-  [title String
-   cell (Fn [Int] String)])
-
-; One view: kind selects the GtPhlow*ViewSpecification, the rest is the
-; view's metadata, set through the NB combinators below. `selector` is
-; assigned at registration from the view function's name.
-(deftype NbView
-  [kind String ; "empty" | "text" | "list" | "columned" | "tree" | "bitmap"
-   title String
-   selector String
-   priority Int
-   content String
-   count (Fn [] Int)
-   item-text (Fn [Int] String)
-   item-send (Fn [Int] Int)
-   columns (Array NbColumn)
-   width Int
-   height Int
-   pixels (Array Byte)
-   children (Fn [] (Array Int))
-   source String])
-
-(deftype NbObject
-  [type-name String
-   print (Fn [] String)
-   views (Array NbView)])
-
-(def *nb-objects* (the (Array NbObject) []))
-(def *nb-refs* (the (Array Int) []))
-(def *nb-view-memo* (the (Map String (Array Int)) {}))
 (def *nb-view-sources* (the (Map String String) {}))
+(def *nb-view-memo* (the (Map String (Array Int)) {}))
 (def *nb-token* @"")
 (def *nb-server-object* 0)
-(def *nb-max-items* 256)
-(def *nb-max-print* 200)
 
 (defmodule NB
-  (defn push-object [object]
-    (do
-      (Array.push-back! &*nb-objects* object)
-      (Array.push-back! &*nb-refs* 1)
-      (- (Array.length &*nb-objects*) 1)))
+  (doc view-source "records verbatim notebook source for a view selector.")
+  (defn view-source [selector source]
+    (Map.put! &*nb-view-sources* &selector &source))
 
-  (defn bump-ref! [id]
-    (Array.aset! &*nb-refs* id (+ 1 @(Array.unsafe-nth &*nb-refs* id))))
-
-  (defn drop-ref! [id]
-    (Array.aset! &*nb-refs* id (Int.max 0 (- @(Array.unsafe-nth &*nb-refs* id) 1))))
-
-  (defn object-count [] (Array.length &*nb-objects*))
-
-  (doc cap "limits a print string to *nb-max-print* bytes.")
-  (defn cap [s]
-    (if (> (String.length &s) *nb-max-print*)
-      (String.append &(String.prefix &s *nb-max-print*) "…")
-      s))
-
-  (hidden value-mark)
-  ; a control byte no program prints by accident; the server splits stdout
-  ; at the last line that starts with it
-  (def value-mark (String.from-bytes &[(Byte.from-int 1)]))
-
-  (doc capture-print "prints the cell's result on a line marked by a
-leading control byte, so the server can split it from the program's own
-output instead of guessing at the last line. Wrapped around the last
-expression on the paths that run to completion; the wrapped expression's
-own value becomes ().")
-  (sig capture-print (Fn [a] ()))
-  (defn capture-print [value]
-    (IO.println &(String.append &value-mark &(str &value))))
-
-  (doc view-source "records the source text a view selector was written as;
-served view specifications prefer it over the macro's re-printed stamp.")
-  (defn view-source [selector text]
-    (Map.put! &*nb-view-sources* &selector &text))
-
-  ; --- view builders ----------------------------------------------------
-
-  (private empty-view)
-  (hidden empty-view)
-  (defn empty-view [kind]
-    (NbView.init kind
-                 @"Unknown"
-                 @"gtViewFor"
-                 1
-                 @""
-                 (fn [] 0)
-                 (fn [i] (do (ignore i) @""))
-                 (fn [i] (do (ignore i) -1))
-                 []
-                 0
-                 0
-                 []
-                 (fn [] (the (Array Int) []))
-                 @""))
-
-  (doc empty "the inapplicable view: served as GtPhlowEmptyViewSpecification
-and dropped by the inspector, mirroring phlow's 'aView empty'. A view
-function answers it when its view does not apply to the value.")
-  (defn empty [] (empty-view @"empty"))
-  (doc text "a new text view.")
-  (defn text [] (empty-view @"text"))
-  (doc list "a new list view.")
-  (defn list [] (empty-view @"list"))
-  (doc columned "a new columned-list view.")
-  (defn columned [] (empty-view @"columned"))
-  (doc tree "a new tree view; expansion asks each node object's children.")
-  (defn tree [] (empty-view @"tree"))
-  (doc bitmap "a new bitmap view over RGBA8888 pixels.")
-  (defn bitmap [] (empty-view @"bitmap"))
-
-  ; --- view combinators -------------------------------------------------
-
-  (doc title "sets the view's title.")
-  (defn title [view t] (NbView.set-title view t))
-
-  (doc priority "sets the view's priority (lower shows first).")
-  (defn priority [view p] (NbView.set-priority view p))
-
-  (doc selector "sets the view's method selector; defview does this from
-the view function's name.")
-  (defn selector [view s] (NbView.set-selector view s))
-
-  (doc content "sets a text view's content.")
-  (defn content [view c] (NbView.set-content view c))
-
-  (doc items "sets how many items a listing view has.")
-  (defn items [view count] (NbView.set-count view count))
-
-  (doc item-format "sets the per-index item text of a list or tree view.")
-  (defn item-format [view f] (NbView.set-item-text view f))
-
-  (doc send "sets the per-index selection handler; it registers and answers
-the selected element's object id.")
-  (defn send [view f] (NbView.set-item-send view f))
-
-  (doc column "a column: a header plus a per-index cell formatter. Collect
-columns with with-columns; they are moved, never copied, because copying a
-capturing closure crashes under the current carp-compiler backend.")
-  (defn column [t cell]
-    (NbColumn.init t cell))
-
-  (doc with-columns "sets a columned view's columns.")
-  (defn with-columns [view cols]
-    (NbView.set-columns view cols))
-
-  (doc extent "sets a bitmap view's pixel dimensions.")
-  (defn extent [view w h]
-    (NbView.set-height (NbView.set-width view w) h))
-
-  (doc pixels "sets a bitmap view's RGBA8888 bytes (4 per pixel, row-major).")
-  (defn pixels [view px] (NbView.set-pixels view px))
-
-  (doc children "sets a tree view's expansion closure: it registers and
-answers a node's child object ids. Capture an owned copy of the value, not
-the borrowed view argument.")
-  (defn children [view f] (NbView.set-children view f))
-
-  (doc with-source "stamps the view with the source of its defining
-function; defview does this automatically.")
-  (defn with-source [view src] (NbView.set-source view src))
-
-  ; --- objects ----------------------------------------------------------
-
-  (doc object "an inspectable object: a type name, a print closure and its
-views.")
-  (defn object [type-name print views]
-    (NbObject.init type-name print views))
-
-  (doc leaf "registers a value that only shows its print string.")
-  (defn leaf [type-name print]
-    (let [capped (cap @&print)]
-      (push-object
-        (object type-name
-                (fn [] @&capped)
-                [(=> (text)
-                     (title @"Print")
-                     (selector @"gtPrintFor")
-                     (content print))])))))
-
-; --- the registration interface -----------------------------------------
-
-(definterface nb-register (Fn [a] Int))
-
-; --- defview ------------------------------------------------------------
-;
-; (defview coords [p Point] <builder chain>) defines the regular function
-; `coords`, stamps the built view with the declaration's own source text,
-; and registers it as a view of Point: each defview re-emits Nb<Type>'s
-; nb-register from the compile-time registry, so declaring a view is all
-; there is to it. The function's name becomes the view's method selector
-; and the type's `str` its print string.
-
-(defdynamic *nb-view-registry* '())
-
-(defmodule NBMacro
-  (hidden escape-str)
-  ; String.slice instead of String.head/tail: carp-compiler's compile-time
-  ; String.head answers a Char where the reference answers a string
-  (defndynamic escape-str [s]
-    (if (= (String.length s) 0)
-      ""
-      (let [c (String.slice s 0 1)
-            rest (NBMacro.escape-str (String.suffix s 1))]
-        (cond
-          (= c "\"") (String.concat ["\\\"" rest])
-          (= c "\n") (String.concat ["\\n" rest])
-          (= c "\\") (String.concat ["\\\\" rest])
-          (String.concat [c rest])))))
-
-  (hidden join-forms)
-  (defndynamic join-forms [forms]
-    (if (= (length forms) 0)
-      ""
-      (if (= (length forms) 1)
-        (NBMacro.form-str (car forms))
-        (String.concat [(NBMacro.form-str (car forms)) " "
-                        (NBMacro.join-forms (cdr forms))]))))
-
-  (hidden form-str)
-  (doc form-str "prints a form with the reader sugar (@, &, ~) restored, so
-the self-quoted view source reads like what was written.")
-  (defndynamic form-str [form]
-    (cond
-      (string? form) (String.concat ["\"" (NBMacro.escape-str form) "\""])
-      (array? form) (String.concat ["[" (NBMacro.join-forms form) "]"])
-      (list? form)
-        (cond
-          (and (= (length form) 2) (= (car form) 'copy))
-            (String.concat ["@" (NBMacro.form-str (cadr form))])
-          (and (= (length form) 2) (= (car form) 'ref))
-            (String.concat ["&" (NBMacro.form-str (cadr form))])
-          (and (= (length form) 2) (= (car form) 'deref))
-            (String.concat ["~" (NBMacro.form-str (cadr form))])
-          (String.concat ["(" (NBMacro.join-forms form) ")"]))
-      (str form)))
-
-  (hidden reg-lookup)
-  (defndynamic reg-lookup [reg t]
-    (if (= (length reg) 0)
-      '()
-      (if (= (car (car reg)) t)
-        (cadr (car reg))
-        (NBMacro.reg-lookup (cdr reg) t))))
-
-  (hidden reg-store)
-  (defndynamic reg-store [reg t fns]
-    (if (= (length reg) 0)
-      (list (list t fns))
-      (if (= (car (car reg)) t)
-        (cons (list t fns) (cdr reg))
-        (cons (car reg) (NBMacro.reg-store (cdr reg) t fns)))))
-
-  (hidden cond-over-fields)
-  (doc cond-over-fields "builds (cond (= i 0) <case field0> … default) from a
-type's members; the per-index shape the cell closures need.")
-  (defndynamic cond-over-fields [fields idx make-case default]
-    (if (= (length fields) 0)
-      (list default)
-      (append (list `(= i %idx) (make-case (car fields)))
-              (NBMacro.cond-over-fields (cdr fields) (+ idx 1) make-case default))))
-
-  (hidden record-fields)
-  (doc record-fields "the record fields of a type as a list, or the empty
-list when the type is not a record deftype. Probes the expander's
-__members_<T> binding: evaluating the symbol answers the member array when
-the expander recorded one and the symbol itself when it did not, so the
-probe never aborts the compile the way a bare `members` call would.")
-  (defndynamic record-fields [type-key]
-    (let [probe (eval (Symbol.concat ['__members_ type-key]))]
-      (if (array? probe) (map (fn [x] x) probe) '())))
-
-  (hidden raw-view-form)
-  (doc raw-view-form "the implicit Raw view: one row per field of the type,
-value cells from the generated accessors, selection dives into the field.")
-  (defndynamic raw-view-form [type-name fields]
-    (let [n (length fields)
-          name-cond (cons 'cond
-                          (NBMacro.cond-over-fields fields 0
-                            (fn [m] `(copy %(str (car m))))
-                            '(copy "")))
-          value-cond (cons 'cond
-                           (NBMacro.cond-over-fields fields 0
-                             (fn [m] `(NB.cap (str (%(Symbol.prefix type-name (car m)) (ref nb-value)))))
-                             '(copy "")))
-          send-cond (cons 'cond
-                          (NBMacro.cond-over-fields fields 0
-                            (fn [m] `(nb-register (copy (%(Symbol.prefix type-name (car m)) (ref nb-value)))))
-                            -1))]
-      `(=> (NB.columned)
-           (NB.title (copy "Raw"))
-           (NB.selector (copy "gtRawFor"))
-           (NB.priority 90)
-           (NB.with-columns [(NB.column (copy "Variable") (fn [i] %name-cond))
-                             (NB.column (copy "Value") (fn [i] %value-cond))])
-           (NB.items (fn [] %n))
-           (NB.send (fn [i] %send-cond)))))
-
-  (defndynamic expand-view [name binder body]
-    (let [b (map (fn [x] x) binder)
-          param (car b)
-          type-form (cadr b)
-          ; a generic binder type ((Array a), (Maybe a), …) registers under
-          ; its head symbol
-          type-name (if (list? type-form) (car type-form) type-form)
-          known (NBMacro.reg-lookup *nb-view-registry* type-name)
-          fns (if (List.in? name known) known (append known (list name)))
-          mod-name (Symbol.concat ['Nb type-name])
-          src (String.concat ["(defview " (str name) " " (NBMacro.form-str binder)
-                              "\n  " (NBMacro.form-str body) ")"])
-          ; generic types get no implicit Raw: their fields are internals
-          ; (buckets, private accessors), not the value's shape
-          fields (if (list? type-form) '() (NBMacro.record-fields type-name))
-          base (append
-                 (map (fn [vf]
-                        `(NB.selector (%vf (ref nb-value))
-                                      (copy %(str vf))))
-                      fns)
-                 (list '(=> (NB.text)
-                            (NB.title (copy "Print"))
-                            (NB.selector (copy "gtPrintFor"))
-                            (NB.priority 100)
-                            (NB.content (copy (ref nb-print))))))
-          ; only record deftypes get the implicit Raw view; registered and
-          ; sum types have no member accessors to walk
-          views (collect-into
-                  (if (= (length fields) 0)
-                    base
-                    (append base (list (NBMacro.raw-view-form type-name fields))))
-                  array)]
-      (do
-        (set! *nb-view-registry*
-              (NBMacro.reg-store *nb-view-registry* type-name fns))
-        `(do
-           (defn %name [%param]
-             (NB.with-source %body (copy %src)))
-           (defmodule %mod-name
-             (defn nb-register [nb-value]
-               (let [nb-print (str (ref nb-value))
-                     nb-views %views]
-                 (NB.push-object
-                   (NB.object (copy %(str type-name))
-                              (fn [] (NB.cap (copy (ref nb-print))))
-                              nb-views))))
-             (implements nb-register %(Symbol.prefix mod-name 'nb-register))))))))
-
-(defmacro defview [name binder body]
-  (NBMacro.expand-view name binder body))
-
-(defmodule NbAny
-  (sig nb-register (Fn [a] Int))
-  (defn nb-register [x] (NB.leaf @"" (str &x)))
-  (implements nb-register NbAny.nb-register))
-
-(defmodule NbInt
-  (sig nb-register (Fn [Int] Int))
-  (defn nb-register [x] (NB.leaf @"Int" (str x)))
-  (implements nb-register NbInt.nb-register))
-
-(defmodule NbLong
-  (sig nb-register (Fn [Long] Int))
-  (defn nb-register [x] (NB.leaf @"Long" (str x)))
-  (implements nb-register NbLong.nb-register))
-
-(defmodule NbDouble
-  (sig nb-register (Fn [Double] Int))
-  (defn nb-register [x] (NB.leaf @"Double" (str x)))
-  (implements nb-register NbDouble.nb-register))
-
-(defmodule NbFloat
-  (sig nb-register (Fn [Float] Int))
-  (defn nb-register [x] (NB.leaf @"Float" (str x)))
-  (implements nb-register NbFloat.nb-register))
-
-(defmodule NbBool
-  (sig nb-register (Fn [Bool] Int))
-  (defn nb-register [x] (NB.leaf @"Bool" (str x)))
-  (implements nb-register NbBool.nb-register))
-
-(defmodule NbChar
-  (sig nb-register (Fn [Char] Int))
-  (defn nb-register [x] (NB.leaf @"Char" (str x)))
-  (implements nb-register NbChar.nb-register))
-
-(defmodule NbByte
-  (sig nb-register (Fn [Byte] Int))
-  (defn nb-register [x] (NB.leaf @"Byte" (str x)))
-  (implements nb-register NbByte.nb-register))
-
-; the standard library's structured types get their views the same way user
-; types do: regular defviews. The scalars above keep NB.leaf — their only
-; view is the implicit Print, so there is nothing to declare.
-
-(defn- nb-byte-cell [n]
-  (if (and (> n 31) (< n 127))
-    (String.from-bytes &[(Byte.from-int n)])
-    @"·"))
-
-(defview string-value [s String]
-  (=> (NB.text)
-      (NB.title @"String")
-      (NB.content @s)))
-
-(defview string-bytes [s String]
-  (let [bytes @s]
-    (=> (NB.columned)
-        (NB.title @"Bytes")
-        (NB.priority 2)
-        (NB.with-columns [(NB.column @"#" (fn [i] (str i)))
-                          (NB.column @"Byte" (fn [i] (str (Char.to-int (String.char-at &bytes i)))))
-                          (NB.column @"Char" (fn [i] (nb-byte-cell (Char.to-int (String.char-at &bytes i)))))])
-        (NB.items (fn [] (Int.min (String.length &bytes) *nb-max-items*)))
-        (NB.send (fn [i] (nb-register (Byte.from-int (Char.to-int (String.char-at &bytes i)))))))))
-
-(defview array-items [xs (Array a)]
-  (let [items @xs]
-    (=> (NB.columned)
-        (NB.title @"Items")
-        (NB.with-columns [(NB.column @"#" (fn [i] (str i)))
-                          (NB.column @"Value" (fn [i] (NB.cap (str (Array.unsafe-nth &items i)))))])
-        (NB.items (fn [] (Int.min (Array.length &items) *nb-max-items*)))
-        (NB.send (fn [i] (nb-register @(Array.unsafe-nth &items i)))))))
-
-(defview maybe-just [m (Maybe a)]
-  (match-ref m
-    (Maybe.Just x)
-      (let [kid @x]
-        (=> (NB.list)
-            (NB.title @"Just")
-            (NB.items (fn [] 1))
-            (NB.item-format (fn [i] (do (ignore i) (NB.cap (str &kid)))))
-            (NB.send (fn [i] (do (ignore i) (nb-register @&kid))))))
-    (Maybe.Nothing) (NB.empty)))
-
-(defview result-success [r (Result a b)]
-  (match-ref r
-    (Result.Success x)
-      (let [kid @x]
-        (=> (NB.list)
-            (NB.title @"Success")
-            (NB.items (fn [] 1))
-            (NB.item-format (fn [i] (do (ignore i) (NB.cap (str &kid)))))
-            (NB.send (fn [i] (do (ignore i) (nb-register @&kid))))))
-    (Result.Error _) (NB.empty)))
-
-(defview result-error [r (Result a b)]
-  (match-ref r
-    (Result.Error e)
-      (let [kid @e]
-        (=> (NB.list)
-            (NB.title @"Error")
-            (NB.items (fn [] 1))
-            (NB.item-format (fn [i] (do (ignore i) (NB.cap (str &kid)))))
-            (NB.send (fn [i] (do (ignore i) (nb-register @&kid))))))
-    (Result.Success _) (NB.empty)))
-
-(defview box-value [b (Box a)]
-  (let [kid @(Box.peek b)]
-    (=> (NB.list)
-        (NB.title @"Boxed")
-        (NB.items (fn [] 1))
-        (NB.item-format (fn [i] (do (ignore i) (NB.cap (str &kid)))))
-        (NB.send (fn [i] (do (ignore i) (nb-register @&kid)))))))
-
-(defview set-items [s (Set a)]
-  (let [items (Set.to-array s)]
-    (=> (NB.columned)
-        (NB.title @"Items")
-        (NB.with-columns [(NB.column @"#" (fn [i] (str i)))
-                          (NB.column @"Value" (fn [i] (NB.cap (str (Array.unsafe-nth &items i)))))])
-        (NB.items (fn [] (Int.min (Array.length &items) *nb-max-items*)))
-        (NB.send (fn [i] (nb-register @(Array.unsafe-nth &items i)))))))
-
-(defview bag-items [b (Bag a)]
-  (let [items (Bag.to-array b)]
-    (=> (NB.columned)
-        (NB.title @"Items")
-        (NB.with-columns [(NB.column @"#" (fn [i] (str i)))
-                          (NB.column @"Value" (fn [i] (NB.cap (str (Array.unsafe-nth &items i)))))])
-        (NB.items (fn [] (Int.min (Array.length &items) *nb-max-items*)))
-        (NB.send (fn [i] (nb-register @(Array.unsafe-nth &items i)))))))
-
-; Pair and Map stay dormant until carp-compiler resolves multi-parameter
-; constructors against the generic fallback correctly.
-
-(defview pair-values [p (Pair a b)]
-  (let [a-kid @(Pair.a p)
-        b-kid @(Pair.b p)]
-    (=> (NB.list)
-        (NB.title @"Items")
-        (NB.items (fn [] 2))
-        (NB.item-format (fn [i] (if (= i 0) (NB.cap (str &a-kid)) (NB.cap (str &b-kid)))))
-        (NB.send (fn [i] (if (= i 0) (nb-register @&a-kid) (nb-register @&b-kid)))))))
-
-(defview map-entries [m (Map a b)]
-  (let [pairs (Map.to-array m)]
-    (=> (NB.columned)
-        (NB.title @"Entries")
-        (NB.with-columns [(NB.column @"Key" (fn [i] (NB.cap (str (Pair.a (Array.unsafe-nth &pairs i))))))
-                          (NB.column @"Value" (fn [i] (NB.cap (str (Pair.b (Array.unsafe-nth &pairs i))))))])
-        (NB.items (fn [] (Int.min (Array.length &pairs) *nb-max-items*)))
-        (NB.send (fn [i] (nb-register @(Pair.b (Array.unsafe-nth &pairs i))))))))
+(def value-mark (String.from-bytes &[(Byte.from-int 1)]))
+(defn capture-print [value]
+    (IO.println &(String.append &value-mark &(str &value)))))
 
 ; --- json emission ------------------------------------------------------
 
@@ -604,16 +67,17 @@ value cells from the generated accessors, selection dives into the field.")
       (String.from-bytes &out)))
 
   (defn object-json [id]
-    (let [object (Array.unsafe-nth &*nb-objects* id)]
+    (let [object (Array.unsafe-nth &*view-objects* id)
+          printed (~(ViewObject.print object))]
       (fmt "{\"id\": %d, \"object_type\": \"%s\", \"print_string\": \"%s\", \"reference_count\": %d, \"should_auto_release\": true}"
            id
-           &(json-escape (NbObject.type-name object))
-           &(json-escape &(~(NbObject.print object)))
-           @(Array.unsafe-nth &*nb-refs* id))))
+           &(json-escape (ViewObject.type-name object))
+           &(json-escape &(View.slice &printed 0 4096))
+           @(Array.unsafe-nth &*view-refs* id))))
 
   (defn objects-json []
     (let-do [out @"["]
-      (for [i 0 (object-count)]
+      (for [i 0 (View.object-count)]
         (do
           (when (> i 0) (set! out (String.append &out ", ")))
           (set! out (String.append &out &(object-json i)))))
@@ -622,19 +86,19 @@ value cells from the generated accessors, selection dives into the field.")
   (private stamped-source)
   (hidden stamped-source)
   (defn stamped-source [view]
-    (match (Map.get-maybe &*nb-view-sources* (NbView.selector view))
+    (match (Map.get-maybe &*nb-view-sources* (ViewSpec.selector view))
       (Maybe.Just s) s
-      (Maybe.Nothing) @(NbView.source view)))
+      (Maybe.Nothing) @(ViewSpec.source view)))
 
   (private spec-head)
   (hidden spec-head)
   (defn spec-head [view-name view transport]
     (fmt "\"viewName\": \"%s\", \"title\": \"%s\", \"priority\": %d, \"dataTransport\": %d, \"methodSelector\": \"%s\", \"source\": \"%s\""
          view-name
-         &(json-escape (NbView.title view))
-         @(NbView.priority view)
+         &(json-escape (ViewSpec.title view))
+         @(ViewSpec.priority view)
          transport
-         &(json-escape (NbView.selector view))
+         &(json-escape (ViewSpec.selector view))
          &(json-escape &(stamped-source view))))
 
   (private column-specs-json)
@@ -647,7 +111,7 @@ value cells from the generated accessors, selection dives into the field.")
           (set! out
                 (String.append &out
                                &(fmt "{\"title\": \"%s\", \"cellWidth\": null, \"type\": \"text\", \"spawnsObjects\": false, \"properties\": []}"
-                                     &(json-escape (NbColumn.title (Array.unsafe-nth columns i))))))))
+                                     &(json-escape (ViewColumn.title (Array.unsafe-nth columns i))))))))
       (String.append &out "]")))
 
   (private textual-node)
@@ -657,32 +121,32 @@ value cells from the generated accessors, selection dives into the field.")
          &(json-escape text)))
 
   (defn view-json [view]
-    (let [kind (NbView.kind view)]
+    (let [kind (ViewSpec.kind view)]
       (cond
         (String.= kind "empty")
           (fmt "{\"viewName\": \"GtPhlowEmptyViewSpecification\", \"methodSelector\": \"%s\"}"
-               &(json-escape (NbView.selector view)))
+               &(json-escape (ViewSpec.selector view)))
         (String.= kind "text")
           (fmt "{%s, \"string\": \"%s\"}"
                &(spec-head "GtPhlowTextEditorViewSpecification" view 1)
-               &(json-escape (NbView.content view)))
+               &(json-escape &(View.slice &(~(ViewSpec.content view) &0l &(View.request @"" 0 256 6 65536)) 0 65536)))
         (String.= kind "columned")
           (fmt "{%s, \"columnSpecifications\": %s, \"horizontalScrollingEnabled\": null}"
                &(spec-head "GtPhlowColumnedListViewSpecification" view 2)
-               &(column-specs-json (NbView.columns view)))
+               &(column-specs-json (ViewSpec.columns view)))
         (String.= kind "tree")
           (fmt "{%s}" &(spec-head "GtPhlowTreeViewSpecification" view 2))
         (String.= kind "bitmap")
           (fmt "{%s, \"bitmap\": {\"width\": %d, \"height\": %d, \"stride\": %d, \"format\": \"RGBA8888\", \"pixels\": \"%s\"}}"
                &(spec-head "GtPhlowBitmapViewSpecification" view 1)
-               @(NbView.width view)
-               @(NbView.height view)
-               (* @(NbView.width view) 4)
-               &(base64 (NbView.pixels view)))
+               @(ViewSpec.width view)
+               @(ViewSpec.height view)
+               (* @(ViewSpec.width view) 4)
+               &(base64 (ViewSpec.pixels view)))
         (fmt "{%s}" &(spec-head "GtPhlowListViewSpecification" view 2)))))
 
   (defn views-json [id]
-    (let-do [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))
+    (let-do [views (ViewObject.views (Array.unsafe-nth &*view-objects* id))
              out @"["]
       (for [i 0 (Array.length views)]
         (do
@@ -693,107 +157,118 @@ value cells from the generated accessors, selection dives into the field.")
   (doc view-with-selector "the index of the view with the given selector,
 or -1.")
   (defn view-with-selector [id selector]
-    (let-do [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))
+    (let-do [views (ViewObject.views (Array.unsafe-nth &*view-objects* id))
              found -1]
       (for [i 0 (Array.length views)]
-        (when (String.= (NbView.selector (Array.unsafe-nth views i)) selector)
+        (when (String.= (ViewSpec.selector (Array.unsafe-nth views i)) selector)
           (set! found i)))
       found))
 
   (doc view-children "the registered child ids of a listing view, computed
 once per (object, selector) and memoized.")
-  (defn view-children [id selector view-index]
-    (let [key (fmt "%d/%s" id selector)]
+  (defn view-child [id selector row]
+    (let [key (fmt "%d/%s/%d" id selector row)]
       (match (Map.get-maybe &*nb-view-memo* &key)
-        (Maybe.Just ids) ids
+        (Maybe.Just ids) @(Array.unsafe-nth &ids 0)
         (Maybe.Nothing)
-          (let-do [n (let [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))]
-                       (~(NbView.count (Array.unsafe-nth views view-index))))
-                   ids (the (Array Int) [])]
-            (for [i 0 n]
-              (let [child (let [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))]
-                            (~(NbView.item-send (Array.unsafe-nth views view-index)) i))]
-                (Array.push-back! &ids child)))
-            (Map.put! &*nb-view-memo* &key &ids)
-            ids))))
+          (let [child (View.send-item id selector row)]
+            (do (Map.put! &*nb-view-memo* &key &[child]) child)))))
 
   (private node-value-json)
   (hidden node-value-json)
-  (defn node-value-json [id view-index i]
-    (let [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))
+  (defn node-value-json [id view-index i bytes]
+    (let [views (ViewObject.views (Array.unsafe-nth &*view-objects* id))
           view (Array.unsafe-nth views view-index)]
-      (if (String.= (NbView.kind view) "columned")
-        (let-do [columns (NbView.columns view)
-                 out @"{\"columnValues\": ["]
-          (for [c 0 (Array.length columns)]
-            (do
-              (when (> c 0) (set! out (String.append &out ", ")))
-              (set! out
-                    (String.append &out
-                                   &(textual-node &(~(NbColumn.cell (Array.unsafe-nth columns c)) i))))))
+      (if (String.= (ViewSpec.kind view) "columned")
+        (let-do [columns (ViewSpec.columns view) out @"{\"columnValues\": ["
+                 remaining (Int.max 0 (- bytes 24)) c 0]
+          (while (and (< c (Array.length columns)) (> remaining 64))
+            (let-do [request (View.request @"" 0 1 6 (Int.max 0 (/ (- remaining 64) 6)))
+                     text (View.cell &0l view i c &request)
+                     clipped (View.slice &text 0 @(ViewRequest.bytes &request))
+                     cell (String.append (if (> c 0) ", " "") &(textual-node &clipped))]
+              (set! out (String.append &out &cell))
+              (set! remaining (- remaining (String.length &cell)))
+              (set! c (Int.inc c))))
           (String.append &out "]}"))
-        (textual-node &(~(NbView.item-text view) i)))))
+        (let [request (View.request @"" 0 1 6 (Int.max 0 (/ (- bytes 64) 6)))
+              text (View.cell &0l view i 0 &request)]
+          (textual-node &(View.slice &text 0 @(ViewRequest.bytes &request)))))))
 
-  (defn items-json [id selector]
+  (defn release-object! [id]
+    (let-do [prefix (fmt "%d/" id) keys (Map.keys &*nb-view-memo*)]
+      (for [i 0 (Array.length &keys)]
+        (let [key (Array.unsafe-nth &keys i)]
+          (when (String.starts-with? key &prefix)
+            (do (match (Map.get-maybe &*nb-view-memo* key)
+                  (Maybe.Nothing) ()
+                  (Maybe.Just ids)
+                    (for [j 0 (Array.length &ids)]
+                      (View.drop-ref! @(Array.unsafe-nth &ids j))))
+                (Map.remove! &*nb-view-memo* key)))))
+      (View.drop-ref! id)))
+
+  (defn items-json [id selector offset count]
     (let [view-index (view-with-selector id selector)]
-      (if (< view-index 0)
-        @"[]"
-        (let-do [ids (view-children id selector view-index)
-                 out @"["]
-          (for [i 0 (Array.length &ids)]
-            (do
-              (when (> i 0) (set! out (String.append &out ", ")))
-              (let [node-value (node-value-json id view-index i)
-                    child @(Array.unsafe-nth &ids i)]
-                (do
-                  (bump-ref! child)
-                  (set! out
-                        (String.append &out
-                                       &(fmt "{\"nodeId\": %d, \"nodeValue\": %s, \"phlowObject\": %s}"
-                                             child
-                                             &node-value
-                                             &(object-json child))))))))
+      (if (< view-index 0) @"[]"
+        (let-do [total (let [views (ViewObject.views (Array.unsafe-nth &*view-objects* id))]
+                        (~(ViewSpec.count (Array.unsafe-nth views view-index)) &0l))
+                 request (View.request @"" offset count 6 65536)
+                 end (View.end-index total &request)
+                 row @(ViewRequest.offset &request) remaining 65534 out @"["]
+          (while (and (< row end) (> remaining 8256))
+            (let-do [node-value (node-value-json id view-index row (Int.max 0 (- remaining 8192)))
+                     child (view-child id selector row)
+                     object (if (View.valid-id? child) (object-json child) @"null")
+                     node (fmt "%s{\"nodeId\": %d, \"nodeValue\": %s, \"phlowObject\": %s}"
+                       (if (> row offset) ", " "") child &node-value &object)
+                     size (String.length &node)]
+              (if (> size remaining) (set! remaining 0)
+                (do (when (View.valid-id? child) (View.bump-ref! child))
+                    (set! out (String.append &out &node))
+                    (set! remaining (- remaining size))))
+              (set! row (Int.inc row))))
           (String.append &out "]")))))
 
   (private tree-view-index)
   (hidden tree-view-index)
   (defn tree-view-index [id]
-    (let-do [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))
+    (let-do [views (ViewObject.views (Array.unsafe-nth &*view-objects* id))
              found -1]
       (for [i 0 (Array.length views)]
-        (when (String.= (NbView.kind (Array.unsafe-nth views i)) "tree")
+        (when (String.= (ViewSpec.kind (Array.unsafe-nth views i)) "tree")
           (set! found i)))
       found))
 
-  (doc children-json "a node's registered children as item nodes, memoized
-per object; children come from the node object's own tree view and the node
-text is each child's print string.")
   (defn children-json [id]
-    (let-do [key (fmt "children/%d" id)
-             ids (match (Map.get-maybe &*nb-view-memo* &key)
-                   (Maybe.Just ids) ids
-                   (Maybe.Nothing)
-                     (let-do [vi (tree-view-index id)
-                              kids (if (< vi 0)
-                                     (the (Array Int) [])
-                                     (let [views (NbObject.views (Array.unsafe-nth &*nb-objects* id))]
-                                       (~(NbView.children (Array.unsafe-nth views vi)))))]
-                       (Map.put! &*nb-view-memo* &key &kids)
-                       kids))
-             out @"["]
-      (for [i 0 (Array.length &ids)]
+  (let-do [key (fmt "%d/children" id)
+           ids (match (Map.get-maybe &*nb-view-memo* &key)
+             (Maybe.Just ids) ids
+             (Maybe.Nothing)
+               (let-do [vi (tree-view-index id)
+                        kids (if (< vi 0) (the (Array Int) [])
+                          (let [callback (let [views (ViewObject.views (Array.unsafe-nth &*view-objects* id))]
+                                           @(ViewSpec.children (Array.unsafe-nth views vi)))]
+                            (callback &0l &(View.request @"" 0 256 6 65536))))]
+                 (Map.put! &*nb-view-memo* &key &kids)
+                 kids))
+           out @"[" remaining 65534 i 0
+           end (Int.min 256 (Array.length &ids))]
+    (while (and (< i end) (> remaining 8256))
+      (let [child @(Array.unsafe-nth &ids i)]
         (do
-          (when (> i 0) (set! out (String.append &out ", ")))
-          (let [child @(Array.unsafe-nth &ids i)]
-            (do
-              (bump-ref! child)
-              (set! out
-                    (String.append &out
-                                   &(fmt "{\"nodeId\": %d, \"nodeValue\": %s, \"phlowObject\": %s}"
-                                         child
-                                         &(textual-node &(~(NbObject.print (Array.unsafe-nth &*nb-objects* child))))
-                                         &(object-json child))))))))
-      (String.append &out "]"))))
+          (when (View.valid-id? child)
+            (let [node (fmt "%s{\"nodeId\": %d, \"nodeValue\": %s, \"phlowObject\": %s}"
+                         (if (String.= &out "[") "" ", ") child
+                         &(textual-node &(~(ViewObject.print (Array.unsafe-nth &*view-objects* child))))
+                         &(object-json child))]
+              (if (> (String.length &node) remaining) (set! remaining 0)
+                (do (View.bump-ref! child)
+                    (set! out (String.append &out &node))
+                    (set! remaining (- remaining (String.length &node)))))))
+          (set! i (Int.inc i)))))
+    (String.append &out "]")))
+)
 
 ; --- http serving -------------------------------------------------------
 
@@ -812,8 +287,7 @@ text is each child's print string.")
   (hidden parse-int-or)
   (defn parse-int-or [s dflt] (Maybe.from (Int.from-string s) dflt))
 
-  (defn valid-id? [id]
-    (and (>= id 0) (< id (object-count))))
+
 
   (doc route "answers the JSON body for a request.")
   (defn route [verb path]
@@ -829,7 +303,7 @@ text is each child's print string.")
                      (and (String.= (Array.unsafe-nth &parts 0) "session")
                           (String.= (Array.unsafe-nth &parts 1) &*nb-token*)))
               (let-do [id (parse-int-or (Array.unsafe-nth &parts 3) -1)]
-                (when (valid-id? id) (drop-ref! id))
+                (when (View.valid-id? id) (release-object! id))
                 @"true")
               @"false")
           (and (= n 1) (String.= (Array.unsafe-nth &parts 0) "session"))
@@ -840,32 +314,51 @@ text is each child's print string.")
             (objects-json)
           (and (= n 2) (String.= (Array.unsafe-nth &parts 0) "objects"))
             (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)]
-              (if (valid-id? id)
-                (do (bump-ref! id) (object-json id))
+              (if (View.valid-id? id)
+                (do (View.bump-ref! id) (object-json id))
                 @"{\"error\": \"no such object\"}"))
           (and (= n 3)
                (and (String.= (Array.unsafe-nth &parts 0) "objects")
                     (String.= (Array.unsafe-nth &parts 2) "views")))
             (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)]
-              (if (valid-id? id) (views-json id) @"[]"))
+              (if (View.valid-id? id) (views-json id) @"[]"))
           (and (= n 4)
                (and (String.= (Array.unsafe-nth &parts 0) "objects")
                     (String.= (Array.unsafe-nth &parts 2) "views")))
             (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)
-                  view-index (if (valid-id? (parse-int-or (Array.unsafe-nth &parts 1) -1))
+                  view-index (if (View.valid-id? (parse-int-or (Array.unsafe-nth &parts 1) -1))
                                (view-with-selector (parse-int-or (Array.unsafe-nth &parts 1) -1)
                                                    (Array.unsafe-nth &parts 3))
                                -1)]
-              (if (and (valid-id? id) (>= view-index 0))
-                (view-json (Array.unsafe-nth (NbObject.views (Array.unsafe-nth &*nb-objects* id)) view-index))
+              (if (and (View.valid-id? id) (>= view-index 0))
+                (view-json (Array.unsafe-nth (ViewObject.views (Array.unsafe-nth &*view-objects* id)) view-index))
                 @"null"))
+          (and (= n 7)
+               (String.= (Array.unsafe-nth &parts 0) "objects")
+               (String.= (Array.unsafe-nth &parts 2) "views")
+               (String.= (Array.unsafe-nth &parts 4) "items"))
+            (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)
+                  request (View.request @"" (parse-int-or (Array.unsafe-nth &parts 5) 0)
+                                          (parse-int-or (Array.unsafe-nth &parts 6) 256) 6 65536)]
+              (if (View.valid-id? id)
+                (items-json id (Array.unsafe-nth &parts 3)
+                  @(ViewRequest.offset &request) @(ViewRequest.count &request)) @"[]"))
+          (and (= n 5)
+               (String.= (Array.unsafe-nth &parts 0) "objects")
+               (String.= (Array.unsafe-nth &parts 2) "views")
+               (String.= (Array.unsafe-nth &parts 4) "count"))
+            (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)
+                  vi (if (View.valid-id? id) (view-with-selector id (Array.unsafe-nth &parts 3)) -1)]
+              (if (< vi 0) @"0"
+                (let [views (ViewObject.views (Array.unsafe-nth &*view-objects* id))]
+                  (str (~(ViewSpec.count (Array.unsafe-nth views vi)) &0l)))))
           (and (= n 5)
                (and (String.= (Array.unsafe-nth &parts 0) "objects")
                     (and (String.= (Array.unsafe-nth &parts 2) "views")
                          (String.= (Array.unsafe-nth &parts 4) "items"))))
             (let [id (parse-int-or (Array.unsafe-nth &parts 1) -1)]
-              (if (valid-id? id)
-                (items-json id (Array.unsafe-nth &parts 3))
+              (if (View.valid-id? id)
+                (items-json id (Array.unsafe-nth &parts 3) 0 256)
                 @"[]"))
           (and (= n 6)
                (and (String.= (Array.unsafe-nth &parts 0) "objects")
@@ -879,7 +372,7 @@ text is each child's print string.")
                                                               (- (Array.length &segments) 1))
                                             -1)
                               -1)]
-              (if (valid-id? parent)
+              (if (View.valid-id? parent)
                 (children-json parent)
                 @"[]"))
           (and (= n 6)
@@ -887,8 +380,8 @@ text is each child's print string.")
                     (and (String.= (Array.unsafe-nth &parts 2) "views")
                          (String.= (Array.unsafe-nth &parts 4) "send"))))
             (let [id (parse-int-or (Array.unsafe-nth &parts 5) -1)]
-              (if (valid-id? id)
-                (do (bump-ref! id) (object-json id))
+              (if (View.valid-id? id)
+                (do (View.bump-ref! id) (object-json id))
                 @"{\"error\": \"no such object\"}"))
           @"{\"error\": \"no such route\"}"))))
 
@@ -945,8 +438,8 @@ the carp server; never returns. Port and token come from argv when present.")
                       @token)]
       (set! *nb-token* rtoken)
       (ignore (IO.Raw.fflush IO.Raw.stdout))
-      (ignore (nb-register value))
+      (ignore (view-register value))
       (set! *nb-server-object*
-            (NB.leaf @"CarpValueHost"
+            (View.leaf @"CarpValueHost"
                      (fmt "carp value host on port %d" rport)))
       (serve rport))))

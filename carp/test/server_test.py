@@ -1,4 +1,5 @@
 import json, socket, sys
+from pathlib import Path
 
 PORT = int(sys.argv[1])
 
@@ -68,9 +69,9 @@ results.append(check("phlow views", hget("/objects/0/views"),
                      lambda r: r[0]["viewName"] == "GtPhlowColumnedListViewSpecification"
                                and r[0]["methodSelector"] == "array-items"
                                and [c["title"] for c in r[0]["columnSpecifications"]] == ["#", "Value"]))
-import os
-_nb = open(os.path.join(os.path.dirname(__file__), "..", "src", "notebook.carp")).read()
-_ai = _nb[_nb.index("(defview array-items"):]
+_shared = Path(__file__).resolve().parents[3] / "carpentry-org" / "carp-compiler" / "carp-views" / "carp-views.carp"
+_views = _shared.read_text()
+_ai = _views[_views.index("(defview array-items"):]
 _ai = _ai[:_ai.index("\n\n")]
 results.append(check("builtin source verbatim", {"src": hget("/objects/0/views")[0]["source"][:60]},
                      lambda r: hget("/objects/0/views")[0]["source"] == _ai))
@@ -105,10 +106,10 @@ grad_src = '''(deftype Grad [w Int h Int])
           (Array.push-back! &px (Byte.from-int 255)))))
     px))
 (defview rendered [g Grad]
-  (=> (NB.bitmap)
-      (NB.title @"Bitmap")
-      (NB.extent @(Grad.w g) @(Grad.h g))
-      (NB.pixels (grad-pixels g))))
+  (=> (View.bitmap)
+      (View.title @"Bitmap")
+      (View.extent @(Grad.w g) @(Grad.h g))
+      (View.pixels (grad-pixels g))))
 (Grad.init 4 2)'''
 bmr = rpc({"id": 25, "cmd": "eval", "session": "bm1", "source": grad_src})["ok"]
 results.append(check("bitmap host", bmr, lambda r: r["exit"] == 0 and r["hostPort"] > 0 and r["value"] == "(Grad 4 2)"))
@@ -133,18 +134,18 @@ tree_src = '''(deftype Cnt [n Int])
            out (the (Array Int) [])]
     (when (> n 0)
       (do
-        (Array.push-back! &out (nb-register (Cnt.init (- n 1))))
-        (Array.push-back! &out (nb-register (Cnt.init (- n 1))))))
+        (Array.push-back! &out (view-register (Cnt.init (- n 1))))
+        (Array.push-back! &out (view-register (Cnt.init (- n 1))))))
     out))
 (defview overview [c Cnt]
   (let [n @(Cnt.n c)
         me @c]
-    (=> (NB.tree)
-        (NB.title @"Tree")
-        (NB.items (fn [] (if (> n 0) 2 0)))
-        (NB.item-format (fn [i] (fmt "root kid %d" i)))
-        (NB.send (fn [i] (do (ignore i) (nb-register (Cnt.init (- n 1))))))
-        (NB.children (fn [] (cnt-kids &me))))))
+    (=> (View.tree)
+        (View.title @"Tree")
+        (View.items (fn [] (if (> n 0) 2 0)))
+        (View.item-format (fn [i] (fmt "root kid %d" i)))
+        (View.send (fn [i] (do (ignore i) (view-register (Cnt.init (- n 1))))))
+        (View.children (fn [] (cnt-kids &me))))))
 (Cnt.init 3)'''
 tr = rpc({"id": 28, "cmd": "eval", "session": "tr1", "source": tree_src})["ok"]
 results.append(check("tree host", tr, lambda r: r["exit"] == 0 and r["hostPort"] > 0))
@@ -176,18 +177,18 @@ if tr["hostPort"] > 0:
 
 dv_src = '''(deftype Point [x Int y Int])
 (defview coords [p Point]
-  (=> (NB.text)
-      (NB.title @"Coords")
-      (NB.content (fmt "x: %d" @(Point.x p)))))
+  (=> (View.text)
+      (View.title @"Coords")
+      (View.content (fmt "x: %d" @(Point.x p)))))
 (defview coordinates [p Point]
   (let [x @(Point.x p)
         y @(Point.y p)]
-    (=> (NB.list)
-        (NB.title @"Coordinates")
-        (NB.priority 2)
-        (NB.items (fn [] 2))
-        (NB.item-format (fn [i] (if (= i 0) (str x) (str y))))
-        (NB.send (fn [i] (if (= i 0) (nb-register x) (nb-register y)))))))
+    (=> (View.list)
+        (View.title @"Coordinates")
+        (View.priority 2)
+        (View.items (fn [] 2))
+        (View.item-format (fn [i] (if (= i 0) (str x) (str y))))
+        (View.send (fn [i] (if (= i 0) (view-register x) (view-register y)))))))
 (Point.init 3 4)'''
 dv = rpc({"id": 29, "cmd": "eval", "session": "dv1", "source": dv_src})["ok"]
 results.append(check("defview host", dv, lambda r: r["exit"] == 0 and r["hostPort"] > 0 and r["value"] == "(Point 3 4)"))
